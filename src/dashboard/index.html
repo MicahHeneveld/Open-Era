@@ -460,6 +460,7 @@
     }
     function settlementInspector(item) {
       var owningFaction = faction(item.factionId);
+      var owner = character(item.ownerId);
       var parties = item.intelligence && item.intelligence.exact ? world.characters.filter(function (entry) { return entry.locationId === item.id; }) : [];
       var c = commander();
       var travelAllowed = !c.travel && c.locationId !== item.id;
@@ -467,7 +468,7 @@
       var intel = item.intelligence;
       var intelLabel = intel && intel.exact ? "Exact owned records" : intel ? esc(intel.source) + " · " + fmt(intel.confidence * 100) + "% confidence · " + intel.ageTicks + " ticks old" : "No current report";
       return '<div class="eyebrow">Island intelligence</div><h2>' + esc(item.name) + '</h2>' +
-        '<div class="subtle">' + esc(owningFaction ? owningFaction.name : "Independent") + " · Population " + (item.population == null ? "unknown" : item.population.toLocaleString()) + "</div>" +
+        '<div class="subtle">' + esc(owningFaction ? owningFaction.name : "Independent") + (owner ? " · Owned by " + esc(owner.name) : "") + " · Population " + (item.population == null ? "unknown" : item.population.toLocaleString()) + "</div>" +
         '<div class="subtle">' + intelLabel + "</div>" +
         '<div class="stat-grid">' +
           '<div class="stat"><span>Garrison</span><strong>' + item.garrison + "</strong></div>" +
@@ -485,7 +486,8 @@
         }).join("") : '<div class="empty">' + (intel && intel.exact ? "No named parties are currently here." : "Foreign party positions are not available in this report.") + "</div>") +
         "<h3>Direct command</h3><div class=\"actions\">" +
           (travelAllowed ? '<button class="action" type="button" data-action="travel" data-target="' + esc(item.id) + '">Sail here</button>' : "") +
-          (here ? '<button class="action danger" type="button" data-action="raid">Raid defenses</button>' : "") +
+          (here && item.surrenderOffered ? '<button class="action danger" type="button" data-action="claim-settlement">Accept surrender &amp; claim</button>' : "") +
+          (here && item.factionId && item.factionId !== c.factionId && !item.surrenderOffered ? '<button class="action danger" type="button" data-action="raid">Raid defenses</button>' : "") +
           '<button class="action" type="button" data-action="trade-local">Trade locally</button>' +
           '<button class="action" type="button" data-action="buy-provisions">Buy provisions</button>' +
         "</div>";

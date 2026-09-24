@@ -10,12 +10,16 @@ import {
 } from "./agency.ts";
 import {
   applyEvent,
+  CLAIM_STABILITY_FLOOR,
   clamp,
   distanceBetween,
   factionPower,
   marketPrice,
   partyPower,
   round,
+  settlementClaimAvailableTo,
+  SURRENDER_GARRISON_THRESHOLD,
+  SURRENDER_STABILITY_THRESHOLD,
 } from "./state.ts";
 import {
   RESOURCE_KEYS,
@@ -235,6 +239,18 @@ function buildCandidates(
   ];
 
   const hostileTerritory = settlement.factionId !== character.factionId && settlement.factionId !== null;
+  if (hostileTerritory && character.troops.count > 0 && settlementClaimAvailableTo(settlement, character.id)) {
+    candidates.push({
+      action: "claim-settlement",
+      targetId: settlement.id,
+      score:
+        175 +
+        character.personality.ambition * 38 +
+        character.personality.aggression * 12 -
+        character.personality.caution * 8,
+      reason: `accept ${settlement.name}'s surrender and establish a personal claim`,
+    });
+  }
   if (
     hostileTerritory &&
     character.factionId !== null &&
@@ -367,6 +383,18 @@ function resolveBattle(
   const settlementStocks = cloneResources(settlement.stocks);
   const lootArms = attackerWon ? round(Math.min(settlementStocks.arms, 8 + character.troops.count * 0.08)) : 0;
   settlementStocks.arms = round(settlementStocks.arms - lootArms);
+  const defenderGarrison = settlement.garrison - defenderLosses;
+  const settlementStability = round(clamp(settlement.stability - (attackerWon ? 12 : 3), 0, 100));
+  const surrender = attackerWon &&
+      defenderGarrison <= SURRENDER_GARRISON_THRESHOLD &&
+      settlementStability <= SURRENDER_STABILITY_THRESHOLD &&
+      settlement.factionId !== null
+    ? {
+        offeredToId: character.id,
+        offeredTick: world.tick,
+        previousFactionId: settlement.factionId,
+      }
+    : settlement.surrender;
 
   emit(world, events, {
     type: "battle-resolved",
@@ -389,9 +417,10 @@ function resolveBattle(
       attackerMoney: round(character.money + (attackerWon ? 35 + lootArms * 2 : 0), 2),
       victories: character.victories + (attackerWon ? 1 : 0),
       defeats: character.defeats + (attackerWon ? 0 : 1),
-      defenderGarrison: settlement.garrison - defenderLosses,
-      settlementStability: round(clamp(settlement.stability - (attackerWon ? 12 : 3), 0, 100)),
+      defenderGarrison,
+      settlementStability,
       settlementStocks,
+      surrender,
     },
   });
 
@@ -451,6 +480,29 @@ function resolveBattle(
       },
     });
   }
+}
+
+function resolveSettlementClaim(
+  world: WorldState,
+  character: Character,
+  events: SimEvent[],
+): void {
+  const settlement = world.settlements[character.locationId!];
+  emit(world, events, {
+    type: "settlement-claimed",
+    actorId: character.id,
+    targetId: settlement.factionId ?? undefined,
+    settlementId: settlement.id,
+    data: {
+      previousFactionId: settlement.factionId,
+      previousOwnerId: settlement.ownerId,
+      ownerId: character.id,
+      factionId: character.factionId,
+      garrison: settlement.garrison,
+      stability: round(Math.max(CLAIM_STABILITY_FLOOR, settlement.stability)),
+      basis: "accepted-surrender",
+    },
+  });
 }
 
 function progressActiveGoal(
@@ -581,6 +633,19 @@ function processPlayerCommands(
       });
       continue;
     }
+    if (command.action === "claim-settlement") {
+      const settlement = world.settlements[commander.locationId];
+      const hostile = settlement.factionId !== null && settlement.factionId !== commander.factionId;
+      if (!hostile || !settlementClaimAvailableTo(settlement, commander.id)) {
+        emit(world, events, {
+          type: "player-command-failed",
+          actorId: commander.id,
+          settlementId: settlement.id,
+          data: { commandId: command.id, reason: "the settlement is no longer offering surrender" },
+        });
+        continue;
+      }
+    }
     const chosen: DecisionCandidate = {
       action: command.action,
       targetId: command.targetId,
@@ -698,6 +763,9 @@ function resolveDecision(
     }
     case "raid":
       resolveBattle(world, character, events, rng);
+      break;
+    case "claim-settlement":
+      resolveSettlementClaim(world, character, events);
       break;
     case "rest": {
       const cargo = cloneResources(character.cargo);

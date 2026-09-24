@@ -30,6 +30,11 @@ export interface Settlement {
   garrison: number;
   fortification: number;
   stability: number;
+  surrender: {
+    offeredToId: string;
+    offeredTick: number;
+    previousFactionId: string;
+  } | null;
 }
 
 export interface Personality {
@@ -200,6 +205,7 @@ export type PlayerAction =
   | "work"
   | "recruit"
   | "raid"
+  | "claim-settlement"
   | "rest";
 
 export type PlayerCommand =

@@ -213,10 +213,10 @@ function actionsForGoal(kind: GoalKind): string[] {
   return {
     "material-security": ["buy-provisions", "rest", "work", "travel"],
     "build-wealth": ["trade-local", "travel", "work"],
-    "build-power": ["recruit", "work", "raid"],
-    "serve-faction": ["recruit", "work", "raid", "travel"],
+    "build-power": ["recruit", "work", "raid", "claim-settlement"],
+    "serve-faction": ["recruit", "work", "raid", "claim-settlement", "travel"],
     "explore-world": ["travel", "trade-local"],
-    "expand-influence": ["raid", "recruit", "travel"],
+    "expand-influence": ["raid", "claim-settlement", "recruit", "travel"],
     "recover-strength": ["rest", "buy-provisions", "recruit"],
   }[kind];
 }
@@ -224,7 +224,7 @@ function actionsForGoal(kind: GoalKind): string[] {
 function actionsForOrder(directive: OrderDirective): string[] {
   return {
     protect: ["recruit", "work", "travel"],
-    pressure: ["raid", "recruit", "travel"],
+    pressure: ["raid", "claim-settlement", "recruit", "travel"],
     "trade-supplies": ["trade-local", "travel"],
     explore: ["travel", "trade-local"],
   }[directive];

@@ -81,3 +81,26 @@ test("battle experiences reshape goals and may change hierarchical relationships
   assert.ok(evolved.some((event) => event.data.trigger === "defeat"));
   assert.ok(relationships.length > 0);
 });
+
+test("an autonomous character claims a hostile settlement that offers surrender", () => {
+  const world = createPrototypeWorld(1847);
+  const claimant = world.characters["character-03"];
+  const settlement = world.settlements["cinder-key"];
+  claimant.locationId = settlement.id;
+  claimant.travel = null;
+  settlement.garrison = 8;
+  settlement.stability = 18;
+  settlement.surrender = {
+    offeredToId: claimant.id,
+    offeredTick: world.tick,
+    previousFactionId: "free-tide",
+  };
+
+  const result = runTick(world);
+  const claim = result.events.find((event) =>
+    event.type === "settlement-claimed" && event.actorId === claimant.id
+  );
+  assert.ok(claim);
+  assert.equal(settlement.ownerId, claimant.id);
+  assert.equal(settlement.factionId, claimant.factionId);
+});

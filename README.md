@@ -2,7 +2,7 @@
 
 Open Era is a persistent maritime political sandbox in which human players and autonomous characters pursue their own ambitions in the same continuously simulated world.
 
-The accumulated product decisions and visual concepts are preserved in the [design record](docs/design/README.md) and [generated mockup catalog](docs/assets/mockups/README.md).
+The accumulated product decisions and visual concepts are preserved in the [design record](docs/design/README.md) and [generated mockup catalog](docs/assets/mockups/README.md). Behavioral findings are recorded in the [human commander playtests](docs/playtests/).
 
 This branch contains the first **headless world prototype**. It is intentionally focused on simulation behavior rather than presentation: we can accelerate days of world activity, inspect why characters made decisions, stop and restart the process, and compare outcomes before committing to the mobile UI or networking stack.
 
@@ -15,6 +15,7 @@ This branch contains the first **headless world prototype**. It is intentionally
 - Party provisions, sailors, troop recruitment, morale, and attrition
 - Physical travel between islands and merchant arbitrage
 - Character-plus-troop combat against settlement garrisons
+- Surrender thresholds, deliberate settlement claims, and personal conqueror ownership
 - Persistent personality-rooted goals and structured multi-tick plans
 - Imperfect island knowledge that becomes stale and refreshes through direct observation
 - Trust, affinity, respect, fear, grievance, and obligation between characters
@@ -118,4 +119,4 @@ The simulation files are intended to survive into the production server. The CLI
 
 ## Current boundary
 
-This is a behavioral probe, not a complete game. The dialogue adapter currently uses deterministic prototype replies rather than a paid LLM. Deeper personality branching, faction offices, settlement ownership, debt, captivity, lost technology, inner strength, inheritance, multiplayer authentication, and production networking are still deferred. The current dashboard is deliberately local and the player begins as a World Government commander so command acceptance, refusal, and asynchronous communication can be exercised immediately.
+This is a behavioral probe, not a complete game. The dialogue adapter currently uses deterministic prototype replies rather than a paid LLM. Deeper personality branching, faction offices, settlement management, debt, captivity, lost technology, inner strength, inheritance, multiplayer authentication, and production networking are still deferred. The current dashboard is deliberately local and the player begins as a World Government commander so command acceptance, refusal, and asynchronous communication can be exercised immediately.

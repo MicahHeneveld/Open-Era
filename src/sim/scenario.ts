@@ -46,13 +46,14 @@ function estimatedPrices(settlement: Settlement, factor: number): Resources {
 }
 
 function makeSettlement(
-  values: Omit<Settlement, "ownerId" | "workers" | "targetStocks">,
+  values: Omit<Settlement, "ownerId" | "workers" | "targetStocks" | "surrender">,
 ): Settlement {
   return {
     ...values,
     ownerId: null,
     workers: Math.round(values.population * 0.42),
     targetStocks: resources(180, 90, 70, 100),
+    surrender: null,
   };
 }
 

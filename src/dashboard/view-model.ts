@@ -1,5 +1,5 @@
 import { assessStandingOrder } from "../sim/agency.ts";
-import { factionPower, marketPrice, partyPower, round } from "../sim/state.ts";
+import { factionPower, marketPrice, partyPower, round, settlementClaimAvailableTo } from "../sim/state.ts";
 import { RESOURCE_KEYS, type SimEvent, type WorldState } from "../sim/types.ts";
 
 function eventSummary(world: WorldState, event: SimEvent): string {
@@ -21,6 +21,8 @@ function eventSummary(world: WorldState, event: SimEvent): string {
       return `${actor} reconsidered their plan: ${event.data.reason}`;
     case "battle-resolved":
       return `${actor} ${event.data.outcome === "attacker-victory" ? "won" : "lost"} at ${settlement}`;
+    case "settlement-claimed":
+      return `${actor} accepted ${settlement}'s surrender and established a claim`;
     case "arrived":
       return `${actor} arrived at ${settlement}`;
     case "travel-started":
@@ -61,6 +63,10 @@ export function dashboardState(world: WorldState, events: SimEvent[]): Record<st
     settlements: Object.values(world.settlements).map((settlement) => {
       const exact = settlement.factionId === commander.factionId;
       const knowledge = commander.knowledge[settlement.id];
+      const surrenderOffered = commander.locationId === settlement.id &&
+        settlement.factionId !== null &&
+        settlement.factionId !== commander.factionId &&
+        settlementClaimAvailableTo(settlement, commander.id);
       if (!exact) {
         return {
           id: settlement.id,
@@ -79,6 +85,7 @@ export function dashboardState(world: WorldState, events: SimEvent[]): Record<st
           stability: null,
           prices: knowledge?.priceEstimate ?? Object.fromEntries(RESOURCE_KEYS.map((resource) => [resource, 0])),
           partyCount: null,
+          surrenderOffered,
           intelligence: knowledge ? {
             exact: false,
             source: knowledge.source,
@@ -92,6 +99,7 @@ export function dashboardState(world: WorldState, events: SimEvent[]): Record<st
         ...settlement,
         prices: Object.fromEntries(RESOURCE_KEYS.map((resource) => [resource, marketPrice(world, settlement.id, resource)])),
         partyCount: Object.values(world.characters).filter((character) => character.locationId === settlement.id).length,
+        surrenderOffered,
         intelligence: { exact: true, source: "owned", confidence: 1, observedTick: world.tick, ageTicks: 0 },
       };
     }),

@@ -1,4 +1,4 @@
-import { applyEvent, clamp } from "./state.ts";
+import { applyEvent, clamp, settlementClaimAvailableTo } from "./state.ts";
 import type {
   OrderDirective,
   PlayerAction,
@@ -35,6 +35,7 @@ const actions = new Set<PlayerAction>([
   "work",
   "recruit",
   "raid",
+  "claim-settlement",
   "rest",
 ]);
 
@@ -97,6 +98,14 @@ function validateCharacterAction(
     }
     if (character.troops.count < 25) return reject("insufficient-troops", "At least 25 troops are required to raid");
   }
+  if (request.action === "claim-settlement") {
+    if (!settlement.factionId || settlement.factionId === character.factionId) {
+      return reject("not-hostile", "The current settlement is not a hostile surrender target");
+    }
+    if (!settlementClaimAvailableTo(settlement, character.id)) {
+      return reject("not-surrendering", "The settlement is not offering surrender to this character");
+    }
+  }
   if (request.action === "recruit" && (character.money < 30 || settlement.stocks.arms < 2)) {
     return reject("cannot-recruit", "Recruitment requires money and locally available arms");
   }
@@ -110,7 +119,9 @@ function validateCharacterAction(
     issuedTick: world.tick,
     type: "character-action",
     action: request.action,
-    targetId: request.action === "raid" ? character.locationId : request.targetId,
+    targetId: request.action === "raid" || request.action === "claim-settlement"
+      ? character.locationId
+      : request.targetId,
   };
   return { ok: true, command, event: acceptedEvent(world, command) };
 }

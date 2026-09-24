@@ -97,6 +97,7 @@ function agencyTraces(world: WorldState, events: SimEvent[]): string {
     "goal-evolved",
     "relationship-changed",
     "standing-order-issued",
+    "settlement-claimed",
     "player-action-executed",
     "player-command-failed",
   ]);
@@ -164,6 +165,12 @@ function eventStory(world: WorldState, event: SimEvent): string | null {
     const won = event.data.outcome === "attacker-victory";
     return `- Day ${round(event.tick / world.ticksPerDay, 1)}: **${actor}** ${won ? "defeated" : "was repelled by"} the garrison at **${settlement}**. ${event.data.attackerLosses} attackers and ${event.data.defenderLosses} defenders were lost.`;
   }
+  if (event.type === "settlement-claimed") {
+    const previousFaction = event.data.previousFactionId
+      ? world.factions[event.data.previousFactionId as string]?.name ?? event.data.previousFactionId
+      : "independent rule";
+    return `- Day ${round(event.tick / world.ticksPerDay, 1)}: **${actor}** accepted **${settlement}**'s surrender, ending ${previousFaction}'s control and establishing a personal claim.`;
+  }
   if (event.type === "arrived") {
     return `- Day ${round(event.tick / world.ticksPerDay, 1)}: ${actor} arrived at **${settlement}**.`;
   }
@@ -206,7 +213,7 @@ function summaryMarkdown(world: WorldState, events: SimEvent[], snapshotCount: n
       return `| ${character.name} | ${character.archetype} | ${character.factionId ? world.factions[character.factionId].name : "Unaffiliated"} | ${partyPower(character)} | ${character.victories}–${character.defeats} | ${goal?.label ?? "Uncommitted"} |`;
     })
     .join("\n");
-  const majorTypes = new Set(["battle-resolved", "goal-evolved", "relationship-changed", "settlement-shortage", "standing-order-issued", "player-action-executed"]);
+  const majorTypes = new Set(["battle-resolved", "settlement-claimed", "goal-evolved", "relationship-changed", "settlement-shortage", "standing-order-issued", "player-action-executed"]);
   const majorStories = events
     .filter((event) => majorTypes.has(event.type))
     .map((event) => eventStory(world, event))

@@ -37,6 +37,109 @@ test("a validated direct action is queued, executed once, and removed", () => {
   assert.equal(result.events.filter((event) => event.type === "player-command-resolved").length, 1);
 });
 
+test("a surrendering settlement can be claimed by the conquering character", () => {
+  const world = createPrototypeWorld(1847);
+  const commander = world.characters[world.players["prototype-player"].characterId];
+  const settlement = world.settlements["cinder-key"];
+  commander.locationId = settlement.id;
+  settlement.garrison = 12;
+  settlement.stability = 24;
+  settlement.surrender = {
+    offeredToId: commander.id,
+    offeredTick: world.tick,
+    previousFactionId: "free-tide",
+  };
+
+  const submission = submitCommand(world, {
+    playerId: "prototype-player",
+    type: "character-action",
+    action: "claim-settlement",
+  });
+  assert.equal(submission.ok, true);
+
+  const result = runTick(world);
+  const claim = result.events.find((event) => event.type === "settlement-claimed");
+  assert.ok(claim);
+  assert.equal(claim.actorId, commander.id);
+  assert.equal(claim.settlementId, settlement.id);
+  assert.equal(claim.data.previousFactionId, "free-tide");
+  assert.equal(settlement.ownerId, commander.id);
+  assert.equal(settlement.factionId, "world-government");
+  assert.equal(settlement.stability, 55);
+  assert.equal(world.pendingCommands.length, 0);
+});
+
+test("a victory crossing both thresholds offers surrender only to the victor", () => {
+  const world = createPrototypeWorld(1847);
+  const commander = world.characters[world.players["prototype-player"].characterId];
+  const settlement = world.settlements["cinder-key"];
+  commander.locationId = settlement.id;
+  settlement.garrison = 1;
+  settlement.stability = 20;
+
+  const submission = submitCommand(world, {
+    playerId: "prototype-player",
+    type: "character-action",
+    action: "raid",
+  });
+  assert.equal(submission.ok, true);
+
+  const result = runTick(world);
+  const battle = result.events.find((event) =>
+    event.type === "battle-resolved" && event.actorId === commander.id
+  );
+  assert.equal(battle?.data.outcome, "attacker-victory");
+  assert.deepEqual(settlement.surrender, {
+    offeredToId: commander.id,
+    offeredTick: 0,
+    previousFactionId: "free-tide",
+  });
+  assert.equal(settlement.ownerId, null);
+});
+
+test("threshold conditions alone do not grant a claim without the victor's surrender offer", () => {
+  const world = createPrototypeWorld(1847);
+  const commander = world.characters[world.players["prototype-player"].characterId];
+  const settlement = world.settlements["cinder-key"];
+  commander.locationId = settlement.id;
+  settlement.garrison = 10;
+  settlement.stability = 20;
+  settlement.surrender = null;
+
+  assert.deepEqual(submitCommand(world, {
+    playerId: "prototype-player",
+    type: "character-action",
+    action: "claim-settlement",
+  }), {
+    ok: false,
+    code: "not-surrendering",
+    error: "The settlement is not offering surrender to this character",
+  });
+
+  settlement.surrender = {
+    offeredToId: "character-03",
+    offeredTick: world.tick,
+    previousFactionId: "free-tide",
+  };
+  assert.equal(submitCommand(world, {
+    playerId: "prototype-player",
+    type: "character-action",
+    action: "claim-settlement",
+  }).ok, false);
+
+  settlement.stability = 30.05;
+  settlement.surrender = {
+    offeredToId: commander.id,
+    offeredTick: world.tick,
+    previousFactionId: "free-tide",
+  };
+  assert.equal(submitCommand(world, {
+    playerId: "prototype-player",
+    type: "character-action",
+    action: "claim-settlement",
+  }).ok, true);
+});
+
 test("server validation rejects commands outside player authority without mutating state", () => {
   const world = createPrototypeWorld(1847);
   const beforeSequence = world.nextEventSequence;

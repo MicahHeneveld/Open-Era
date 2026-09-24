@@ -3,9 +3,18 @@ import type {
   Character,
   ResourceKey,
   Resources,
+  Settlement,
   SimEvent,
   WorldState,
 } from "./types.ts";
+
+export const SURRENDER_GARRISON_THRESHOLD = 15;
+export const SURRENDER_STABILITY_THRESHOLD = 30;
+export const CLAIM_STABILITY_FLOOR = 55;
+
+export function settlementClaimAvailableTo(settlement: Settlement, characterId: string): boolean {
+  return settlement.surrender?.offeredToId === characterId;
+}
 
 export function clamp(value: number, minimum: number, maximum: number): number {
   return Math.max(minimum, Math.min(maximum, value));
@@ -265,6 +274,14 @@ export function applyEvent(world: WorldState, event: SimEvent): void {
       settlement.garrison = event.data.defenderGarrison as number;
       settlement.stability = event.data.settlementStability as number;
       settlement.stocks = resourcesFrom(event.data, "settlementStocks");
+      settlement.surrender = event.data.surrender as Settlement["surrender"];
+      break;
+    case "settlement-claimed":
+      if (!actor || !settlement) throw new Error("Settlement claim event is missing an entity");
+      settlement.ownerId = event.data.ownerId as string;
+      settlement.factionId = event.data.factionId as string | null;
+      settlement.stability = event.data.stability as number;
+      settlement.surrender = null;
       break;
     case "tick-advanced":
       world.tick = event.data.nextTick as number;

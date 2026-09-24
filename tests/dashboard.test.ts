@@ -16,7 +16,9 @@ test("the local dashboard serves state and executes its command API", async () =
 
     const page = await fetch(`${base}/`);
     assert.equal(page.status, 200);
-    assert.match(await page.text(), /Open Era/);
+    const pageHtml = await page.text();
+    assert.match(pageHtml, /Open Era/);
+    assert.match(pageHtml, /Accept surrender &amp; claim/);
 
     const initialResponse = await fetch(`${base}/api/state`);
     const initial = await initialResponse.json() as {
