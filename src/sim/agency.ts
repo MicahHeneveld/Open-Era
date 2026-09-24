@@ -32,6 +32,17 @@ export interface PlanReview {
   plan: CharacterPlan;
 }
 
+export interface OrderActionAssessment {
+  aligned: boolean;
+  summary: string;
+}
+
+export interface OrderCompletionJudgment {
+  score: number;
+  threshold: number;
+  summary: string;
+}
+
 const fallbackPrices: Record<ResourceKey, number> = {
   provisions: 2.4,
   arms: 5.6,
@@ -98,9 +109,12 @@ export function needsObservation(world: WorldState, character: Character): boole
   return !belief || belief.source !== "direct" || world.tick - belief.observedTick >= world.ticksPerDay;
 }
 
-function activeOrder(character: Character, tick: number): StandingOrder | null {
+export function activeStandingOrder(character: Character, tick: number): StandingOrder | null {
   return character.standingOrders
-    .filter((order) => order.expiresTick === null || order.expiresTick >= tick)
+    .filter((order) =>
+      (order.status === "pending" || order.status === "active") &&
+      (order.expiresTick === null || order.expiresTick > tick)
+    )
     .sort((left, right) => right.priority - left.priority || left.id.localeCompare(right.id))[0] ?? null;
 }
 
@@ -142,7 +156,7 @@ export function assessStandingOrder(character: Character, order: StandingOrder |
     targetId: order.targetId,
     obedience,
     threshold,
-    willComply: obedience >= threshold,
+    willComply: order.status === "active" || obedience >= threshold,
     factors: Object.fromEntries(Object.entries(factors).map(([key, value]) => [key, round(value)])),
   };
 }
@@ -162,7 +176,9 @@ function planReviewReason(world: WorldState, character: Character): string | nul
   if (character.lastBattleTick > character.plan.createdTick && character.defeats > 0 && goal.kind !== "recover-strength") {
     return "a recent defeat invalidated prior assumptions";
   }
-  const newerOrder = character.standingOrders.some((order) => order.issuedTick > character.plan!.createdTick);
+  const newerOrder = character.standingOrders.some((order) =>
+    order.status === "pending" && order.issuedTick > character.plan!.createdTick
+  );
   if (newerOrder) return "a new standing order requires consideration";
   return null;
 }
@@ -238,7 +254,7 @@ export function reviewPlan(
   const reason = planReviewReason(world, character);
   if (!reason) return null;
 
-  const order = activeOrder(character, world.tick);
+  const order = activeStandingOrder(character, world.tick);
   const orderAssessment = assessStandingOrder(character, order);
   const goalScores = character.goals
     .filter((goal) => goal.status === "active")
@@ -281,6 +297,102 @@ export function reviewPlan(
     orderAssessment,
     plan,
   };
+}
+
+function settlementMatchesFaction(world: WorldState, settlementId: string | undefined, factionId: string | undefined): boolean {
+  return Boolean(settlementId && factionId && world.settlements[settlementId]?.factionId === factionId);
+}
+
+export function assessOrderAction(
+  world: WorldState,
+  character: Character,
+  order: StandingOrder,
+  action: string,
+  targetId?: string,
+): OrderActionAssessment {
+  const targetName = order.targetId
+    ? world.settlements[order.targetId]?.name ?? world.factions[order.targetId]?.name ?? order.targetId
+    : "the assigned objective";
+  let aligned = true;
+  let summary = `Continuing ${order.directive.replaceAll("-", " ")} orders concerning ${targetName}.`;
+
+  if (order.directive === "protect") {
+    aligned = character.locationId === order.targetId
+      ? action !== "travel"
+      : action === "travel" && targetId === order.targetId;
+  } else if (order.directive === "pressure") {
+    const actingAgainstTarget = (action === "raid" || action === "claim-settlement") &&
+      settlementMatchesFaction(world, character.locationId ?? targetId, order.targetId);
+    const travelingAgainstTarget = action === "travel" && settlementMatchesFaction(world, targetId, order.targetId);
+    aligned = actingAgainstTarget || travelingAgainstTarget || action === "recruit" || action === "buy-provisions" || action === "rest";
+  } else if (order.directive === "trade-supplies") {
+    aligned = action === "trade-local" || action === "buy-provisions" ||
+      (action === "travel" && (!order.targetId || targetId === order.targetId));
+  } else if (order.directive === "explore") {
+    aligned = action === "trade-local" ||
+      (action === "travel" && (!order.targetId || targetId === order.targetId)) ||
+      Boolean(order.targetId && character.locationId === order.targetId && action !== "travel");
+  }
+
+  if (!aligned) {
+    summary = `${character.name} diverted to ${action.replaceAll("-", " ")} while retaining ${order.directive.replaceAll("-", " ")} orders for ${targetName}.`;
+  } else if (order.adherence === "deviating") {
+    summary = `${character.name} resumed ${order.directive.replaceAll("-", " ")} orders concerning ${targetName}.`;
+  }
+  return { aligned, summary };
+}
+
+export function judgeOrderCompletion(
+  world: WorldState,
+  character: Character,
+  order: StandingOrder,
+  action: string,
+  events: Array<{ type: string; actorId?: string; targetId?: string; settlementId?: string; data: Record<string, unknown> }>,
+  rng: DeterministicRng,
+): OrderCompletionJudgment | null {
+  if (order.status !== "active" || order.adherence !== "following") return null;
+  const elapsed = world.tick - order.statusChangedTick;
+  let evidence = 0;
+  let summary = "";
+
+  if (order.directive === "protect" && character.locationId === order.targetId && elapsed >= world.ticksPerDay) {
+    const settlement = world.settlements[order.targetId!];
+    evidence = 0.62 + Math.min(0.2, elapsed / (world.ticksPerDay * 10)) + settlement.stability / 1_000;
+    summary = `${character.name} reports that ${settlement.name} is secure and asks the issuer to close the protection order.`;
+  } else if (order.directive === "pressure") {
+    const success = [...events].reverse().find((event) =>
+      event.actorId === character.id &&
+      ((event.type === "battle-resolved" && event.data.outcome === "attacker-victory" && event.targetId === order.targetId) ||
+        (event.type === "settlement-claimed" && event.data.previousFactionId === order.targetId))
+    );
+    if (success) {
+      evidence = success.type === "settlement-claimed" ? 1 : 0.91;
+      const place = success.settlementId ? world.settlements[success.settlementId]?.name ?? success.settlementId : "the objective";
+      summary = `${character.name} judges the pressure operation at ${place} successful and requests confirmation.`;
+    }
+  } else if (order.directive === "trade-supplies" && action === "trade-local") {
+    const trade = [...events].reverse().find((event) =>
+      event.type === "market-trade" && event.actorId === character.id &&
+      (!order.targetId || event.settlementId === order.targetId)
+    );
+    if (trade) {
+      evidence = 0.9;
+      const place = world.settlements[trade.settlementId!]?.name ?? "the assigned market";
+      summary = `${character.name} reports the supply transaction at ${place} complete and requests confirmation.`;
+    }
+  } else if (order.directive === "explore") {
+    const targetId = order.targetId ?? character.locationId;
+    const knowledge = targetId ? character.knowledge[targetId] : undefined;
+    if (targetId && character.locationId === targetId && knowledge?.source === "direct" && knowledge.observedTick >= order.issuedTick) {
+      evidence = 0.88;
+      summary = `${character.name} considers the survey of ${world.settlements[targetId].name} complete and requests confirmation.`;
+    }
+  }
+
+  if (!summary) return null;
+  const score = round(clamp(evidence + character.personality.ambition * 0.08 - character.personality.caution * 0.1 + rng.between(-0.04, 0.04), 0, 1));
+  const threshold = round(0.7 + character.personality.caution * 0.08);
+  return score >= threshold ? { score, threshold, summary } : null;
 }
 
 export function planActionBoost(

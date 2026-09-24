@@ -1,9 +1,12 @@
 import { DeterministicRng } from "./rng.ts";
 import {
+  activeStandingOrder,
+  assessOrderAction,
   believedGarrison,
   believedPrice,
   directObservation,
   goalProgressForAction,
+  judgeOrderCompletion,
   needsObservation,
   planActionBoost,
   reviewPlan,
@@ -590,6 +593,37 @@ function processPlayerCommands(
       continue;
     }
 
+    if (command.type === "confirm-order") {
+      const recipient = world.characters[command.characterId];
+      const order = recipient?.standingOrders.find((candidate) => candidate.id === command.orderId);
+      if (!recipient || !order || order.issuerId !== commander.id || order.status !== "awaiting-confirmation") {
+        emit(world, events, {
+          type: "player-command-failed",
+          actorId: commander.id,
+          targetId: command.characterId,
+          data: { commandId: command.id, reason: "the completion report is no longer awaiting this issuer" },
+        });
+        continue;
+      }
+      emit(world, events, {
+        type: "standing-order-completed",
+        actorId: commander.id,
+        targetId: recipient.id,
+        data: {
+          commandId: command.id,
+          orderId: order.id,
+          summary: `${commander.name} confirmed ${recipient.name}'s completion report.`,
+        },
+      });
+      emit(world, events, {
+        type: "player-command-resolved",
+        actorId: commander.id,
+        targetId: recipient.id,
+        data: { commandId: command.id, outcome: "order-completion-confirmed", orderId: order.id },
+      });
+      continue;
+    }
+
     if (command.type === "issue-order") {
       const recipient = world.characters[command.characterId];
       if (!recipient || recipient.controller.kind !== "autonomous") {
@@ -609,6 +643,11 @@ function processPlayerCommands(
         priority: command.priority,
         issuedTick: world.tick,
         expiresTick: command.expiresTick,
+        status: "pending",
+        adherence: "unassessed",
+        statusChangedTick: world.tick,
+        deviationCount: 0,
+        lastReport: null,
       };
       emit(world, events, {
         type: "standing-order-issued",
@@ -667,6 +706,82 @@ function processPlayerCommands(
       data: { commandId: command.id, outcome: "action-executed", action: command.action },
     });
   }
+}
+
+function expireStandingOrders(world: WorldState, events: SimEvent[]): void {
+  for (const character of Object.values(world.characters).sort((left, right) => left.id.localeCompare(right.id))) {
+    for (const order of character.standingOrders) {
+      if (
+        (order.status === "pending" || order.status === "active") &&
+        order.expiresTick !== null &&
+        world.tick >= order.expiresTick
+      ) {
+        emit(world, events, {
+          type: "standing-order-expired",
+          actorId: order.issuerId,
+          targetId: character.id,
+          data: {
+            orderId: order.id,
+            summary: `${order.directive.replaceAll("-", " ")} orders expired before completion was reported.`,
+          },
+        });
+      }
+    }
+  }
+}
+
+function recordOrderAssessment(
+  world: WorldState,
+  character: Character,
+  events: SimEvent[],
+  assessment: NonNullable<ReturnType<typeof reviewPlan>>["orderAssessment"],
+): void {
+  if (!assessment) return;
+  const order = character.standingOrders.find((candidate) => candidate.id === assessment.orderId);
+  if (!order || order.status !== "pending") return;
+  const accepted = assessment.willComply;
+  emit(world, events, {
+    type: accepted ? "standing-order-accepted" : "standing-order-refused",
+    actorId: character.id,
+    targetId: character.id,
+    data: {
+      orderId: order.id,
+      issuerId: order.issuerId,
+      obedience: assessment.obedience,
+      threshold: assessment.threshold,
+      factors: assessment.factors,
+      summary: accepted
+        ? `${character.name} accepted the ${order.directive.replaceAll("-", " ")} order.`
+        : `${character.name} refused the ${order.directive.replaceAll("-", " ")} order after weighing loyalty, risk, and ambition.`,
+    },
+  });
+}
+
+function updateOrderAdherence(
+  world: WorldState,
+  character: Character,
+  chosen: DecisionCandidate,
+  events: SimEvent[],
+): StandingOrder | null {
+  const order = activeStandingOrder(character, world.tick);
+  if (!order || order.status !== "active") return null;
+  const assessment = assessOrderAction(world, character, order, chosen.action, chosen.targetId);
+  if (!assessment.aligned && order.adherence !== "deviating") {
+    emit(world, events, {
+      type: "standing-order-deviated",
+      actorId: character.id,
+      targetId: character.id,
+      data: { orderId: order.id, issuerId: order.issuerId, action: chosen.action, summary: assessment.summary },
+    });
+  } else if (assessment.aligned && order.adherence === "deviating") {
+    emit(world, events, {
+      type: "standing-order-resumed",
+      actorId: character.id,
+      targetId: character.id,
+      data: { orderId: order.id, issuerId: order.issuerId, action: chosen.action, summary: assessment.summary },
+    });
+  }
+  return order;
 }
 
 function resolveDecision(
@@ -839,6 +954,7 @@ export function runTick(world: WorldState): TickResult {
 
   produceSettlements(world, events);
   processPlayerCommands(world, events, rng);
+  expireStandingOrders(world, events);
 
   for (const character of Object.values(world.characters).sort((a, b) => a.id.localeCompare(b.id))) {
     upkeepCharacter(world, character, events, Boolean(character.travel));
@@ -869,6 +985,7 @@ export function runTick(world: WorldState): TickResult {
         targetId: planReview.plan.targetId,
         data: planReview as unknown as Record<string, unknown>,
       });
+      recordOrderAssessment(world, character, events, planReview.orderAssessment);
     }
     if (character.travel) {
       progressTravel(world, character, events);
@@ -894,8 +1011,26 @@ export function runTick(world: WorldState): TickResult {
         candidates: candidates.slice(0, 6),
       },
     });
+    const order = updateOrderAdherence(world, character, chosen, events);
     resolveDecision(world, character, chosen, events, rng);
     progressActiveGoal(world, character, chosen.action, events);
+    if (order) {
+      const judgment = judgeOrderCompletion(world, character, order, chosen.action, events, rng);
+      if (judgment) {
+        emit(world, events, {
+          type: "standing-order-completion-reported",
+          actorId: character.id,
+          targetId: character.id,
+          data: {
+            orderId: order.id,
+            issuerId: order.issuerId,
+            score: judgment.score,
+            threshold: judgment.threshold,
+            summary: judgment.summary,
+          },
+        });
+      }
+    }
     evolveLocalRelationship(world, character, events, rng);
   }
 

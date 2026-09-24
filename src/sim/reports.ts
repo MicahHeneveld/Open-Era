@@ -97,6 +97,13 @@ function agencyTraces(world: WorldState, events: SimEvent[]): string {
     "goal-evolved",
     "relationship-changed",
     "standing-order-issued",
+    "standing-order-accepted",
+    "standing-order-refused",
+    "standing-order-deviated",
+    "standing-order-resumed",
+    "standing-order-completion-reported",
+    "standing-order-completed",
+    "standing-order-expired",
     "settlement-claimed",
     "player-action-executed",
     "player-command-failed",
@@ -194,6 +201,9 @@ function eventStory(world: WorldState, event: SimEvent): string | null {
     const order = event.data.order as { directive: string };
     return `- Day ${round(event.tick / world.ticksPerDay, 1)}: ${actor} issued **${order.directive.replaceAll("-", " ")}** orders to **${target}**.`;
   }
+  if (event.type.startsWith("standing-order-") && typeof event.data.summary === "string") {
+    return `- Day ${round(event.tick / world.ticksPerDay, 1)}: ${event.data.summary}`;
+  }
   if (event.type === "player-action-executed") {
     return `- Day ${round(event.tick / world.ticksPerDay, 1)}: Human direction committed ${actor} to **${String(event.data.action).replaceAll("-", " ")}**.`;
   }
@@ -213,7 +223,21 @@ function summaryMarkdown(world: WorldState, events: SimEvent[], snapshotCount: n
       return `| ${character.name} | ${character.archetype} | ${character.factionId ? world.factions[character.factionId].name : "Unaffiliated"} | ${partyPower(character)} | ${character.victories}–${character.defeats} | ${goal?.label ?? "Uncommitted"} |`;
     })
     .join("\n");
-  const majorTypes = new Set(["battle-resolved", "settlement-claimed", "goal-evolved", "relationship-changed", "settlement-shortage", "standing-order-issued", "player-action-executed"]);
+  const majorTypes = new Set([
+    "battle-resolved",
+    "settlement-claimed",
+    "goal-evolved",
+    "relationship-changed",
+    "settlement-shortage",
+    "standing-order-issued",
+    "standing-order-refused",
+    "standing-order-deviated",
+    "standing-order-resumed",
+    "standing-order-completion-reported",
+    "standing-order-completed",
+    "standing-order-expired",
+    "player-action-executed",
+  ]);
   const majorStories = events
     .filter((event) => majorTypes.has(event.type))
     .map((event) => eventStory(world, event))
@@ -233,7 +257,12 @@ function summaryMarkdown(world: WorldState, events: SimEvent[], snapshotCount: n
   const orderAssessments = planReviews
     .map((event) => event.data.orderAssessment as { willComply: boolean } | null)
     .filter((assessment): assessment is { willComply: boolean } => Boolean(assessment));
-  const complied = orderAssessments.filter((assessment) => assessment.willComply).length;
+  const acceptedOrders = events.filter((event) => event.type === "standing-order-accepted").length;
+  const refusedOrders = events.filter((event) => event.type === "standing-order-refused").length;
+  const orderDeviations = events.filter((event) => event.type === "standing-order-deviated").length;
+  const orderResumptions = events.filter((event) => event.type === "standing-order-resumed").length;
+  const completionReports = events.filter((event) => event.type === "standing-order-completion-reported").length;
+  const confirmedOrders = events.filter((event) => event.type === "standing-order-completed").length;
   const observations = events.filter((event) => event.type === "knowledge-updated").length;
   const evolvedGoals = events.filter((event) => event.type === "goal-evolved").length;
   const relationshipChanges = events.filter((event) => event.type === "relationship-changed").length;
@@ -272,7 +301,8 @@ The **${world.scenario}** scenario reached tick ${world.tick} (day ${round(world
 ## Agency diagnostics
 
 - ${planReviews.length} explicit plan reviews and ${observations} direct knowledge updates
-- ${orderAssessments.length} standing-order evaluations: ${complied} accepted and ${orderAssessments.length - complied} declined
+- ${orderAssessments.length} plan-time order assessments; ${acceptedOrders} orders accepted and ${refusedOrders} refused
+- ${orderDeviations} reported order deviations, ${orderResumptions} resumptions, ${completionReports} completion reports, and ${confirmedOrders} issuer confirmations
 - ${evolvedGoals} goals reshaped by major experiences and ${relationshipChanges} relationship changes
 - Active long-term goals — ${goalDistribution}
 

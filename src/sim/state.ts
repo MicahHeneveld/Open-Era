@@ -5,12 +5,31 @@ import type {
   Resources,
   Settlement,
   SimEvent,
+  StandingOrder,
   WorldState,
 } from "./types.ts";
 
 export const SURRENDER_GARRISON_THRESHOLD = 15;
 export const SURRENDER_STABILITY_THRESHOLD = 30;
 export const CLAIM_STABILITY_FLOOR = 55;
+
+export function normalizeStandingOrder(order: StandingOrder): StandingOrder {
+  return {
+    ...order,
+    status: order.status ?? "pending",
+    adherence: order.adherence ?? "unassessed",
+    statusChangedTick: order.statusChangedTick ?? order.issuedTick,
+    deviationCount: order.deviationCount ?? 0,
+    lastReport: order.lastReport ?? null,
+  };
+}
+
+export function normalizeWorldState(world: WorldState): WorldState {
+  for (const character of Object.values(world.characters)) {
+    character.standingOrders = character.standingOrders.map(normalizeStandingOrder);
+  }
+  return world;
+}
 
 export function settlementClaimAvailableTo(settlement: Settlement, characterId: string): boolean {
   return settlement.surrender?.offeredToId === characterId;
@@ -106,6 +125,13 @@ function resourcesFrom(data: Record<string, unknown>, key: string): Resources {
   return data[key] as Resources;
 }
 
+function standingOrderFromEvent(world: WorldState, event: SimEvent): StandingOrder {
+  const recipient = event.targetId ? world.characters[event.targetId] : undefined;
+  const order = recipient?.standingOrders.find((candidate) => candidate.id === event.data.orderId);
+  if (!order) throw new Error(`Unknown standing order: ${String(event.data.orderId)}`);
+  return order;
+}
+
 export function applyEvent(world: WorldState, event: SimEvent): void {
   const actor = event.actorId ? world.characters[event.actorId] : undefined;
   const settlement = event.settlementId ? world.settlements[event.settlementId] : undefined;
@@ -161,7 +187,63 @@ export function applyEvent(world: WorldState, event: SimEvent): void {
     case "standing-order-issued": {
       const recipient = event.targetId ? world.characters[event.targetId] : undefined;
       if (!recipient) throw new Error("Standing order has no recipient");
-      recipient.standingOrders.push(event.data.order as Character["standingOrders"][number]);
+      recipient.standingOrders.push(normalizeStandingOrder(event.data.order as Character["standingOrders"][number]));
+      break;
+    }
+    case "standing-order-accepted": {
+      const order = standingOrderFromEvent(world, event);
+      order.status = "active";
+      order.adherence = "following";
+      order.statusChangedTick = world.tick;
+      order.lastReport = { tick: world.tick, kind: "accepted", summary: event.data.summary as string };
+      break;
+    }
+    case "standing-order-refused": {
+      const order = standingOrderFromEvent(world, event);
+      order.status = "refused";
+      order.adherence = "unassessed";
+      order.statusChangedTick = world.tick;
+      order.lastReport = { tick: world.tick, kind: "refused", summary: event.data.summary as string };
+      break;
+    }
+    case "standing-order-deviated": {
+      const order = standingOrderFromEvent(world, event);
+      order.adherence = "deviating";
+      order.deviationCount += 1;
+      order.lastReport = { tick: world.tick, kind: "deviation", summary: event.data.summary as string };
+      break;
+    }
+    case "standing-order-resumed": {
+      const order = standingOrderFromEvent(world, event);
+      order.adherence = "following";
+      order.lastReport = { tick: world.tick, kind: "resumed", summary: event.data.summary as string };
+      break;
+    }
+    case "standing-order-completion-reported": {
+      const order = standingOrderFromEvent(world, event);
+      const recipient = event.targetId ? world.characters[event.targetId] : undefined;
+      order.status = "awaiting-confirmation";
+      order.adherence = "following";
+      order.statusChangedTick = world.tick;
+      order.lastReport = { tick: world.tick, kind: "completion", summary: event.data.summary as string };
+      if (recipient?.plan?.orderId === order.id) recipient.plan = null;
+      break;
+    }
+    case "standing-order-completed": {
+      const order = standingOrderFromEvent(world, event);
+      order.status = "completed";
+      order.adherence = "following";
+      order.statusChangedTick = world.tick;
+      order.lastReport = { tick: world.tick, kind: "confirmed", summary: event.data.summary as string };
+      break;
+    }
+    case "standing-order-expired": {
+      const order = standingOrderFromEvent(world, event);
+      const recipient = event.targetId ? world.characters[event.targetId] : undefined;
+      order.status = "expired";
+      order.statusChangedTick = world.tick;
+      order.lastReport = { tick: world.tick, kind: "expired", summary: event.data.summary as string };
+      if (recipient?.plan?.orderId === order.id) recipient.plan = null;
       break;
     }
     case "player-action-executed":

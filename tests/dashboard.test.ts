@@ -19,6 +19,7 @@ test("the local dashboard serves state and executes its command API", async () =
     const pageHtml = await page.text();
     assert.match(pageHtml, /Open Era/);
     assert.match(pageHtml, /Accept surrender &amp; claim/);
+    assert.match(pageHtml, /Exception-first check-in/);
 
     const initialResponse = await fetch(`${base}/api/state`);
     const initial = await initialResponse.json() as {
@@ -61,11 +62,39 @@ test("the local dashboard serves state and executes its command API", async () =
     const final = await (await fetch(`${base}/api/state`)).json() as {
       tick: number;
       pendingCommands: unknown[];
-      characters: Array<{ id: string; standingOrders: Array<{ id: string }> }>;
+      briefing: { attentionCount: number; items: Array<{ action?: string; characterId?: string; orderId?: string }> };
+      characters: Array<{ id: string; standingOrders: Array<{ id: string; status: string }> }>;
     };
     assert.equal(final.tick, 1);
     assert.equal(final.pendingCommands.length, 0);
     assert.ok(final.characters.find((character) => character.id === "character-04")?.standingOrders.some((order) => order.id === "command-00001:standing-order"));
+    const completion = final.briefing.items.find((item) => item.action === "confirm-order");
+    assert.ok(completion?.characterId && completion.orderId);
+
+    const confirmResponse = await fetch(`${base}/api/commands`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        playerId: "prototype-player",
+        type: "confirm-order",
+        characterId: completion.characterId,
+        orderId: completion.orderId,
+      }),
+    });
+    assert.equal(confirmResponse.status, 202);
+    assert.equal((await fetch(`${base}/api/advance`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ ticks: 1 }),
+    })).status, 200);
+    const afterConfirmation = await (await fetch(`${base}/api/state`)).json() as {
+      characters: Array<{ id: string; standingOrders: Array<{ id: string; status: string }> }>;
+    };
+    assert.equal(
+      afterConfirmation.characters.find((character) => character.id === completion.characterId)
+        ?.standingOrders.find((order) => order.id === completion.orderId)?.status,
+      "completed",
+    );
 
     const threadResponse = await fetch(`${base}/api/threads`, {
       method: "POST",

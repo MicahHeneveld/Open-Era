@@ -104,3 +104,21 @@ test("an autonomous character claims a hostile settlement that offers surrender"
   assert.equal(settlement.ownerId, claimant.id);
   assert.equal(settlement.factionId, claimant.factionId);
 });
+
+test("accepted orders report temporary deviations, resumptions, and completion judgments", () => {
+  const result = runTicks(createPrototypeWorld(1847), 24);
+  const deviations = result.events.filter((event) => event.type === "standing-order-deviated");
+  const resumptions = result.events.filter((event) => event.type === "standing-order-resumed");
+  const reports = result.events.filter((event) => event.type === "standing-order-completion-reported");
+
+  assert.ok(deviations.length > 0);
+  assert.ok(resumptions.some((event) => deviations.some((deviation) => deviation.data.orderId === event.data.orderId)));
+  assert.ok(reports.length > 0);
+  assert.ok(reports.every((event) => {
+    const character = result.state.characters[event.actorId!];
+    return character.standingOrders.some((order) =>
+      order.id === event.data.orderId &&
+      (order.status === "awaiting-confirmation" || order.status === "completed")
+    );
+  }));
+});

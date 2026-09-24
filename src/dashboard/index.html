@@ -234,6 +234,15 @@
     .event-feed { max-height: 86px; overflow: auto; }
     .event-row { align-items: flex-start; padding: 5px 0; }
     .event-row time { color: var(--muted); white-space: nowrap; }
+    .brief-row { padding: 7px 0; border-bottom: 1px solid #e2dfd4; font-size: 11px; }
+    .brief-row:last-child { border-bottom: 0; }
+    .brief-head { display: flex; align-items: center; justify-content: space-between; gap: 7px; margin-bottom: 2px; }
+    .brief-badge { border-radius: 999px; padding: 2px 6px; color: var(--muted); background: #e8ebe4; font-size: 9px; text-transform: uppercase; }
+    .brief-badge.action { color: white; background: var(--gold); }
+    .brief-badge.warning { color: white; background: var(--danger); }
+    .brief-action { margin-top: 5px; border: 1px solid var(--blue); border-radius: 8px; padding: 4px 7px; color: var(--blue); background: white; font-size: 10px; }
+    .order-detail { padding: 9px 0; border-bottom: 1px solid #e2dfd4; font-size: 12px; }
+    .order-detail .subtle { margin-top: 3px; }
     .toast {
       position: fixed;
       right: 18px;
@@ -293,7 +302,7 @@
         </div>
       </div>
       <div class="footer-card">
-        <div class="footer-title">Recent world events</div>
+        <div class="footer-title">Exception-first check-in</div>
         <div class="event-feed" id="events"></div>
       </div>
     </footer>
@@ -388,6 +397,14 @@
         targetId: targetSelect.value || undefined,
         priority: Number(byId("order-priority").value),
         expiresInTicks: 72
+      });
+    }
+    function confirmOrder(characterId, orderId) {
+      mutate("/api/commands", {
+        playerId: world.player.id,
+        type: "confirm-order",
+        characterId: characterId,
+        orderId: orderId
       });
     }
     function createThread() {
@@ -496,6 +513,7 @@
       var f = faction(item.factionId);
       var place = item.locationId ? settlement(item.locationId).name : item.travel ? "Sailing" : "Unknown";
       var order = item.activeOrderAssessment;
+      var liveOrder = item.standingOrders.slice().reverse().find(function (entry) { return entry.status === "pending" || entry.status === "active"; });
       return '<div class="eyebrow">' + (item.controller.kind === "human" ? "Human-controlled character" : "Autonomous character") + '</div><h2>' + esc(item.name) + "</h2>" +
         '<div class="subtle">' + esc(item.archetype) + " · " + esc(f ? f.name : "Unaffiliated") + " · " + esc(place) + "</div>" +
         '<div class="stat-grid">' +
@@ -506,11 +524,18 @@
         "</div>" +
         "<h3>Condition</h3>" + meter("Health", item.health, item.health < 45) + meter("Morale", item.morale, item.morale < 40) +
         "<h3>Current ambition</h3><div class=\"stat\"><strong>" + esc(item.activeGoal ? item.activeGoal.label : "Player-defined") + "</strong><div class=\"subtle\">" + esc(item.plan ? item.plan.reason : "No autonomous plan") + "</div></div>" +
-        (order ? "<h3>Order response</h3><div class=\"stat\"><strong>" + (order.willComply ? "Likely to comply" : "Likely to refuse") + "</strong><div class=\"subtle\">" + fmt(order.obedience * 100) + "% obedience against " + fmt(order.threshold * 100) + "% threshold</div></div>" : "") +
+        (order && liveOrder ? "<h3>Order response</h3><div class=\"stat\"><strong>" + esc(liveOrder.status === "pending" ? "Awaiting response" : liveOrder.adherence === "deviating" ? "Active · temporarily diverted" : "Active · following") + "</strong><div class=\"subtle\">" + fmt(order.obedience * 100) + "% willingness against " + fmt(order.threshold * 100) + "% initial threshold</div></div>" : "") +
         "<h3>Relationship to commander</h3>" +
         (item.relationship ? '<div class="resource-row"><span>Trust</span><strong>' + fmt(item.relationship.trust * 100) + '%</strong></div><div class="resource-row"><span>Respect</span><strong>' + fmt(item.relationship.respect * 100) + '%</strong></div><div class="resource-row"><span>Grievance</span><strong>' + fmt(item.relationship.grievance * 100) + "%</strong></div>" : '<div class="empty">No meaningful relationship is recorded.</div>') +
         "<h3>Known orders</h3>" +
-        (item.standingOrders.length ? item.standingOrders.slice(-4).map(function (entry) { return '<div class="order-row"><span>' + esc(entry.directive) + "</span><strong>" + fmt(entry.priority * 100) + "%</strong></div>"; }).join("") : '<div class="empty">No standing orders.</div>');
+        (item.standingOrders.length ? item.standingOrders.slice(-4).reverse().map(function (entry) {
+          var confirm = entry.status === "awaiting-confirmation" && entry.issuerId === world.commanderId
+            ? '<button class="brief-action" type="button" data-confirm-order="' + esc(entry.id) + '" data-confirm-character="' + esc(item.id) + '">Confirm completion</button>'
+            : "";
+          return '<div class="order-detail"><div class="order-row"><span>' + esc(entry.directive) + '</span><strong>' + esc(entry.status.replaceAll("-", " ")) + '</strong></div>' +
+            '<div class="subtle">' + esc(entry.adherence) + ' · priority ' + fmt(entry.priority * 100) + '% · ' + entry.deviationCount + ' deviation(s)</div>' +
+            (entry.lastReport ? '<div class="subtle">' + esc(entry.lastReport.summary) + '</div>' : '') + confirm + '</div>';
+        }).join("") : '<div class="empty">No standing orders.</div>');
     }
     function commandPanel() {
       var c = commander();
@@ -540,6 +565,9 @@
       byId("inspector").querySelectorAll("[data-action]").forEach(function (button) {
         button.addEventListener("click", function () { sendAction(button.dataset.action, button.dataset.target); });
       });
+      byId("inspector").querySelectorAll("[data-confirm-order]").forEach(function (button) {
+        button.addEventListener("click", function () { confirmOrder(button.dataset.confirmCharacter, button.dataset.confirmOrder); });
+      });
       byId("order-directive").addEventListener("change", updateOrderTargets);
       byId("issue-order").addEventListener("click", issueOrder);
       updateOrderTargets();
@@ -557,9 +585,24 @@
       byId("pending").textContent = world.pendingCommands.length
         ? world.pendingCommands.length + " command(s) queued"
         : "No commands waiting";
-      byId("events").innerHTML = world.events.slice(0, 12).map(function (event) {
-        return '<div class="event-row"><time>D' + fmt(event.day, 1) + "</time><span>" + esc(event.summary) + "</span></div>";
-      }).join("");
+      var briefing = world.briefing || { attentionCount: 0, items: [] };
+      byId("events").innerHTML = briefing.items.map(function (item) {
+        var action = item.action === "confirm-order"
+          ? '<button class="brief-action" type="button" data-brief-confirm="' + esc(item.orderId) + '" data-brief-character="' + esc(item.characterId) + '">Confirm completion</button>'
+          : item.action === "claim-settlement"
+            ? '<button class="brief-action" type="button" data-brief-claim="true">Review surrender</button>'
+            : "";
+        return '<div class="brief-row"><div class="brief-head"><strong>' + esc(item.title) + '</strong><span class="brief-badge ' + esc(item.severity) + '">' + esc(item.severity) + '</span></div><div>' + esc(item.summary) + '</div>' + action + '</div>';
+      }).join("") || '<div class="empty">No exceptions need attention.</div>';
+      byId("events").querySelectorAll("[data-brief-confirm]").forEach(function (button) {
+        button.addEventListener("click", function () { confirmOrder(button.dataset.briefCharacter, button.dataset.briefConfirm); });
+      });
+      byId("events").querySelectorAll("[data-brief-claim]").forEach(function (button) {
+        button.addEventListener("click", function () {
+          var item = briefing.items.find(function (entry) { return entry.action === "claim-settlement"; });
+          if (item) selectSettlement(item.settlementId);
+        });
+      });
     }
     function renderChat() {
       var conversations = world.conversations || { threads: [], messages: [], scheduledReplies: [] };

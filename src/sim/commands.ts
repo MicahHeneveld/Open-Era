@@ -22,6 +22,12 @@ export type CommandRequest =
       targetId?: string;
       priority?: number;
       expiresInTicks?: number | null;
+    }
+  | {
+      playerId: string;
+      type: "confirm-order";
+      characterId: string;
+      orderId: string;
     };
 
 export type CommandSubmission =
@@ -57,7 +63,7 @@ function acceptedEvent(world: WorldState, command: PlayerCommand): SimEvent {
     tick: world.tick,
     type: "player-command-accepted",
     actorId: player.characterId,
-    targetId: command.type === "issue-order" ? command.characterId : command.targetId,
+    targetId: command.type === "character-action" ? command.targetId : command.characterId,
     data: {
       command,
       nextCommandSequence: world.nextCommandSequence + 1,
@@ -180,10 +186,36 @@ function validateStandingOrder(
   return { ok: true, command, event: acceptedEvent(world, command) };
 }
 
+function validateOrderConfirmation(
+  world: WorldState,
+  request: Extract<CommandRequest, { type: "confirm-order" }>,
+): CommandSubmission {
+  const player = world.players[request.playerId];
+  const issuer = world.characters[player.characterId];
+  const recipient = world.characters[request.characterId];
+  if (!recipient) return reject("unknown-character", "The order recipient is unknown");
+  const order = recipient.standingOrders.find((candidate) => candidate.id === request.orderId);
+  if (!order) return reject("unknown-order", "That standing order does not exist");
+  if (order.issuerId !== issuer.id) return reject("not-issuer", "Only the character who issued an order may confirm it");
+  if (order.status !== "awaiting-confirmation") {
+    return reject("not-awaiting-confirmation", "The character has not reported this order complete");
+  }
+
+  const command: PlayerCommand = {
+    id: `command-${String(world.nextCommandSequence).padStart(5, "0")}`,
+    playerId: player.id,
+    issuedTick: world.tick,
+    type: "confirm-order",
+    characterId: recipient.id,
+    orderId: order.id,
+  };
+  return { ok: true, command, event: acceptedEvent(world, command) };
+}
+
 export function submitCommand(world: WorldState, request: CommandRequest): CommandSubmission {
   const player = world.players[request.playerId];
   if (!player) return reject("unknown-player", "The player session is unknown");
-  return request.type === "character-action"
-    ? validateCharacterAction(world, request)
-    : validateStandingOrder(world, request);
+  if (request.type === "character-action") return validateCharacterAction(world, request);
+  if (request.type === "issue-order") return validateStandingOrder(world, request);
+  return validateOrderConfirmation(world, request);
 }

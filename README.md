@@ -19,7 +19,7 @@ This branch contains the first **headless world prototype**. It is intentionally
 - Persistent personality-rooted goals and structured multi-tick plans
 - Imperfect island knowledge that becomes stale and refreshes through direct observation
 - Trust, affinity, respect, fear, grievance, and obligation between characters
-- Standing orders that characters independently accept or reject based on loyalty, values, relationships, ambition, and risk
+- Standing orders with durable acceptance, refusal, deviation, resumption, completion-report, confirmation, and expiry states
 - Goals and relationships that change after victories, defeats, and shared local experiences
 - A human-controlled commander who never receives autonomous decisions
 - Server-validated direct actions and durable player-issued standing orders
@@ -76,7 +76,8 @@ Open `http://127.0.0.1:4317`. The dashboard provides:
 - Character goals, plans, relationships, knowledge, and order responses
 - Persistent DMs and group chats with visible autonomous response windows
 - Direct player actions such as travel, trade, recruitment, work, and rest
-- Standing orders that autonomous faction members may obey or refuse
+- Standing orders that autonomous faction members may accept, refuse, temporarily deviate from, resume, and report complete
+- An exception-first check-in briefing with completion confirmations, deviations, failures, shortages, battles, and stale intelligence
 - Accelerated time controls and a live world-event feed
 
 Player actions are validated by the simulation server and persisted before execution. The dashboard binds to loopback by default and intentionally has no production authentication; it is a local development observer, not a deployable multiplayer server.

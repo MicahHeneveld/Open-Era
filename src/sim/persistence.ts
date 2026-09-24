@@ -1,7 +1,7 @@
 import { mkdirSync } from "node:fs";
 import { dirname } from "node:path";
 import { DatabaseSync } from "node:sqlite";
-import { applyEvent, stateHash } from "./state.ts";
+import { applyEvent, normalizeWorldState, stateHash } from "./state.ts";
 import type { SimEvent, WorldState } from "./types.ts";
 
 export interface RecoveryResult {
@@ -141,6 +141,7 @@ export class WorldStore {
     if (actualHash !== snapshot.state_hash) {
       throw new Error(`Snapshot hash mismatch at sequence ${snapshot.sequence}`);
     }
+    normalizeWorldState(state);
 
     const rows = this.database
       .prepare("SELECT * FROM events WHERE sequence > ? ORDER BY sequence")
@@ -162,7 +163,7 @@ export class WorldStore {
   }
 
   recentEvents(limit = 80): SimEvent[] {
-    const safeLimit = Math.max(1, Math.min(500, Math.floor(limit)));
+    const safeLimit = Math.max(1, Math.min(5_000, Math.floor(limit)));
     const rows = this.database
       .prepare("SELECT * FROM events ORDER BY sequence DESC LIMIT ?")
       .all(safeLimit) as unknown as EventRow[];

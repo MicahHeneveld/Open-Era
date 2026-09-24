@@ -129,6 +129,22 @@ export interface SettlementKnowledge {
 
 export type OrderDirective = "protect" | "pressure" | "trade-supplies" | "explore";
 
+export type StandingOrderStatus =
+  | "pending"
+  | "active"
+  | "refused"
+  | "awaiting-confirmation"
+  | "completed"
+  | "expired";
+
+export type StandingOrderAdherence = "unassessed" | "following" | "deviating";
+
+export interface StandingOrderReport {
+  tick: number;
+  kind: "accepted" | "refused" | "deviation" | "resumed" | "completion" | "confirmed" | "expired";
+  summary: string;
+}
+
 export interface StandingOrder {
   id: string;
   issuerId: string;
@@ -137,6 +153,11 @@ export interface StandingOrder {
   priority: number;
   issuedTick: number;
   expiresTick: number | null;
+  status: StandingOrderStatus;
+  adherence: StandingOrderAdherence;
+  statusChangedTick: number;
+  deviationCount: number;
+  lastReport: StandingOrderReport | null;
 }
 
 export type CharacterController =
@@ -227,6 +248,14 @@ export type PlayerCommand =
       targetId?: string;
       priority: number;
       expiresTick: number | null;
+    }
+  | {
+      id: string;
+      playerId: string;
+      issuedTick: number;
+      type: "confirm-order";
+      characterId: string;
+      orderId: string;
     };
 
 export interface Character {

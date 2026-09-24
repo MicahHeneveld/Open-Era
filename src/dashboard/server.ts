@@ -89,7 +89,9 @@ export function createDashboardApp(options: DashboardOptions): DashboardApp {
         return;
       }
       if (request.method === "GET" && url.pathname === "/api/state") {
-        json(response, 200, dashboardState(world, store.recentEvents(100)));
+        // Roughly one busy in-world week is scanned for exceptional events;
+        // the view model still returns only a compact recent-event feed.
+        json(response, 200, dashboardState(world, store.recentEvents(5_000)));
         return;
       }
       if (request.method === "GET" && url.pathname === "/api/health") {

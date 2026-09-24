@@ -255,6 +255,11 @@ function orderFor(character: Character): StandingOrder | null {
     priority: character.factionId === "world-government" ? 0.78 : 0.67,
     issuedTick: 0,
     expiresTick: null,
+    status: "pending",
+    adherence: "unassessed",
+    statusChangedTick: 0,
+    deviationCount: 0,
+    lastReport: null,
   };
 }
 

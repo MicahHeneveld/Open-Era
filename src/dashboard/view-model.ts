@@ -17,6 +17,20 @@ function eventSummary(world: WorldState, event: SimEvent): string {
       return `${actor}'s command failed: ${event.data.reason}`;
     case "standing-order-issued":
       return `${actor} issued ${String((event.data.order as { directive: string }).directive).replaceAll("-", " ")} orders to ${target}`;
+    case "standing-order-accepted":
+      return String(event.data.summary);
+    case "standing-order-refused":
+      return String(event.data.summary);
+    case "standing-order-deviated":
+      return String(event.data.summary);
+    case "standing-order-resumed":
+      return String(event.data.summary);
+    case "standing-order-completion-reported":
+      return String(event.data.summary);
+    case "standing-order-completed":
+      return String(event.data.summary);
+    case "standing-order-expired":
+      return String(event.data.summary);
     case "plan-reconsidered":
       return `${actor} reconsidered their plan: ${event.data.reason}`;
     case "battle-resolved":
@@ -46,6 +60,110 @@ function eventSummary(world: WorldState, event: SimEvent): string {
   }
 }
 
+function checkInBriefing(world: WorldState, commanderId: string, events: SimEvent[]): Record<string, unknown> {
+  const commander = world.characters[commanderId];
+  const items: Array<Record<string, unknown>> = [];
+  const relevantOrder = (event: SimEvent) => {
+    const recipient = event.targetId ? world.characters[event.targetId] : undefined;
+    const orderId = typeof event.data.orderId === "string" ? event.data.orderId : null;
+    return recipient?.standingOrders.find((order) => order.id === orderId && order.issuerId === commanderId) ?? null;
+  };
+
+  for (const character of Object.values(world.characters)) {
+    for (const order of character.standingOrders) {
+      if (order.issuerId !== commanderId || order.status !== "awaiting-confirmation") continue;
+      items.push({
+        id: `confirm:${order.id}`,
+        severity: "action",
+        actionRequired: true,
+        title: "Completion needs confirmation",
+        summary: order.lastReport?.summary ?? `${character.name} reports an order complete.`,
+        day: round(order.statusChangedTick / world.ticksPerDay, 2),
+        characterId: character.id,
+        orderId: order.id,
+        action: "confirm-order",
+      });
+    }
+  }
+
+  const surrender = Object.values(world.settlements).find((settlement) =>
+    commander.locationId === settlement.id && settlementClaimAvailableTo(settlement, commander.id)
+  );
+  if (surrender) {
+    items.push({
+      id: `surrender:${surrender.id}`,
+      severity: "action",
+      actionRequired: true,
+      title: "Surrender awaiting decision",
+      summary: `${surrender.name} is offering surrender to ${commander.name}.`,
+      day: round(world.tick / world.ticksPerDay, 2),
+      settlementId: surrender.id,
+      action: "claim-settlement",
+    });
+  }
+
+  const staleIntelligence = Object.values(world.settlements)
+    .filter((settlement) => settlement.factionId !== commander.factionId)
+    .map((settlement) => ({ settlement, knowledge: commander.knowledge[settlement.id] }))
+    .filter(({ knowledge }) => knowledge && world.tick - knowledge.observedTick >= world.ticksPerDay * 3)
+    .sort((left, right) => left.knowledge.observedTick - right.knowledge.observedTick)
+    .slice(0, 2);
+  for (const { settlement, knowledge } of staleIntelligence) {
+    items.push({
+      id: `intel:${settlement.id}:${knowledge.observedTick}`,
+      severity: "warning",
+      actionRequired: false,
+      title: "Intelligence is stale",
+      summary: `${settlement.name}'s report is ${world.tick - knowledge.observedTick} ticks old.`,
+      day: round(world.tick / world.ticksPerDay, 2),
+      settlementId: settlement.id,
+    });
+  }
+
+  const includedTypes = new Set([
+    "player-command-failed",
+    "standing-order-refused",
+    "standing-order-deviated",
+    "standing-order-resumed",
+    "standing-order-completed",
+    "standing-order-expired",
+    "battle-resolved",
+    "settlement-shortage",
+    "settlement-claimed",
+  ]);
+  for (const event of [...events].reverse()) {
+    if (!includedTypes.has(event.type)) continue;
+    if (event.type.startsWith("standing-order-") && !relevantOrder(event)) continue;
+    if (event.type === "settlement-shortage" && world.settlements[event.settlementId!]?.factionId !== commander.factionId) continue;
+    if (event.type === "battle-resolved") {
+      const actor = event.actorId ? world.characters[event.actorId] : undefined;
+      const defendedFactionId = event.settlementId ? world.settlements[event.settlementId]?.factionId : null;
+      if (actor?.factionId !== commander.factionId && defendedFactionId !== commander.factionId) continue;
+    }
+    const warning = event.type === "player-command-failed" || event.type === "standing-order-refused" ||
+      event.type === "standing-order-deviated" || event.type === "standing-order-expired" ||
+      event.type === "settlement-shortage" ||
+      (event.type === "battle-resolved" && event.data.outcome !== "attacker-victory");
+    items.push({
+      id: `event:${event.sequence}`,
+      severity: warning ? "warning" : "info",
+      actionRequired: false,
+      title: event.type.replaceAll("-", " "),
+      summary: eventSummary(world, event),
+      day: round(event.tick / world.ticksPerDay, 2),
+      characterId: event.targetId && world.characters[event.targetId] ? event.targetId : event.actorId,
+      settlementId: event.settlementId,
+      orderId: event.data.orderId,
+    });
+    if (items.length >= 12) break;
+  }
+
+  return {
+    attentionCount: items.filter((item) => item.actionRequired || item.severity === "warning").length,
+    items: items.slice(0, 10),
+  };
+}
+
 export function dashboardState(world: WorldState, events: SimEvent[]): Record<string, unknown> {
   const player = Object.values(world.players)[0];
   const commander = world.characters[player.characterId];
@@ -56,6 +174,7 @@ export function dashboardState(world: WorldState, events: SimEvent[]): Record<st
     player,
     commanderId: commander.id,
     pendingCommands: world.pendingCommands,
+    briefing: checkInBriefing(world, commander.id, events),
     factions: Object.values(world.factions).map((faction) => ({
       ...faction,
       power: factionPower(world, faction.id),
@@ -107,7 +226,10 @@ export function dashboardState(world: WorldState, events: SimEvent[]): Record<st
       const activeGoal = character.goals.find((goal) => goal.id === character.activeGoalId) ?? null;
       const relationship = commander.relationships[character.id] ?? null;
       const activeOrder = character.standingOrders
-        .filter((order) => order.expiresTick === null || order.expiresTick >= world.tick)
+        .filter((order) =>
+          (order.status === "pending" || order.status === "active") &&
+          (order.expiresTick === null || order.expiresTick > world.tick)
+        )
         .sort((left, right) => right.priority - left.priority)[0] ?? null;
       return {
         id: character.id,
@@ -137,7 +259,7 @@ export function dashboardState(world: WorldState, events: SimEvent[]): Record<st
         defeats: character.defeats,
       };
     }),
-    events: events.map((event) => ({
+    events: events.slice(-100).map((event) => ({
       sequence: event.sequence,
       tick: event.tick,
       day: round(event.tick / world.ticksPerDay, 2),

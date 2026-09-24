@@ -180,6 +180,57 @@ test("a delivered standing order immediately enters autonomous plan review", () 
   assert.ok(issued);
   assert.equal((issued.data.order as { targetId: string }).targetId, "glassport");
   assert.equal((review?.data.orderAssessment as { orderId: string }).orderId, "command-00001:standing-order");
+  const order = recipient.standingOrders.find((candidate) => candidate.id === "command-00001:standing-order");
+  assert.equal(order?.status, "active");
+  assert.equal(order?.adherence, "following");
+  assert.ok(result.events.some((event) => event.type === "standing-order-accepted" && event.actorId === recipient.id));
+});
+
+test("the issuer confirms a character's completion report before an order closes", () => {
+  const world = createPrototypeWorld(1847);
+  const firstTick = runTick(world);
+  const report = firstTick.events.find((event) =>
+    event.type === "standing-order-completion-reported" && event.data.issuerId === "character-01"
+  );
+  assert.ok(report);
+  const recipient = world.characters[report.actorId!];
+  const order = recipient.standingOrders.find((candidate) => candidate.id === report.data.orderId)!;
+  assert.equal(order.status, "awaiting-confirmation");
+
+  const submission = submitCommand(world, {
+    playerId: "prototype-player",
+    type: "confirm-order",
+    characterId: recipient.id,
+    orderId: order.id,
+  });
+  assert.equal(submission.ok, true);
+  const confirmationTick = runTick(world);
+  assert.equal(order.status, "completed");
+  assert.equal(order.lastReport?.kind, "confirmed");
+  assert.ok(confirmationTick.events.some((event) =>
+    event.type === "standing-order-completed" && event.data.orderId === order.id
+  ));
+});
+
+test("an uncompleted timed order expires and no longer drives the character's plan", () => {
+  const world = createPrototypeWorld(1847);
+  const recipient = world.characters["character-04"];
+  const submission = submitCommand(world, {
+    playerId: "prototype-player",
+    type: "issue-order",
+    characterId: recipient.id,
+    directive: "protect",
+    targetId: "glassport",
+    priority: 0.97,
+    expiresInTicks: 1,
+  });
+  assert.equal(submission.ok, true);
+  runTick(world);
+  const result = runTick(world);
+  const order = recipient.standingOrders.find((candidate) => candidate.id === "command-00001:standing-order")!;
+  assert.equal(order.status, "expired");
+  assert.notEqual(recipient.plan?.orderId, order.id);
+  assert.ok(result.events.some((event) => event.type === "standing-order-expired" && event.data.orderId === order.id));
 });
 
 test("an accepted command survives restart and resolves after event replay", () => {
@@ -205,6 +256,41 @@ test("an accepted command survives restart and resolves after event replay", () 
     reopened.appendTick(result.events, recovered);
     assert.equal(recovered.pendingCommands.length, 0);
     assert.ok(result.events.some((event) => event.type === "player-command-resolved"));
+    reopened.close();
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test("schema-3 saves without lifecycle fields recover with pending legacy orders", () => {
+  const directory = mkdtempSync(join(tmpdir(), "open-era-order-migration-"));
+  const path = join(directory, "world.sqlite");
+  try {
+    const world = createPrototypeWorld(1847);
+    for (const character of Object.values(world.characters)) {
+      for (const order of character.standingOrders) {
+        const legacy = order as unknown as Record<string, unknown>;
+        delete legacy.status;
+        delete legacy.adherence;
+        delete legacy.statusChangedTick;
+        delete legacy.deviationCount;
+        delete legacy.lastReport;
+      }
+    }
+    const store = new WorldStore(path);
+    store.initialize(world);
+    store.close();
+
+    const reopened = new WorldStore(path);
+    const recovered = reopened.recover().state;
+    const orders = Object.values(recovered.characters).flatMap((character) => character.standingOrders);
+    assert.ok(orders.length > 0);
+    assert.ok(orders.every((order) =>
+      order.status === "pending" &&
+      order.adherence === "unassessed" &&
+      order.deviationCount === 0 &&
+      order.lastReport === null
+    ));
     reopened.close();
   } finally {
     rmSync(directory, { recursive: true, force: true });
