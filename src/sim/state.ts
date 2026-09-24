@@ -102,6 +102,43 @@ export function applyEvent(world: WorldState, event: SimEvent): void {
   const settlement = event.settlementId ? world.settlements[event.settlementId] : undefined;
 
   switch (event.type) {
+    case "conversation-thread-created": {
+      const thread = event.data.thread as WorldState["conversationThreads"][string];
+      world.conversationThreads[thread.id] = thread;
+      world.nextThreadSequence = event.data.nextThreadSequence as number;
+      break;
+    }
+    case "conversation-message-sent": {
+      const message = event.data.message as WorldState["conversationMessages"][number];
+      world.conversationMessages.push(message);
+      world.conversationThreads[message.threadId].lastMessageTick = message.createdTick;
+      world.nextMessageSequence = event.data.nextMessageSequence as number;
+      break;
+    }
+    case "conversation-reply-scheduled":
+      world.scheduledReplies.push(event.data.reply as WorldState["scheduledReplies"][number]);
+      world.nextReplySequence = event.data.nextReplySequence as number;
+      break;
+    case "conversation-reply-created": {
+      const message = event.data.message as WorldState["conversationMessages"][number];
+      const scheduled = world.scheduledReplies.find((reply) => reply.id === event.data.replyId);
+      if (!scheduled) throw new Error(`Unknown scheduled reply: ${event.data.replyId}`);
+      const alreadyProfiled = world.conversationMessages.some((existing) =>
+        existing.source === "autonomous" && existing.replyToId === message.replyToId
+      );
+      scheduled.status = "responded";
+      scheduled.respondedTick = world.tick;
+      world.conversationMessages.push(message);
+      world.conversationThreads[message.threadId].lastMessageTick = message.createdTick;
+      world.nextMessageSequence = event.data.nextMessageSequence as number;
+      const profiledPlayer = Object.values(world.players).find((player) => player.characterId === event.targetId);
+      if (profiledPlayer && !alreadyProfiled) {
+        for (const tag of message.inferredPlayerTags ?? []) {
+          profiledPlayer.conversationTagScores[tag] = (profiledPlayer.conversationTagScores[tag] ?? 0) + 1;
+        }
+      }
+      break;
+    }
     case "player-command-accepted":
       world.pendingCommands.push(event.data.command as WorldState["pendingCommands"][number]);
       world.nextCommandSequence = event.data.nextCommandSequence as number;

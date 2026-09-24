@@ -143,6 +143,54 @@ export interface Player {
   displayName: string;
   characterId: string;
   knownCharacterIds: string[];
+  conversationTagScores: Record<string, number>;
+}
+
+export type ConversationKind = "direct" | "group";
+
+export type MessageTag =
+  | "urgent"
+  | "trade"
+  | "political"
+  | "threat"
+  | "request"
+  | "supportive"
+  | "hostile"
+  | "manipulation-attempt"
+  | "spam";
+
+export interface ConversationThread {
+  id: string;
+  kind: ConversationKind;
+  title: string;
+  participantIds: string[];
+  createdById: string;
+  createdTick: number;
+  lastMessageTick: number | null;
+}
+
+export interface ConversationMessage {
+  id: string;
+  threadId: string;
+  senderId: string;
+  body: string;
+  createdTick: number;
+  source: "human" | "autonomous";
+  tags: MessageTag[];
+  replyToId?: string;
+  inferredPlayerTags?: string[];
+  discardedActionCount?: number;
+}
+
+export interface ScheduledReply {
+  id: string;
+  threadId: string;
+  characterId: string;
+  triggerMessageId: string;
+  createdTick: number;
+  dueTick: number;
+  status: "pending" | "responded";
+  respondedTick?: number;
 }
 
 export type PlayerAction =
@@ -207,7 +255,7 @@ export interface Character {
 }
 
 export interface WorldState {
-  version: 2;
+  version: 3;
   scenario: string;
   seed: number;
   rngState: number;
@@ -215,11 +263,17 @@ export interface WorldState {
   ticksPerDay: number;
   nextEventSequence: number;
   nextCommandSequence: number;
+  nextThreadSequence: number;
+  nextMessageSequence: number;
+  nextReplySequence: number;
   factions: Record<string, Faction>;
   settlements: Record<string, Settlement>;
   characters: Record<string, Character>;
   players: Record<string, Player>;
   pendingCommands: PlayerCommand[];
+  conversationThreads: Record<string, ConversationThread>;
+  conversationMessages: ConversationMessage[];
+  scheduledReplies: ScheduledReply[];
 }
 
 export interface DecisionCandidate {

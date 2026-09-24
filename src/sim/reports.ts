@@ -116,6 +116,22 @@ function agencyTraces(world: WorldState, events: SimEvent[]): string {
     .join("\n");
 }
 
+function conversationTraces(world: WorldState, events: SimEvent[]): string {
+  return events
+    .filter((event) => event.type.startsWith("conversation-"))
+    .map((event) => JSON.stringify({
+      sequence: event.sequence,
+      tick: event.tick,
+      day: round(event.tick / world.ticksPerDay, 2),
+      type: event.type,
+      characterId: event.actorId,
+      character: event.actorId ? world.characters[event.actorId]?.name : undefined,
+      targetId: event.targetId,
+      ...event.data,
+    }))
+    .join("\n");
+}
+
 function metricsCsv(events: SimEvent[]): string {
   const header = "tick,day,faction_id,faction,power,treasury,settlements,provisions,arms,medicine,ship_materials";
   const rows = [header];
@@ -230,6 +246,9 @@ function summaryMarkdown(world: WorldState, events: SimEvent[], snapshotCount: n
   const autonomousCharacters = Object.values(world.characters).length - humanCharacters;
   const acceptedCommands = events.filter((event) => event.type === "player-command-accepted").length;
   const resolvedCommands = events.filter((event) => event.type === "player-command-resolved").length;
+  const sentMessages = events.filter((event) => event.type === "conversation-message-sent").length;
+  const autonomousReplies = events.filter((event) => event.type === "conversation-reply-created").length;
+  const pendingReplies = world.scheduledReplies.filter((reply) => reply.status === "pending").length;
 
   return `# Open Era simulation report
 
@@ -241,6 +260,7 @@ The **${world.scenario}** scenario reached tick ${world.tick} (day ${round(world
 - ${events.length} persisted events across ${snapshotCount} snapshots
 - ${journeys} journeys, ${trades} market trades, and ${battles} battles
 - ${acceptedCommands} player commands accepted and ${resolvedCommands} resolved
+- ${sentMessages} player messages, ${autonomousReplies} autonomous replies, and ${pendingReplies} replies pending
 
 ## Agency diagnostics
 
@@ -284,6 +304,7 @@ export function writeReports(
   mkdirSync(outputDirectory, { recursive: true });
   writeFileSync(join(outputDirectory, "decision-traces.jsonl"), decisionTraces(world, events) + "\n");
   writeFileSync(join(outputDirectory, "agency-traces.jsonl"), agencyTraces(world, events) + "\n");
+  writeFileSync(join(outputDirectory, "conversation-traces.jsonl"), conversationTraces(world, events) + "\n");
   writeFileSync(join(outputDirectory, "metrics.csv"), metricsCsv(events));
   writeFileSync(join(outputDirectory, "map.svg"), mapSvg(world));
   writeFileSync(join(outputDirectory, "report.md"), summaryMarkdown(world, events, snapshotCount));

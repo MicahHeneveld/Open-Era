@@ -3,6 +3,15 @@ import { createServer, type IncomingMessage, type Server, type ServerResponse } 
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { submitCommand, type CommandRequest } from "../sim/commands.ts";
+import {
+  createConversationThread,
+  DeterministicDialogueProvider,
+  resolveDueReplies,
+  sendConversationMessage,
+  type CreateThreadRequest,
+  type DialogueProvider,
+  type SendMessageRequest,
+} from "../sim/conversations.ts";
 import { runTick } from "../sim/engine.ts";
 import { WorldStore } from "../sim/persistence.ts";
 import { createPrototypeWorld } from "../sim/scenario.ts";
@@ -16,6 +25,7 @@ export interface DashboardOptions {
   databasePath: string;
   reset?: boolean;
   seed?: number;
+  dialogueProvider?: DialogueProvider;
 }
 
 export interface DashboardApp {
@@ -56,6 +66,7 @@ export function createDashboardApp(options: DashboardOptions): DashboardApp {
   const databasePath = resolve(options.databasePath);
   if (options.reset) removeDatabase(databasePath);
   const store = new WorldStore(databasePath);
+  const dialogueProvider = options.dialogueProvider ?? new DeterministicDialogueProvider();
   let world: WorldState;
   if (store.hasWorld()) world = store.recover().state;
   else {
@@ -94,7 +105,8 @@ export function createDashboardApp(options: DashboardOptions): DashboardApp {
         }
         for (let index = 0; index < ticks; index += 1) {
           const result = runTick(world);
-          store.appendTick(result.events, world);
+          const conversationEvents = await resolveDueReplies(world, dialogueProvider);
+          store.appendTick([...result.events, ...conversationEvents], world);
         }
         json(response, 200, { ok: true, tick: world.tick, day: world.tick / world.ticksPerDay });
         return;
@@ -108,6 +120,28 @@ export function createDashboardApp(options: DashboardOptions): DashboardApp {
         }
         store.appendTick([result.event], world);
         json(response, 202, { ok: true, command: result.command });
+        return;
+      }
+      if (request.method === "POST" && url.pathname === "/api/threads") {
+        const body = await requestBody(request) as CreateThreadRequest;
+        const result = createConversationThread(world, body);
+        if (!result.ok) {
+          json(response, 400, result);
+          return;
+        }
+        store.appendTick(result.events, world);
+        json(response, 201, { ok: true, thread: result.value });
+        return;
+      }
+      if (request.method === "POST" && url.pathname === "/api/messages") {
+        const body = await requestBody(request) as SendMessageRequest;
+        const result = sendConversationMessage(world, body);
+        if (!result.ok) {
+          json(response, result.code === "rate-limited" ? 429 : 400, result);
+          return;
+        }
+        store.appendTick(result.events, world);
+        json(response, 202, { ok: true, message: result.value.message, replies: result.value.replies });
         return;
       }
       json(response, 404, { ok: false, error: "Not found" });

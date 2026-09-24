@@ -21,6 +21,11 @@ This branch contains the first **headless world prototype**. It is intentionally
 - A human-controlled commander who never receives autonomous decisions
 - Server-validated direct actions and durable player-issued standing orders
 - A local interactive map for inspection, commands, and accelerated time
+- Persistent direct messages and group chats shared by human and autonomous characters
+- Deterministic reply windows based on activity, urgency, relationships, and seeded variation
+- Server-validated message tags, light throttling, prompt-injection deterrence, and accumulated player conversation tags
+- A replaceable dialogue-provider boundary whose output cannot directly mutate simulation state
+- Player-safe foreign settlement projections derived from the commander's imperfect knowledge
 - Deterministic seeded outcomes with detailed decision traces
 - SQLite event persistence, daily snapshots, state hashes, and crash recovery
 - Markdown, CSV, JSONL, JSON, and SVG evaluation outputs
@@ -43,6 +48,7 @@ The default run advances twelve in-world days and writes:
 - `simulation-output/latest/map.svg` — map of islands, parties, and active routes
 - `simulation-output/latest/decision-traces.jsonl` — scored alternatives behind every decision
 - `simulation-output/latest/agency-traces.jsonl` — plan reviews, beliefs, evolving goals, and relationships
+- `simulation-output/latest/conversation-traces.jsonl` — threads, messages, reply schedules, response tags, and discarded action proposals
 - `simulation-output/latest/metrics.csv` — faction power, treasury, and resource trends
 - `simulation-output/latest/final-state.json` — complete inspectable world state
 - `.open-era/world.sqlite` — durable event log and snapshots
@@ -65,6 +71,7 @@ Open `http://127.0.0.1:4317`. The dashboard provides:
 - Exact owned-party condition, cargo, troops, money, and travel progress
 - Island resources, prices, stability, garrisons, and parties present
 - Character goals, plans, relationships, knowledge, and order responses
+- Persistent DMs and group chats with visible autonomous response windows
 - Direct player actions such as travel, trade, recruitment, work, and rest
 - Standing orders that autonomous faction members may obey or refuse
 - Accelerated time controls and a live world-event feed
@@ -95,6 +102,7 @@ The tests prove seeded determinism, divergent seeded histories, snapshot-plus-ev
 src/sim/scenario.ts      deterministic pressure-test world
 src/sim/agency.ts        goals, plans, beliefs, relationships, orders
 src/sim/commands.ts      validated and durable human command boundary
+src/sim/conversations.ts persistent threads, timing, tags, safeguards, dialogue adapter
 src/sim/engine.ts        decisions, economy, travel, and combat
 src/sim/state.ts         event reducer, derived values, state hashing
 src/sim/persistence.ts   SQLite event log, atomic ticks, snapshots
@@ -108,4 +116,4 @@ The simulation files are intended to survive into the production server. The CLI
 
 ## Current boundary
 
-This is a behavioral probe, not a complete game. Dialogue, deeper personality branching, faction offices, settlement ownership, debt, captivity, lost technology, inner strength, inheritance, multiplayer authentication, and production networking are still deferred. The current dashboard is deliberately local and the player begins as a World Government commander so command acceptance and refusal can be exercised immediately.
+This is a behavioral probe, not a complete game. The dialogue adapter currently uses deterministic prototype replies rather than a paid LLM. Deeper personality branching, faction offices, settlement ownership, debt, captivity, lost technology, inner strength, inheritance, multiplayer authentication, and production networking are still deferred. The current dashboard is deliberately local and the player begins as a World Government commander so command acceptance, refusal, and asynchronous communication can be exercised immediately.

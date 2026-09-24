@@ -31,6 +31,14 @@ function eventSummary(world: WorldState, event: SimEvent): string {
       return `${actor}'s ambitions changed after ${event.data.trigger}`;
     case "settlement-shortage":
       return `${settlement} is suffering a provisions shortage`;
+    case "conversation-thread-created":
+      return `${actor} opened a conversation`;
+    case "conversation-message-sent":
+      return `${actor} sent a message`;
+    case "conversation-reply-scheduled":
+      return `${actor} will reply later`;
+    case "conversation-reply-created":
+      return `${actor} replied`;
     default:
       return `${actor}: ${event.type.replaceAll("-", " ")}`;
   }
@@ -50,11 +58,43 @@ export function dashboardState(world: WorldState, events: SimEvent[]): Record<st
       ...faction,
       power: factionPower(world, faction.id),
     })),
-    settlements: Object.values(world.settlements).map((settlement) => ({
-      ...settlement,
-      prices: Object.fromEntries(RESOURCE_KEYS.map((resource) => [resource, marketPrice(world, settlement.id, resource)])),
-      partyCount: Object.values(world.characters).filter((character) => character.locationId === settlement.id).length,
-    })),
+    settlements: Object.values(world.settlements).map((settlement) => {
+      const exact = settlement.factionId === commander.factionId;
+      const knowledge = commander.knowledge[settlement.id];
+      if (!exact) {
+        return {
+          id: settlement.id,
+          name: settlement.name,
+          position: settlement.position,
+          factionId: knowledge?.factionId ?? null,
+          ownerId: null,
+          population: null,
+          workers: null,
+          focus: null,
+          production: null,
+          stocks: knowledge?.stocksEstimate ?? Object.fromEntries(RESOURCE_KEYS.map((resource) => [resource, 0])),
+          targetStocks: null,
+          garrison: knowledge?.garrisonEstimate ?? null,
+          fortification: null,
+          stability: null,
+          prices: knowledge?.priceEstimate ?? Object.fromEntries(RESOURCE_KEYS.map((resource) => [resource, 0])),
+          partyCount: null,
+          intelligence: knowledge ? {
+            exact: false,
+            source: knowledge.source,
+            confidence: round(knowledge.confidence, 2),
+            observedTick: knowledge.observedTick,
+            ageTicks: world.tick - knowledge.observedTick,
+          } : null,
+        };
+      }
+      return {
+        ...settlement,
+        prices: Object.fromEntries(RESOURCE_KEYS.map((resource) => [resource, marketPrice(world, settlement.id, resource)])),
+        partyCount: Object.values(world.characters).filter((character) => character.locationId === settlement.id).length,
+        intelligence: { exact: true, source: "owned", confidence: 1, observedTick: world.tick, ageTicks: 0 },
+      };
+    }),
     characters: Object.values(world.characters).map((character) => {
       const activeGoal = character.goals.find((goal) => goal.id === character.activeGoalId) ?? null;
       const relationship = commander.relationships[character.id] ?? null;
@@ -100,5 +140,19 @@ export function dashboardState(world: WorldState, events: SimEvent[]): Record<st
       summary: eventSummary(world, event),
       data: event.data,
     })).reverse(),
+    conversations: {
+      threads: Object.values(world.conversationThreads)
+        .filter((thread) => thread.participantIds.includes(commander.id))
+        .map((thread) => ({
+          ...thread,
+          participants: thread.participantIds.map((id) => ({ id, name: world.characters[id]?.name ?? id })),
+        })),
+      messages: world.conversationMessages.filter((message) =>
+        world.conversationThreads[message.threadId]?.participantIds.includes(commander.id)
+      ),
+      scheduledReplies: world.scheduledReplies.filter((reply) =>
+        reply.status === "pending" && world.conversationThreads[reply.threadId]?.participantIds.includes(commander.id)
+      ),
+    },
   };
 }

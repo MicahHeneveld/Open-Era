@@ -371,7 +371,7 @@ export function createPrototypeWorld(seed = 1847): WorldState {
   }
 
   return {
-    version: 2,
+    version: 3,
     scenario: "four-island-pressure-test",
     seed,
     rngState: rng.state,
@@ -379,6 +379,9 @@ export function createPrototypeWorld(seed = 1847): WorldState {
     ticksPerDay: 6,
     nextEventSequence: 1,
     nextCommandSequence: 1,
+    nextThreadSequence: 1,
+    nextMessageSequence: 1,
+    nextReplySequence: 1,
     factions,
     settlements,
     characters,
@@ -388,8 +391,12 @@ export function createPrototypeWorld(seed = 1847): WorldState {
         displayName: "Prototype Commander",
         characterId: "character-01",
         knownCharacterIds: Object.keys(characters),
+        conversationTagScores: {},
       },
     },
     pendingCommands: [],
+    conversationThreads: {},
+    conversationMessages: [],
+    scheduledReplies: [],
   };
 }

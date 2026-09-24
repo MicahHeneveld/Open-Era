@@ -2,6 +2,7 @@ import { existsSync, rmSync } from "node:fs";
 import { resolve } from "node:path";
 import { parseArgs } from "node:util";
 import { runTick } from "../sim/engine.ts";
+import { DeterministicDialogueProvider, resolveDueReplies } from "../sim/conversations.ts";
 import { WorldStore } from "../sim/persistence.ts";
 import { writeReports } from "../sim/reports.ts";
 import { createPrototypeWorld } from "../sim/scenario.ts";
@@ -44,9 +45,11 @@ try {
     store.initialize(world);
   }
 
+  const dialogueProvider = new DeterministicDialogueProvider();
   for (let index = 0; index < ticks; index += 1) {
     const result = runTick(world);
-    store.appendTick(result.events, world);
+    const conversationEvents = await resolveDueReplies(world, dialogueProvider);
+    store.appendTick([...result.events, ...conversationEvents], world);
   }
 
   const events = store.allEvents();
