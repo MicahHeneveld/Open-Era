@@ -10,6 +10,7 @@ These documents capture the decisions made during the initial design conversatio
 - [Development and playtest pipeline](../development-pipeline.md) — branch roles, automated gates, adaptive player protocol, and promotion rules
 - [Playtest template](../playtests/TEMPLATE.md) — evidence record for assistant and human sessions
 - [Human commander playtest 001](../playtests/human-commander-001.md) — first adaptive player run and the design gaps it exposed
+- [Promotion baseline playtest 001](../playtests/promotion-baseline-001.md) — public-interface conquest, stabilization, recovery, and promotion recommendation
 
 ## Decision status
 
