@@ -1,0 +1,15 @@
+{
+  "name": "open-era",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "A persistent maritime political sandbox simulation.",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "simulate": "node --experimental-strip-types src/cli/run-simulation.ts",
+    "test": "node --experimental-strip-types --test tests/*.test.ts",
+    "check": "node --experimental-strip-types --test tests/*.test.ts"
+  }
+}
