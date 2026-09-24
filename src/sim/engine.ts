@@ -25,6 +25,7 @@ import {
   type ResourceKey,
   type Resources,
   type SimEvent,
+  type StandingOrder,
   type TickResult,
   type WorldState,
 } from "./types.ts";
@@ -521,6 +522,88 @@ function evolveLocalRelationship(
   });
 }
 
+function processPlayerCommands(
+  world: WorldState,
+  events: SimEvent[],
+  rng: DeterministicRng,
+): void {
+  for (const command of [...world.pendingCommands]) {
+    const player = world.players[command.playerId];
+    const commander = player ? world.characters[player.characterId] : undefined;
+    if (!player || !commander) {
+      emit(world, events, {
+        type: "player-command-failed",
+        data: { commandId: command.id, reason: "player or controlled character no longer exists" },
+      });
+      continue;
+    }
+
+    if (command.type === "issue-order") {
+      const recipient = world.characters[command.characterId];
+      if (!recipient || recipient.controller.kind !== "autonomous") {
+        emit(world, events, {
+          type: "player-command-failed",
+          actorId: commander.id,
+          targetId: command.characterId,
+          data: { commandId: command.id, reason: "order recipient is no longer available" },
+        });
+        continue;
+      }
+      const order: StandingOrder = {
+        id: `${command.id}:standing-order`,
+        issuerId: commander.id,
+        directive: command.directive,
+        targetId: command.targetId,
+        priority: command.priority,
+        issuedTick: world.tick,
+        expiresTick: command.expiresTick,
+      };
+      emit(world, events, {
+        type: "standing-order-issued",
+        actorId: commander.id,
+        targetId: recipient.id,
+        data: { commandId: command.id, order },
+      });
+      emit(world, events, {
+        type: "player-command-resolved",
+        actorId: commander.id,
+        targetId: recipient.id,
+        data: { commandId: command.id, outcome: "order-delivered", orderId: order.id },
+      });
+      continue;
+    }
+
+    if (commander.travel || !commander.locationId) {
+      emit(world, events, {
+        type: "player-command-failed",
+        actorId: commander.id,
+        data: { commandId: command.id, reason: "controlled character cannot act while traveling" },
+      });
+      continue;
+    }
+    const chosen: DecisionCandidate = {
+      action: command.action,
+      targetId: command.targetId,
+      score: 1,
+      reason: "direct human instruction",
+    };
+    emit(world, events, {
+      type: "player-action-executed",
+      actorId: commander.id,
+      targetId: command.targetId,
+      settlementId: commander.locationId,
+      data: { commandId: command.id, action: command.action },
+    });
+    resolveDecision(world, commander, chosen, events, rng);
+    emit(world, events, {
+      type: "player-command-resolved",
+      actorId: commander.id,
+      targetId: command.targetId,
+      data: { commandId: command.id, outcome: "action-executed", action: command.action },
+    });
+  }
+}
+
 function resolveDecision(
   world: WorldState,
   character: Character,
@@ -687,6 +770,7 @@ export function runTick(world: WorldState): TickResult {
   const events: SimEvent[] = [];
 
   produceSettlements(world, events);
+  processPlayerCommands(world, events, rng);
 
   for (const character of Object.values(world.characters).sort((a, b) => a.id.localeCompare(b.id))) {
     upkeepCharacter(world, character, events, Boolean(character.travel));
@@ -704,6 +788,10 @@ export function runTick(world: WorldState): TickResult {
           },
         });
       }
+    }
+    if (character.controller.kind === "human") {
+      if (character.travel) progressTravel(world, character, events);
+      continue;
     }
     const planReview = reviewPlan(world, character, rng);
     if (planReview) {

@@ -134,6 +134,9 @@ export class WorldStore {
     if (!snapshot) throw new Error("World store has no snapshot");
 
     const state = JSON.parse(snapshot.state_json) as WorldState;
+    if (state.version !== 2) {
+      throw new Error(`World schema ${state.version} is incompatible with schema 2; start this milestone with --reset`);
+    }
     const actualHash = stateHash(state);
     if (actualHash !== snapshot.state_hash) {
       throw new Error(`Snapshot hash mismatch at sequence ${snapshot.sequence}`);
@@ -156,6 +159,14 @@ export class WorldStore {
       .prepare("SELECT * FROM events ORDER BY sequence")
       .all() as unknown as EventRow[];
     return rows.map((row) => this.rowToEvent(row));
+  }
+
+  recentEvents(limit = 80): SimEvent[] {
+    const safeLimit = Math.max(1, Math.min(500, Math.floor(limit)));
+    const rows = this.database
+      .prepare("SELECT * FROM events ORDER BY sequence DESC LIMIT ?")
+      .all(safeLimit) as unknown as EventRow[];
+    return rows.reverse().map((row) => this.rowToEvent(row));
   }
 
   snapshotCount(): number {

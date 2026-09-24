@@ -102,6 +102,24 @@ export function applyEvent(world: WorldState, event: SimEvent): void {
   const settlement = event.settlementId ? world.settlements[event.settlementId] : undefined;
 
   switch (event.type) {
+    case "player-command-accepted":
+      world.pendingCommands.push(event.data.command as WorldState["pendingCommands"][number]);
+      world.nextCommandSequence = event.data.nextCommandSequence as number;
+      break;
+    case "player-command-resolved":
+    case "player-command-failed":
+      world.pendingCommands = world.pendingCommands.filter(
+        (command) => command.id !== event.data.commandId,
+      );
+      break;
+    case "standing-order-issued": {
+      const recipient = event.targetId ? world.characters[event.targetId] : undefined;
+      if (!recipient) throw new Error("Standing order has no recipient");
+      recipient.standingOrders.push(event.data.order as Character["standingOrders"][number]);
+      break;
+    }
+    case "player-action-executed":
+      break;
     case "settlement-produced":
       if (!settlement) throw new Error("Production event has no settlement");
       settlement.stocks = resourcesFrom(event.data, "stocks");

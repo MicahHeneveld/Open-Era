@@ -96,6 +96,9 @@ function agencyTraces(world: WorldState, events: SimEvent[]): string {
     "knowledge-updated",
     "goal-evolved",
     "relationship-changed",
+    "standing-order-issued",
+    "player-action-executed",
+    "player-command-failed",
   ]);
   return events
     .filter((event) => included.has(event.type))
@@ -163,6 +166,14 @@ function eventStory(world: WorldState, event: SimEvent): string | null {
     const target = event.targetId ? world.characters[event.targetId]?.name ?? event.targetId : "their superior";
     return `- Day ${round(event.tick / world.ticksPerDay, 1)}: ${event.data.trigger} changed ${actor}'s relationship with **${target}**.`;
   }
+  if (event.type === "standing-order-issued") {
+    const target = event.targetId ? world.characters[event.targetId]?.name ?? event.targetId : "a subordinate";
+    const order = event.data.order as { directive: string };
+    return `- Day ${round(event.tick / world.ticksPerDay, 1)}: ${actor} issued **${order.directive.replaceAll("-", " ")}** orders to **${target}**.`;
+  }
+  if (event.type === "player-action-executed") {
+    return `- Day ${round(event.tick / world.ticksPerDay, 1)}: Human direction committed ${actor} to **${String(event.data.action).replaceAll("-", " ")}**.`;
+  }
   return null;
 }
 
@@ -179,7 +190,7 @@ function summaryMarkdown(world: WorldState, events: SimEvent[], snapshotCount: n
       return `| ${character.name} | ${character.archetype} | ${character.factionId ? world.factions[character.factionId].name : "Unaffiliated"} | ${partyPower(character)} | ${character.victories}–${character.defeats} | ${goal?.label ?? "Uncommitted"} |`;
     })
     .join("\n");
-  const majorTypes = new Set(["battle-resolved", "goal-evolved", "relationship-changed", "settlement-shortage"]);
+  const majorTypes = new Set(["battle-resolved", "goal-evolved", "relationship-changed", "settlement-shortage", "standing-order-issued", "player-action-executed"]);
   const majorStories = events
     .filter((event) => majorTypes.has(event.type))
     .map((event) => eventStory(world, event))
@@ -215,15 +226,21 @@ function summaryMarkdown(world: WorldState, events: SimEvent[], snapshotCount: n
     .map(([kind, count]) => `${kind}: ${count}`)
     .join("; ");
 
+  const humanCharacters = Object.values(world.characters).filter((character) => character.controller.kind === "human").length;
+  const autonomousCharacters = Object.values(world.characters).length - humanCharacters;
+  const acceptedCommands = events.filter((event) => event.type === "player-command-accepted").length;
+  const resolvedCommands = events.filter((event) => event.type === "player-command-resolved").length;
+
   return `# Open Era simulation report
 
 The **${world.scenario}** scenario reached tick ${world.tick} (day ${round(world.tick / world.ticksPerDay, 1)}). Its deterministic state hash is \`${stateHash(world)}\`.
 
 ## Run health
 
-- ${Object.keys(world.characters).length} named autonomous characters
+- ${autonomousCharacters} autonomous characters and ${humanCharacters} human-controlled character
 - ${events.length} persisted events across ${snapshotCount} snapshots
 - ${journeys} journeys, ${trades} market trades, and ${battles} battles
+- ${acceptedCommands} player commands accepted and ${resolvedCommands} resolved
 
 ## Agency diagnostics
 

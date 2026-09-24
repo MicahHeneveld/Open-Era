@@ -134,6 +134,47 @@ export interface StandingOrder {
   expiresTick: number | null;
 }
 
+export type CharacterController =
+  | { kind: "autonomous" }
+  | { kind: "human"; playerId: string };
+
+export interface Player {
+  id: string;
+  displayName: string;
+  characterId: string;
+  knownCharacterIds: string[];
+}
+
+export type PlayerAction =
+  | "travel"
+  | "buy-provisions"
+  | "trade-local"
+  | "work"
+  | "recruit"
+  | "raid"
+  | "rest";
+
+export type PlayerCommand =
+  | {
+      id: string;
+      playerId: string;
+      issuedTick: number;
+      type: "character-action";
+      action: PlayerAction;
+      targetId?: string;
+    }
+  | {
+      id: string;
+      playerId: string;
+      issuedTick: number;
+      type: "issue-order";
+      characterId: string;
+      directive: OrderDirective;
+      targetId?: string;
+      priority: number;
+      expiresTick: number | null;
+    };
+
 export interface Character {
   id: string;
   name: string;
@@ -150,6 +191,7 @@ export interface Character {
   attributes: CharacterAttributes;
   skills: CharacterSkills;
   personality: Personality;
+  controller: CharacterController;
   goals: CharacterGoal[];
   activeGoalId: string | null;
   plan: CharacterPlan | null;
@@ -165,16 +207,19 @@ export interface Character {
 }
 
 export interface WorldState {
-  version: 1;
+  version: 2;
   scenario: string;
   seed: number;
   rngState: number;
   tick: number;
   ticksPerDay: number;
   nextEventSequence: number;
+  nextCommandSequence: number;
   factions: Record<string, Faction>;
   settlements: Record<string, Settlement>;
   characters: Record<string, Character>;
+  players: Record<string, Player>;
+  pendingCommands: PlayerCommand[];
 }
 
 export interface DecisionCandidate {

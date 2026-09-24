@@ -9,6 +9,7 @@
   },
   "scripts": {
     "simulate": "node --experimental-strip-types src/cli/run-simulation.ts",
+    "dashboard": "node --experimental-strip-types src/cli/run-dashboard.ts",
     "test": "node --experimental-strip-types --test tests/*.test.ts",
     "check": "node --experimental-strip-types --test tests/*.test.ts"
   }

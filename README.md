@@ -18,6 +18,9 @@ This branch contains the first **headless world prototype**. It is intentionally
 - Trust, affinity, respect, fear, grievance, and obligation between characters
 - Standing orders that characters independently accept or reject based on loyalty, values, relationships, ambition, and risk
 - Goals and relationships that change after victories, defeats, and shared local experiences
+- A human-controlled commander who never receives autonomous decisions
+- Server-validated direct actions and durable player-issued standing orders
+- A local interactive map for inspection, commands, and accelerated time
 - Deterministic seeded outcomes with detailed decision traces
 - SQLite event persistence, daily snapshots, state hashes, and crash recovery
 - Markdown, CSV, JSONL, JSON, and SVG evaluation outputs
@@ -50,6 +53,24 @@ Run the command again without `--reset` to recover the stored world and continue
 npm run simulate -- --ticks 24
 ```
 
+## Use the interactive dashboard
+
+```bash
+npm run dashboard -- --reset
+```
+
+Open `http://127.0.0.1:4317`. The dashboard provides:
+
+- A minimal top-down map with four selectable islands and moving parties
+- Exact owned-party condition, cargo, troops, money, and travel progress
+- Island resources, prices, stability, garrisons, and parties present
+- Character goals, plans, relationships, knowledge, and order responses
+- Direct player actions such as travel, trade, recruitment, work, and rest
+- Standing orders that autonomous faction members may obey or refuse
+- Accelerated time controls and a live world-event feed
+
+Player actions are validated by the simulation server and persisted before execution. The dashboard binds to loopback by default and intentionally has no production authentication; it is a local development observer, not a deployable multiplayer server.
+
 Useful options:
 
 ```text
@@ -73,11 +94,13 @@ The tests prove seeded determinism, divergent seeded histories, snapshot-plus-ev
 ```text
 src/sim/scenario.ts      deterministic pressure-test world
 src/sim/agency.ts        goals, plans, beliefs, relationships, orders
+src/sim/commands.ts      validated and durable human command boundary
 src/sim/engine.ts        decisions, economy, travel, and combat
 src/sim/state.ts         event reducer, derived values, state hashing
 src/sim/persistence.ts   SQLite event log, atomic ticks, snapshots
 src/sim/reports.ts       human- and machine-readable evaluation output
 src/cli/                 disposable headless runner
+src/dashboard/           local browser map, inspector, and command API
 tests/                   determinism and recovery checks
 ```
 
@@ -85,4 +108,4 @@ The simulation files are intended to survive into the production server. The CLI
 
 ## Current boundary
 
-This is a behavioral probe, not a complete game. Dialogue, deeper personality branching, faction offices, settlement ownership, debt, captivity, lost technology, inner strength, inheritance, and human-issued orders are still deferred. The current standing orders are scenario fixtures used to validate autonomous obedience and refusal before adding player-controlled command flows.
+This is a behavioral probe, not a complete game. Dialogue, deeper personality branching, faction offices, settlement ownership, debt, captivity, lost technology, inner strength, inheritance, multiplayer authentication, and production networking are still deferred. The current dashboard is deliberately local and the player begins as a World Government commander so command acceptance and refusal can be exercised immediately.

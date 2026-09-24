@@ -24,7 +24,7 @@ test("initial planning records alternatives and independent order judgments", ()
   const result = runTick(world);
   const reviews = result.events.filter((event) => event.type === "plan-reconsidered");
 
-  assert.equal(reviews.length, 30);
+  assert.equal(reviews.length, 29);
   const assessments = reviews
     .map((event) => event.data.orderAssessment as { willComply: boolean } | null)
     .filter((assessment): assessment is { willComply: boolean } => Boolean(assessment));
@@ -72,7 +72,7 @@ test("urgent survival needs can override an aggressive character's established a
 });
 
 test("battle experiences reshape goals and may change hierarchical relationships", () => {
-  const result = runTicks(createPrototypeWorld(1847), 30);
+  const result = runTicks(createPrototypeWorld(1847), 60);
   const evolved = result.events.filter((event) => event.type === "goal-evolved");
   const relationships = result.events.filter((event) => event.type === "relationship-changed");
 

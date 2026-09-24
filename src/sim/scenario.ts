@@ -124,6 +124,7 @@ function makeCharacter(
       trade: archetype === "merchant" ? rng.integer(64, 90) : rng.integer(15, 60),
     },
     personality: personalityFor(archetype, rng),
+    controller: { kind: "autonomous" },
     goals: [],
     activeGoalId: null,
     plan: null,
@@ -357,6 +358,8 @@ export function createPrototypeWorld(seed = 1847): WorldState {
     }
   }
 
+  characters["character-01"].controller = { kind: "human", playerId: "prototype-player" };
+
   // Give co-located characters a small social history independent of hierarchy.
   for (const character of Object.values(characters)) {
     const neighbor = Object.values(characters).find((candidate) =>
@@ -368,15 +371,25 @@ export function createPrototypeWorld(seed = 1847): WorldState {
   }
 
   return {
-    version: 1,
+    version: 2,
     scenario: "four-island-pressure-test",
     seed,
     rngState: rng.state,
     tick: 0,
     ticksPerDay: 6,
     nextEventSequence: 1,
+    nextCommandSequence: 1,
     factions,
     settlements,
     characters,
+    players: {
+      "prototype-player": {
+        id: "prototype-player",
+        displayName: "Prototype Commander",
+        characterId: "character-01",
+        knownCharacterIds: Object.keys(characters),
+      },
+    },
+    pendingCommands: [],
   };
 }
