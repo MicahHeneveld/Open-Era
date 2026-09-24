@@ -9,6 +9,7 @@ These documents capture the decisions made during the initial design conversatio
 - [Generated mockups](../assets/mockups/README.md) — all 13 image concepts produced during the conversation
 - [Development and playtest pipeline](../development-pipeline.md) — branch roles, automated gates, adaptive player protocol, and promotion rules
 - [Playtest template](../playtests/TEMPLATE.md) — evidence record for assistant and human sessions
+- [Human commander playtest 001](../playtests/human-commander-001.md) — first adaptive player run and the design gaps it exposed
 
 ## Decision status
 

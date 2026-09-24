@@ -29,6 +29,8 @@ Footer priorities:
 
 - Current ship and crew condition.
 - Active orders.
+- An exception-first check-in briefing for attacks, shortages, refusals, deviations, completion reports, and stale intelligence.
+- Informational exceptions may be acknowledged and hidden. Unresolved decisions remain visible, while an appointed reporting officer compresses routine notices into a digest.
 - Travel progress.
 - A small set of context-sensitive actions.
 

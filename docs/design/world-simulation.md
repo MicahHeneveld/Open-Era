@@ -21,6 +21,8 @@ Players may enlist and earn promotion, receive appointments through patronage, o
 
 Player-created faction structure evolves as the organization grows rather than requiring a complete constitution at creation. A human officeholder's routine work may be handled by the next eligible subordinate in the office hierarchy.
 
+Delegating information is distinct from delegating authority. An appointed reporting officer may filter and summarize routine updates, but the original issuer still confirms completion, changes objectives, and cancels orders unless a later office system explicitly grants broader powers.
+
 Deputy behavior is personality- and loyalty-sensitive. The current decision record permits routine budgets, production, taxes, defensive responses, minor agreements, and potentially even high-impact acts such as law changes, war, secession, or disposal of major assets. That last category needs explicit authorization guardrails before production; loyalty alone is not a sufficient security boundary.
 
 ## Economy
@@ -64,7 +66,7 @@ When the owner declares separation:
 
 If the settlement survives a time threshold or makes peace, the owner may remain independent, found a new faction, or seek protection or membership elsewhere.
 
-The prototype does not yet implement occupation, surrender, or claim establishment after a successful battle. This is the highest-priority territorial gap found by the first human playtest.
+The prototype uses a garrison surrender threshold followed by an explicit player claim decision. The conquering character personally owns a claimed settlement; longer-term occupation, negotiation, and population responses remain deferred.
 
 ## Parties, troops, and ships
 

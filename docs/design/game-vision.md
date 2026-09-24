@@ -66,5 +66,5 @@ Defeat should alter a story rather than erase it. Combat can cause wounds, troop
 
 - Which player audience should feel most at home remains undecided.
 - The precise boundary between an accessible first hour and the intentionally deep simulation remains to be tested.
-- The first complete territorial-conquest flow is unresolved: occupation order, timed occupation, or surrender negotiation.
+- The first territorial-conquest flow uses a surrender threshold followed by an explicit claim decision; the conquering character personally owns the captured settlement.
 - The degree of offline protection in hostile territory needs explicit rules.

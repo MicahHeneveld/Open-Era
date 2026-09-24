@@ -69,7 +69,11 @@ These values affect cooperation, reply timing, obedience, risk tolerance, persua
 
 ## Orders and autonomy
 
-A named character weighs an order using loyalty, relationship, values, perceived risk, ambition, obligation, grievance, and the issuer's authority. Acceptance is not the same as continuing adherence. The first commander playtest showed that the prototype can mark an order “compliant” while the recipient wanders away from the objective; production needs explicit progress and deviation states.
+A named character weighs an order using loyalty, relationship, values, perceived risk, ambition, obligation, grievance, and the issuer's authority. Acceptance is not the same as continuing adherence. Orders therefore retain a durable lifecycle: pending response, active, refused, awaiting issuer confirmation, completed, or expired. Adherence is tracked separately. A character may report a temporary deviation, retain the assignment, and later report that they have resumed it.
+
+Characters judge when they believe an objective is satisfied. That judgment produces a completion report rather than closing the order automatically. The issuer must confirm the report before the order becomes completed. This preserves player authority while allowing characters to interpret broad directives through personality and circumstances.
+
+Issuers may amend or cancel an open order. Changing the directive or objective is a material revision and sends the order back through the character's acceptance judgment. Adjusting only priority or expiry preserves the existing acceptance. A reporting officer may collect and summarize routine acceptance, resumption, and confirmation notices, but does not gain authority to change or close orders.
 
 Troop officers have lower judgment and leadership ceilings but follow commands exactly. Named characters can produce better local decisions and beneficial side activity at the cost of control.
 

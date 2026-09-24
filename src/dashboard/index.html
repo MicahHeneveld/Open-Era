@@ -1,0 +1,758 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Open Era — World Observer</title>
+  <style>
+    :root {
+      --ink: #24313a;
+      --muted: #687983;
+      --paper: #fffaf0;
+      --paper-strong: #fffdf8;
+      --sea: #ccebea;
+      --sea-deep: #9dd5d3;
+      --line: #b8c5bc;
+      --green: #6b9f66;
+      --gold: #d39b43;
+      --danger: #bd5e50;
+      --blue: #345995;
+      --shadow: 0 8px 24px rgba(42, 64, 70, .13);
+      font-family: Inter, ui-rounded, "Avenir Next", system-ui, sans-serif;
+      color: var(--ink);
+      background: #e9efea;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; min-height: 100vh; }
+    button, select, input, textarea { font: inherit; }
+    button { cursor: pointer; }
+    .shell { min-height: 100vh; display: grid; grid-template-rows: auto 1fr auto; }
+    header {
+      min-height: 70px;
+      display: grid;
+      grid-template-columns: minmax(220px, 1fr) auto auto;
+      align-items: center;
+      gap: 20px;
+      padding: 12px 20px;
+      background: var(--paper-strong);
+      border-bottom: 1px solid var(--line);
+      z-index: 10;
+    }
+    .brand { display: flex; align-items: baseline; gap: 12px; }
+    .brand h1 { margin: 0; font-size: 23px; letter-spacing: -.5px; }
+    .brand span { color: var(--muted); font-size: 13px; }
+    .header-stats { display: flex; gap: 10px; }
+    .pill {
+      border: 1px solid var(--line);
+      background: #f4f0e6;
+      border-radius: 999px;
+      padding: 7px 12px;
+      font-size: 12px;
+      white-space: nowrap;
+    }
+    .menu {
+      width: 38px;
+      height: 38px;
+      border-radius: 12px;
+      border: 1px solid var(--line);
+      background: white;
+      font-weight: 800;
+    }
+    .workspace {
+      min-height: 0;
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 360px;
+      gap: 12px;
+      padding: 12px;
+    }
+    .map-card {
+      position: relative;
+      min-height: 590px;
+      overflow: hidden;
+      border: 1px solid #9fc6c4;
+      border-radius: 22px;
+      background:
+        radial-gradient(ellipse at 18% 32%, rgba(255,255,255,.36) 0 2px, transparent 3px),
+        radial-gradient(ellipse at 72% 64%, rgba(255,255,255,.32) 0 2px, transparent 3px),
+        linear-gradient(155deg, var(--sea), #dff3ef 60%, var(--sea-deep));
+      box-shadow: var(--shadow);
+    }
+    .map-label {
+      position: absolute;
+      top: 16px;
+      left: 18px;
+      z-index: 3;
+      padding: 8px 12px;
+      border-radius: 12px;
+      background: rgba(255,253,248,.88);
+      border: 1px solid rgba(120,150,145,.4);
+      backdrop-filter: blur(5px);
+      font-size: 12px;
+      color: var(--muted);
+    }
+    #routes { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+    .island {
+      position: absolute;
+      width: 112px;
+      min-height: 82px;
+      transform: translate(-50%, -50%);
+      border: 0;
+      color: var(--ink);
+      background: transparent;
+      text-align: center;
+      z-index: 2;
+    }
+    .island-shape {
+      display: block;
+      width: 72px;
+      height: 49px;
+      margin: 0 auto 5px;
+      border: 3px solid #47734d;
+      border-radius: 56% 44% 48% 52% / 45% 58% 42% 55%;
+      background: #84b96f;
+      box-shadow: inset -8px -7px 0 rgba(43,93,65,.13), 0 5px 0 rgba(66,105,78,.14);
+      transition: transform .16s ease;
+    }
+    .island:hover .island-shape, .island.selected .island-shape { transform: translateY(-3px) scale(1.06); }
+    .island.selected .island-shape { outline: 4px solid rgba(211,155,67,.45); }
+    .island strong { display: block; font-size: 13px; }
+    .island small { color: #4e6870; font-size: 10px; }
+    .ship {
+      position: absolute;
+      width: 17px;
+      height: 17px;
+      transform: translate(-50%, -50%) rotate(45deg);
+      border-radius: 4px 10px 4px 10px;
+      background: var(--ink);
+      border: 2px solid white;
+      box-shadow: 0 2px 6px rgba(0,0,0,.22);
+      z-index: 4;
+    }
+    .inspector {
+      min-height: 0;
+      overflow: auto;
+      border: 1px solid var(--line);
+      border-radius: 20px;
+      background: var(--paper);
+      box-shadow: var(--shadow);
+      padding: 18px;
+    }
+    .eyebrow { color: var(--muted); text-transform: uppercase; letter-spacing: 1px; font-size: 10px; font-weight: 800; }
+    h2 { margin: 5px 0 2px; font-size: 23px; }
+    h3 { margin: 20px 0 9px; font-size: 13px; text-transform: uppercase; letter-spacing: .7px; }
+    .subtle { color: var(--muted); font-size: 12px; }
+    .stat-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; margin-top: 14px; }
+    .stat {
+      padding: 10px;
+      border: 1px solid #d8d8ca;
+      border-radius: 12px;
+      background: rgba(255,255,255,.55);
+    }
+    .stat span { display: block; color: var(--muted); font-size: 10px; text-transform: uppercase; }
+    .stat strong { font-size: 15px; }
+    .resource-row, .party-row, .event-row, .order-row {
+      display: flex;
+      justify-content: space-between;
+      gap: 10px;
+      align-items: center;
+      padding: 9px 0;
+      border-bottom: 1px solid #e2dfd4;
+      font-size: 12px;
+    }
+    .party-row { width: 100%; border-width: 0 0 1px; background: transparent; text-align: left; }
+    .party-row:hover { color: var(--blue); }
+    .meter { height: 8px; border-radius: 99px; overflow: hidden; background: #dcded5; margin-top: 5px; }
+    .meter i { display: block; height: 100%; background: var(--green); }
+    .meter.danger i { background: var(--danger); }
+    .actions { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
+    .action, .advance, .primary {
+      border: 1px solid #aebcb1;
+      border-radius: 11px;
+      background: white;
+      padding: 9px 10px;
+      color: var(--ink);
+    }
+    .action:hover, .advance:hover { border-color: var(--blue); color: var(--blue); }
+    .primary { color: white; background: var(--blue); border-color: var(--blue); width: 100%; font-weight: 700; }
+    .danger { color: var(--danger); }
+    label { display: block; margin: 9px 0 4px; color: var(--muted); font-size: 11px; font-weight: 700; }
+    select, input, textarea {
+      width: 100%;
+      padding: 9px 10px;
+      border-radius: 10px;
+      border: 1px solid #bfc8bf;
+      background: white;
+      color: var(--ink);
+    }
+    textarea { resize: vertical; min-height: 72px; }
+    .chat-drawer {
+      position: fixed;
+      z-index: 25;
+      top: 70px;
+      right: 0;
+      bottom: 0;
+      width: min(440px, 100vw);
+      display: grid;
+      grid-template-rows: auto auto 1fr auto;
+      gap: 10px;
+      padding: 16px;
+      border-left: 1px solid var(--line);
+      background: var(--paper-strong);
+      box-shadow: -12px 0 30px rgba(42,64,70,.16);
+      transform: translateX(105%);
+      transition: transform .2s ease;
+    }
+    .chat-drawer.open { transform: translateX(0); }
+    .chat-head { display: flex; align-items: center; justify-content: space-between; }
+    .chat-head h2 { margin: 0; }
+    .chat-create { padding: 10px; border: 1px solid #d8d8ca; border-radius: 12px; background: #f7f2e7; }
+    .chat-create-grid { display: grid; grid-template-columns: 110px 1fr auto; gap: 6px; align-items: end; }
+    .chat-create label { margin-top: 0; }
+    .chat-create select[multiple] { min-height: 72px; }
+    .thread-tabs { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 3px; }
+    .thread-tab { white-space: nowrap; border: 1px solid var(--line); border-radius: 999px; padding: 7px 10px; background: white; }
+    .thread-tab.active { color: white; border-color: var(--blue); background: var(--blue); }
+    .message-log { min-height: 0; overflow: auto; padding: 4px; }
+    .message { max-width: 86%; margin: 8px 0; padding: 9px 11px; border-radius: 13px; background: #eef0e9; font-size: 12px; }
+    .message.mine { margin-left: auto; color: white; background: var(--blue); }
+    .message-meta { margin-top: 5px; opacity: .72; font-size: 10px; }
+    .reply-wait { margin: 7px 0; color: var(--muted); font-size: 11px; }
+    .chat-compose { display: grid; grid-template-columns: 1fr auto; gap: 7px; align-items: end; }
+    footer {
+      display: grid;
+      grid-template-columns: 1.25fr 1fr 1.2fr;
+      gap: 12px;
+      padding: 10px 14px;
+      background: var(--paper-strong);
+      border-top: 1px solid var(--line);
+    }
+    .footer-card { min-width: 0; padding: 6px 10px; }
+    .footer-title { margin-bottom: 6px; font-size: 10px; font-weight: 800; color: var(--muted); text-transform: uppercase; letter-spacing: .8px; }
+    .condition { display: grid; grid-template-columns: repeat(3, 1fr); gap: 9px; font-size: 11px; }
+    .advance-row { display: flex; gap: 7px; }
+    .advance { padding: 7px 9px; font-size: 11px; }
+    .event-feed { max-height: 86px; overflow: auto; }
+    .event-row { align-items: flex-start; padding: 5px 0; }
+    .event-row time { color: var(--muted); white-space: nowrap; }
+    .brief-row { padding: 7px 0; border-bottom: 1px solid #e2dfd4; font-size: 11px; }
+    .brief-row:last-child { border-bottom: 0; }
+    .brief-head { display: flex; align-items: center; justify-content: space-between; gap: 7px; margin-bottom: 2px; }
+    .brief-badge { border-radius: 999px; padding: 2px 6px; color: var(--muted); background: #e8ebe4; font-size: 9px; text-transform: uppercase; }
+    .brief-badge.action { color: white; background: var(--gold); }
+    .brief-badge.warning { color: white; background: var(--danger); }
+    .brief-action { margin-top: 5px; border: 1px solid var(--blue); border-radius: 8px; padding: 4px 7px; color: var(--blue); background: white; font-size: 10px; }
+    .brief-tools { display: flex; gap: 6px; flex-wrap: wrap; }
+    .order-detail { padding: 9px 0; border-bottom: 1px solid #e2dfd4; font-size: 12px; }
+    .order-detail .subtle { margin-top: 3px; }
+    .manage-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; }
+    .manage-grid label { margin-top: 0; }
+    .compact-select { margin: 4px 0 7px; padding: 6px 8px; font-size: 11px; }
+    .toast {
+      position: fixed;
+      right: 18px;
+      bottom: 118px;
+      max-width: 360px;
+      padding: 12px 16px;
+      color: white;
+      border-radius: 12px;
+      background: var(--ink);
+      box-shadow: var(--shadow);
+      opacity: 0;
+      transform: translateY(8px);
+      pointer-events: none;
+      transition: .2s ease;
+      z-index: 30;
+    }
+    .toast.show { opacity: 1; transform: translateY(0); }
+    .toast.error { background: var(--danger); }
+    .empty { padding: 18px 0; color: var(--muted); font-size: 12px; }
+    @media (max-width: 900px) {
+      .workspace { grid-template-columns: 1fr; }
+      .map-card { min-height: 520px; }
+      .inspector { max-height: none; }
+      footer { grid-template-columns: 1fr; }
+      .header-stats { display: none; }
+    }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <header>
+      <div class="brand"><h1>Open Era</h1><span id="world-time">Loading world…</span></div>
+      <div class="header-stats" id="header-stats"></div>
+      <button class="menu" id="chat-toggle" type="button" title="Messages">☰</button>
+    </header>
+    <section class="workspace">
+      <div class="map-card" id="map">
+        <div class="map-label">Select an island or party to inspect it</div>
+        <svg id="routes" viewBox="0 0 100 100" preserveAspectRatio="none"></svg>
+        <div id="islands"></div>
+        <div id="ships"></div>
+      </div>
+      <aside class="inspector" id="inspector"></aside>
+    </section>
+    <footer>
+      <div class="footer-card">
+        <div class="footer-title">Current ship and party</div>
+        <div class="condition" id="condition"></div>
+      </div>
+      <div class="footer-card">
+        <div class="footer-title">Pending commands and time</div>
+        <div id="pending" class="subtle"></div>
+        <select id="brief-officer" class="compact-select" aria-label="Reporting officer"></select>
+        <div class="advance-row">
+          <button class="advance" type="button" data-ticks="1">+4 hours</button>
+          <button class="advance" type="button" data-ticks="6">+1 day</button>
+          <button class="advance" type="button" data-ticks="24">+4 days</button>
+        </div>
+      </div>
+      <div class="footer-card">
+        <div class="footer-title" id="brief-title">Exception-first check-in</div>
+        <div class="event-feed" id="events"></div>
+      </div>
+    </footer>
+  </div>
+  <section class="chat-drawer" id="chat-drawer" aria-label="Messages">
+    <div class="chat-head"><div><div class="eyebrow">Persistent communications</div><h2>Messages</h2></div><button class="menu" id="chat-close" type="button">×</button></div>
+    <div class="chat-create">
+      <div class="chat-create-grid">
+        <div><label for="chat-kind">Thread</label><select id="chat-kind"><option value="direct">Direct</option><option value="group">Group</option></select></div>
+        <div><label for="chat-participants">Known characters</label><select id="chat-participants" multiple></select></div>
+        <button class="action" id="chat-create" type="button">Create</button>
+      </div>
+      <div class="subtle">Select one character for a DM or at least two for a group.</div>
+    </div>
+    <div><div class="thread-tabs" id="thread-tabs"></div><div class="message-log" id="message-log"></div></div>
+    <div class="chat-compose"><textarea id="message-body" maxlength="600" placeholder="Write a message…"></textarea><button class="primary" id="message-send" type="button">Send</button></div>
+  </section>
+  <div class="toast" id="toast"></div>
+  <script>
+    "use strict";
+    var world = null;
+    var selected = { kind: "settlement", id: "crown-harbor" };
+    var selectedThreadId = null;
+    var busy = false;
+
+    function esc(value) {
+      return String(value == null ? "" : value)
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;");
+    }
+    function byId(id) { return document.getElementById(id); }
+    function commander() { return world.characters.find(function (item) { return item.id === world.commanderId; }); }
+    function faction(id) { return world.factions.find(function (item) { return item.id === id; }); }
+    function settlement(id) { return world.settlements.find(function (item) { return item.id === id; }); }
+    function character(id) { return world.characters.find(function (item) { return item.id === id; }); }
+    function fmt(value, digits) { return value == null ? "—" : Number(value).toFixed(digits == null ? 0 : digits); }
+    function toast(message, error) {
+      var element = byId("toast");
+      element.textContent = message;
+      element.className = "toast show" + (error ? " error" : "");
+      window.clearTimeout(toast.timer);
+      toast.timer = window.setTimeout(function () { element.className = "toast"; }, 2600);
+    }
+    async function api(path, options) {
+      var response = await fetch(path, options);
+      var body = await response.json();
+      if (!response.ok) throw new Error(body.error || "Request failed");
+      return body;
+    }
+    async function refresh() {
+      world = await api("/api/state");
+      render();
+    }
+    async function mutate(path, body) {
+      if (busy) return;
+      busy = true;
+      try {
+        var result = await api(path, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify(body)
+        });
+        toast(result.command ? "Command queued" : result.thread ? "Conversation created" : result.message ? "Message sent" : result.itemId ? "Briefing item acknowledged" : Object.hasOwn(result, "characterId") ? "Reporting route updated" : "World advanced", false);
+        await refresh();
+      } catch (error) {
+        toast(error.message, true);
+      } finally {
+        busy = false;
+      }
+    }
+    function selectSettlement(id) { selected = { kind: "settlement", id: id }; render(); }
+    function selectCharacter(id) { selected = { kind: "character", id: id }; render(); }
+    function sendAction(action, targetId) {
+      mutate("/api/commands", {
+        playerId: world.player.id,
+        type: "character-action",
+        action: action,
+        targetId: targetId || undefined
+      });
+    }
+    function issueOrder() {
+      var recipient = byId("order-recipient").value;
+      var directive = byId("order-directive").value;
+      var targetSelect = byId("order-target");
+      mutate("/api/commands", {
+        playerId: world.player.id,
+        type: "issue-order",
+        characterId: recipient,
+        directive: directive,
+        targetId: targetSelect.value || undefined,
+        priority: Number(byId("order-priority").value),
+        expiresInTicks: 72
+      });
+    }
+    function confirmOrder(characterId, orderId) {
+      mutate("/api/commands", {
+        playerId: world.player.id,
+        type: "confirm-order",
+        characterId: characterId,
+        orderId: orderId
+      });
+    }
+    function amendOrder(characterId, orderId) {
+      var expires = byId("manage-expiry").value.trim();
+      mutate("/api/commands", {
+        playerId: world.player.id,
+        type: "amend-order",
+        characterId: characterId,
+        orderId: orderId,
+        directive: byId("manage-directive").value,
+        targetId: byId("manage-target").value || null,
+        priority: Number(byId("manage-priority").value),
+        expiresInTicks: expires === "" ? null : Number(expires)
+      });
+    }
+    function cancelOrder(characterId, orderId) {
+      mutate("/api/commands", {
+        playerId: world.player.id,
+        type: "cancel-order",
+        characterId: characterId,
+        orderId: orderId
+      });
+    }
+    function acknowledgeBriefing(itemId, throughSequence) {
+      mutate("/api/briefing/acknowledge", {
+        playerId: world.player.id,
+        itemId: itemId,
+        routineThroughSequence: throughSequence == null ? undefined : Number(throughSequence)
+      });
+    }
+    function assignReportingOfficer() {
+      mutate("/api/briefing/officer", {
+        playerId: world.player.id,
+        characterId: byId("brief-officer").value || null
+      });
+    }
+    function createThread() {
+      var participants = Array.from(byId("chat-participants").selectedOptions).map(function (option) { return option.value; });
+      mutate("/api/threads", { playerId: world.player.id, kind: byId("chat-kind").value, participantIds: participants });
+    }
+    function sendMessage() {
+      var body = byId("message-body").value;
+      if (!selectedThreadId) return toast("Create or select a conversation first", true);
+      if (!body.trim()) return toast("Write a message first", true);
+      byId("message-body").value = "";
+      mutate("/api/messages", { playerId: world.player.id, threadId: selectedThreadId, body: body });
+    }
+    function updateOrderTargets() {
+      var directive = byId("order-directive").value;
+      var target = byId("order-target");
+      var options = [];
+      if (directive === "pressure") {
+        options = world.factions.map(function (item) { return [item.id, item.name]; });
+      } else if (directive === "protect" || directive === "trade-supplies" || directive === "explore") {
+        if (directive !== "protect") options.push(["", "No fixed destination"]);
+        options = options.concat(world.settlements.map(function (item) { return [item.id, item.name]; }));
+      }
+      target.innerHTML = options.map(function (item) {
+        return '<option value="' + esc(item[0]) + '">' + esc(item[1]) + "</option>";
+      }).join("");
+      if (selected.kind === "settlement") target.value = selected.id;
+    }
+    function updateManagedOrderTargets() {
+      var directive = byId("manage-directive");
+      var target = byId("manage-target");
+      if (!directive || !target) return;
+      var current = target.dataset.current;
+      var options = [];
+      if (directive.value === "pressure") {
+        options = world.factions.map(function (item) { return [item.id, item.name]; });
+      } else {
+        if (directive.value !== "protect") options.push(["", "No fixed destination"]);
+        options = options.concat(world.settlements.map(function (item) { return [item.id, item.name]; }));
+      }
+      target.innerHTML = options.map(function (item) {
+        return '<option value="' + esc(item[0]) + '">' + esc(item[1]) + "</option>";
+      }).join("");
+      if (options.some(function (item) { return item[0] === current; })) target.value = current;
+      target.dataset.current = target.value;
+    }
+    function renderHeader() {
+      var c = commander();
+      var f = faction(c.factionId);
+      byId("world-time").textContent = "Day " + fmt(world.day, 1) + " · " + (f ? f.name : "Unaffiliated");
+      byId("header-stats").innerHTML =
+        '<span class="pill">Money <strong>' + fmt(c.money) + "</strong></span>" +
+        '<span class="pill">Provisions <strong>' + fmt(c.cargo.provisions, 1) + "</strong></span>" +
+        '<span class="pill">Faction power <strong>' + fmt(f ? f.power : 0) + "</strong></span>";
+    }
+    function renderMap() {
+      var islands = byId("islands");
+      islands.innerHTML = world.settlements.map(function (item) {
+        var owningFaction = faction(item.factionId);
+        var chosen = selected.kind === "settlement" && selected.id === item.id;
+        return '<button type="button" class="island' + (chosen ? " selected" : "") + '" style="left:' + item.position.x + "%;top:" + item.position.y + '%" data-island="' + esc(item.id) + '">' +
+          '<span class="island-shape" style="border-color:' + esc(owningFaction ? owningFaction.color : "#667b61") + '"></span>' +
+          "<strong>" + esc(item.name) + "</strong>" +
+          "<small>" + (item.partyCount == null ? "Parties unknown" : item.partyCount + " parties") + " · " + (item.stability == null ? "stability unknown" : fmt(item.stability) + "% stable") + "</small></button>";
+      }).join("");
+      islands.querySelectorAll("[data-island]").forEach(function (button) {
+        button.addEventListener("click", function () { selectSettlement(button.dataset.island); });
+      });
+      var routes = [];
+      var ships = [];
+      world.characters.filter(function (item) { return item.travel; }).forEach(function (item) {
+        var from = settlement(item.travel.fromId);
+        var to = settlement(item.travel.toId);
+        var progress = 1 - item.travel.remainingTicks / item.travel.totalTicks;
+        var x = from.position.x + (to.position.x - from.position.x) * progress;
+        var y = from.position.y + (to.position.y - from.position.y) * progress;
+        routes.push('<line x1="' + from.position.x + '" y1="' + from.position.y + '" x2="' + to.position.x + '" y2="' + to.position.y + '" stroke="#557b83" stroke-width=".35" stroke-dasharray="1.4 1.2" opacity=".45"/>');
+        ships.push('<button type="button" class="ship" style="left:' + x + "%;top:" + y + '%" title="' + esc(item.name) + '" data-character="' + esc(item.id) + '"></button>');
+      });
+      byId("routes").innerHTML = routes.join("");
+      byId("ships").innerHTML = ships.join("");
+      byId("ships").querySelectorAll("[data-character]").forEach(function (button) {
+        button.addEventListener("click", function () { selectCharacter(button.dataset.character); });
+      });
+    }
+    function meter(label, value, danger) {
+      return '<div><span class="subtle">' + esc(label) + " " + fmt(value) + '%</span><div class="meter' + (danger ? " danger" : "") + '"><i style="width:' + Math.max(0, Math.min(100, value)) + '%"></i></div></div>';
+    }
+    function settlementInspector(item) {
+      var owningFaction = faction(item.factionId);
+      var owner = character(item.ownerId);
+      var parties = item.intelligence && item.intelligence.exact ? world.characters.filter(function (entry) { return entry.locationId === item.id; }) : [];
+      var c = commander();
+      var travelAllowed = !c.travel && c.locationId !== item.id;
+      var here = c.locationId === item.id;
+      var intel = item.intelligence;
+      var intelLabel = intel && intel.exact ? "Exact owned records" : intel ? esc(intel.source) + " · " + fmt(intel.confidence * 100) + "% confidence · " + intel.ageTicks + " ticks old" : "No current report";
+      return '<div class="eyebrow">Island intelligence</div><h2>' + esc(item.name) + '</h2>' +
+        '<div class="subtle">' + esc(owningFaction ? owningFaction.name : "Independent") + (owner ? " · Owned by " + esc(owner.name) : "") + " · Population " + (item.population == null ? "unknown" : item.population.toLocaleString()) + "</div>" +
+        '<div class="subtle">' + intelLabel + "</div>" +
+        '<div class="stat-grid">' +
+          '<div class="stat"><span>Garrison</span><strong>' + item.garrison + "</strong></div>" +
+          '<div class="stat"><span>Fortification</span><strong>' + fmt(item.fortification, 2) + "×</strong></div>" +
+          '<div class="stat"><span>Stability</span><strong>' + fmt(item.stability) + "%</strong></div>" +
+          '<div class="stat"><span>Production</span><strong>' + esc(item.focus || "Unknown") + "</strong></div>" +
+        "</div>" +
+        "<h3>Stocks and prices</h3>" +
+        Object.keys(item.stocks).map(function (key) {
+          return '<div class="resource-row"><span>' + esc(key) + "</span><span><strong>" + fmt(item.stocks[key], 1) + "</strong> @ " + fmt(item.prices[key], 2) + "</span></div>";
+        }).join("") +
+        "<h3>Parties present</h3>" +
+        (parties.length ? parties.map(function (party) {
+          return '<button class="party-row" type="button" data-party="' + esc(party.id) + '"><span><strong>' + esc(party.name) + "</strong><br><span class=\"subtle\">" + esc(party.archetype) + "</span></span><span>" + fmt(party.partyPower) + "</span></button>";
+        }).join("") : '<div class="empty">' + (intel && intel.exact ? "No named parties are currently here." : "Foreign party positions are not available in this report.") + "</div>") +
+        "<h3>Direct command</h3><div class=\"actions\">" +
+          (travelAllowed ? '<button class="action" type="button" data-action="travel" data-target="' + esc(item.id) + '">Sail here</button>' : "") +
+          (here && item.surrenderOffered ? '<button class="action danger" type="button" data-action="claim-settlement">Accept surrender &amp; claim</button>' : "") +
+          (here && item.factionId && item.factionId !== c.factionId && !item.surrenderOffered ? '<button class="action danger" type="button" data-action="raid">Raid defenses</button>' : "") +
+          '<button class="action" type="button" data-action="trade-local">Trade locally</button>' +
+          '<button class="action" type="button" data-action="buy-provisions">Buy provisions</button>' +
+        "</div>";
+    }
+    function characterInspector(item) {
+      var f = faction(item.factionId);
+      var place = item.locationId ? settlement(item.locationId).name : item.travel ? "Sailing" : "Unknown";
+      var order = item.activeOrderAssessment;
+      var liveOrder = item.standingOrders.slice().reverse().find(function (entry) { return entry.status === "pending" || entry.status === "active"; });
+      var managedOrder = item.standingOrders.slice().reverse().find(function (entry) {
+        return entry.issuerId === world.commanderId && (entry.status === "pending" || entry.status === "active");
+      });
+      var cancellableOrder = managedOrder || item.standingOrders.slice().reverse().find(function (entry) {
+        return entry.issuerId === world.commanderId && entry.status === "awaiting-confirmation";
+      });
+      var management = managedOrder
+        ? '<h3>Amend active order</h3><div class="manage-grid">' +
+          '<div><label for="manage-directive">Directive</label><select id="manage-directive"><option value="protect">Protect</option><option value="pressure">Pressure faction</option><option value="trade-supplies">Trade supplies</option><option value="explore">Explore</option></select></div>' +
+          '<div><label for="manage-target">Objective</label><select id="manage-target" data-current="' + esc(managedOrder.targetId || "") + '"></select></div>' +
+          '<div><label for="manage-priority">Priority</label><input id="manage-priority" type="range" min=".1" max="1" step=".05" value="' + managedOrder.priority + '"></div>' +
+          '<div><label for="manage-expiry">Ticks remaining</label><input id="manage-expiry" type="number" min="1" max="720" placeholder="No expiry" value="' + (managedOrder.expiresTick == null ? "" : Math.max(1, managedOrder.expiresTick - world.tick)) + '"></div>' +
+          '</div><div class="actions"><button class="action" id="amend-order" type="button">Queue amendment</button><button class="action danger" id="cancel-order" type="button">Cancel order</button></div>'
+        : cancellableOrder
+          ? '<h3>Manage reported order</h3><button class="action danger" id="cancel-order" type="button">Cancel instead of confirming</button>'
+          : "";
+      return '<div class="eyebrow">' + (item.controller.kind === "human" ? "Human-controlled character" : "Autonomous character") + '</div><h2>' + esc(item.name) + "</h2>" +
+        '<div class="subtle">' + esc(item.archetype) + " · " + esc(f ? f.name : "Unaffiliated") + " · " + esc(place) + "</div>" +
+        '<div class="stat-grid">' +
+          '<div class="stat"><span>Party power</span><strong>' + fmt(item.partyPower) + "</strong></div>" +
+          '<div class="stat"><span>Troops</span><strong>' + item.troops.count + "</strong></div>" +
+          '<div class="stat"><span>Strategy</span><strong>' + item.skills.strategy + "</strong></div>" +
+          '<div class="stat"><span>Leadership</span><strong>' + item.skills.leadership + "</strong></div>" +
+        "</div>" +
+        "<h3>Condition</h3>" + meter("Health", item.health, item.health < 45) + meter("Morale", item.morale, item.morale < 40) +
+        "<h3>Current ambition</h3><div class=\"stat\"><strong>" + esc(item.activeGoal ? item.activeGoal.label : "Player-defined") + "</strong><div class=\"subtle\">" + esc(item.plan ? item.plan.reason : "No autonomous plan") + "</div></div>" +
+        (order && liveOrder ? "<h3>Order response</h3><div class=\"stat\"><strong>" + esc(liveOrder.status === "pending" ? "Awaiting response" : liveOrder.adherence === "deviating" ? "Active · temporarily diverted" : "Active · following") + "</strong><div class=\"subtle\">" + fmt(order.obedience * 100) + "% willingness against " + fmt(order.threshold * 100) + "% initial threshold</div></div>" : "") +
+        "<h3>Relationship to commander</h3>" +
+        (item.relationship ? '<div class="resource-row"><span>Trust</span><strong>' + fmt(item.relationship.trust * 100) + '%</strong></div><div class="resource-row"><span>Respect</span><strong>' + fmt(item.relationship.respect * 100) + '%</strong></div><div class="resource-row"><span>Grievance</span><strong>' + fmt(item.relationship.grievance * 100) + "%</strong></div>" : '<div class="empty">No meaningful relationship is recorded.</div>') +
+        "<h3>Known orders</h3>" +
+        (item.standingOrders.length ? item.standingOrders.slice(-4).reverse().map(function (entry) {
+          var confirm = entry.status === "awaiting-confirmation" && entry.issuerId === world.commanderId
+            ? '<button class="brief-action" type="button" data-confirm-order="' + esc(entry.id) + '" data-confirm-character="' + esc(item.id) + '">Confirm completion</button>'
+            : "";
+          return '<div class="order-detail"><div class="order-row"><span>' + esc(entry.directive) + '</span><strong>' + esc(entry.status.replaceAll("-", " ")) + '</strong></div>' +
+            '<div class="subtle">revision ' + entry.revision + ' · ' + esc(entry.adherence) + ' · priority ' + fmt(entry.priority * 100) + '% · ' + entry.deviationCount + ' deviation(s)</div>' +
+            (entry.lastReport ? '<div class="subtle">' + esc(entry.lastReport.summary) + '</div>' : '') + confirm + '</div>';
+        }).join("") : '<div class="empty">No standing orders.</div>') + management;
+    }
+    function commandPanel() {
+      var c = commander();
+      var recipients = world.characters.filter(function (item) {
+        return item.controller.kind === "autonomous" && item.factionId && item.factionId === c.factionId;
+      });
+      return '<h3>Commander actions</h3><div class="actions">' +
+        '<button class="action" type="button" data-action="work">Work</button>' +
+        '<button class="action" type="button" data-action="recruit">Recruit</button>' +
+        '<button class="action" type="button" data-action="rest">Rest</button>' +
+        '<button class="action" type="button" data-action="trade-local">Trade</button>' +
+        "</div><h3>Issue standing order</h3>" +
+        '<label for="order-recipient">Recipient</label><select id="order-recipient">' +
+        recipients.map(function (item) { return '<option value="' + esc(item.id) + '">' + esc(item.name) + " — " + esc(item.archetype) + "</option>"; }).join("") +
+        '</select><label for="order-directive">Directive</label><select id="order-directive"><option value="protect">Protect</option><option value="pressure">Pressure faction</option><option value="trade-supplies">Trade supplies</option><option value="explore">Explore</option></select>' +
+        '<label for="order-target">Objective</label><select id="order-target"></select>' +
+        '<label for="order-priority">Priority</label><input id="order-priority" type="range" min=".1" max="1" step=".05" value=".85">' +
+        '<button class="primary" id="issue-order" type="button">Queue order</button>';
+    }
+    function renderInspector() {
+      var item = selected.kind === "character" ? character(selected.id) : settlement(selected.id);
+      if (!item) { selected = { kind: "settlement", id: world.settlements[0].id }; item = world.settlements[0]; }
+      byId("inspector").innerHTML = (selected.kind === "character" ? characterInspector(item) : settlementInspector(item)) + commandPanel();
+      byId("inspector").querySelectorAll("[data-party]").forEach(function (button) {
+        button.addEventListener("click", function () { selectCharacter(button.dataset.party); });
+      });
+      byId("inspector").querySelectorAll("[data-action]").forEach(function (button) {
+        button.addEventListener("click", function () { sendAction(button.dataset.action, button.dataset.target); });
+      });
+      byId("inspector").querySelectorAll("[data-confirm-order]").forEach(function (button) {
+        button.addEventListener("click", function () { confirmOrder(button.dataset.confirmCharacter, button.dataset.confirmOrder); });
+      });
+      byId("order-directive").addEventListener("change", updateOrderTargets);
+      byId("issue-order").addEventListener("click", issueOrder);
+      updateOrderTargets();
+      if (selected.kind === "character") {
+        var select = byId("order-recipient");
+        if (Array.from(select.options).some(function (option) { return option.value === selected.id; })) select.value = selected.id;
+        var managed = item.standingOrders.slice().reverse().find(function (entry) {
+          return entry.issuerId === world.commanderId && (entry.status === "pending" || entry.status === "active");
+        });
+        var cancellable = managed || item.standingOrders.slice().reverse().find(function (entry) {
+          return entry.issuerId === world.commanderId && entry.status === "awaiting-confirmation";
+        });
+        if (managed) {
+          byId("manage-directive").value = managed.directive;
+          updateManagedOrderTargets();
+          byId("manage-directive").addEventListener("change", updateManagedOrderTargets);
+          byId("amend-order").addEventListener("click", function () { amendOrder(item.id, managed.id); });
+        }
+        if (cancellable) {
+          byId("cancel-order").addEventListener("click", function () { cancelOrder(item.id, cancellable.id); });
+        }
+      }
+    }
+    function renderFooter() {
+      var c = commander();
+      byId("condition").innerHTML =
+        meter("Health", c.health, c.health < 45) +
+        meter("Morale", c.morale, c.morale < 40) +
+        '<div><span class="subtle">Travel</span><strong>' + esc(c.travel ? c.travel.remainingTicks + " ticks" : "Ready") + "</strong></div>";
+      byId("pending").textContent = world.pendingCommands.length
+        ? world.pendingCommands.length + " command(s) queued"
+        : "No commands waiting";
+      var briefing = world.briefing || { attentionCount: 0, items: [] };
+      byId("brief-title").textContent = briefing.attentionCount
+        ? "Check-in · " + briefing.attentionCount + " need attention"
+        : "Check-in · clear";
+      var officer = byId("brief-officer");
+      officer.innerHTML = '<option value="">Direct reports</option>' + (briefing.eligibleOfficers || []).map(function (item) {
+        return '<option value="' + esc(item.id) + '">' + esc(item.name) + ' · leadership ' + item.leadership + '</option>';
+      }).join("");
+      officer.value = briefing.reportingOfficer ? briefing.reportingOfficer.id : "";
+      officer.onchange = assignReportingOfficer;
+      byId("events").innerHTML = briefing.items.map(function (item) {
+        var decision = item.action === "confirm-order"
+          ? '<button class="brief-action" type="button" data-brief-confirm="' + esc(item.orderId) + '" data-brief-character="' + esc(item.characterId) + '">Confirm completion</button>'
+          : item.action === "claim-settlement"
+            ? '<button class="brief-action" type="button" data-brief-claim="true">Review surrender</button>'
+            : "";
+        var acknowledge = item.acknowledgeable
+          ? '<button class="brief-action" type="button" data-brief-ack="' + esc(item.id) + '" data-brief-through="' + esc(item.throughSequence == null ? "" : item.throughSequence) + '">Acknowledge</button>'
+          : "";
+        return '<div class="brief-row"><div class="brief-head"><strong>' + esc(item.title) + '</strong><span class="brief-badge ' + esc(item.severity) + '">' + esc(item.severity) + '</span></div><div>' + esc(item.summary) + '</div><div class="brief-tools">' + decision + acknowledge + '</div></div>';
+      }).join("") || '<div class="empty">No exceptions need attention.</div>';
+      byId("events").querySelectorAll("[data-brief-confirm]").forEach(function (button) {
+        button.addEventListener("click", function () { confirmOrder(button.dataset.briefCharacter, button.dataset.briefConfirm); });
+      });
+      byId("events").querySelectorAll("[data-brief-claim]").forEach(function (button) {
+        button.addEventListener("click", function () {
+          var item = briefing.items.find(function (entry) { return entry.action === "claim-settlement"; });
+          if (item) selectSettlement(item.settlementId);
+        });
+      });
+      byId("events").querySelectorAll("[data-brief-ack]").forEach(function (button) {
+        button.addEventListener("click", function () {
+          acknowledgeBriefing(button.dataset.briefAck, button.dataset.briefThrough || undefined);
+        });
+      });
+    }
+    function renderChat() {
+      var conversations = world.conversations || { threads: [], messages: [], scheduledReplies: [] };
+      if (!selectedThreadId || !conversations.threads.some(function (thread) { return thread.id === selectedThreadId; })) {
+        selectedThreadId = conversations.threads.length ? conversations.threads[0].id : null;
+      }
+      byId("chat-participants").innerHTML = world.characters.filter(function (item) {
+        return item.id !== world.commanderId && world.player.knownCharacterIds.includes(item.id);
+      }).map(function (item) {
+        return '<option value="' + esc(item.id) + '">' + esc(item.name) + " — " + esc(item.archetype) + "</option>";
+      }).join("");
+      byId("thread-tabs").innerHTML = conversations.threads.map(function (thread) {
+        return '<button class="thread-tab' + (thread.id === selectedThreadId ? " active" : "") + '" type="button" data-thread="' + esc(thread.id) + '">' + esc(thread.title) + "</button>";
+      }).join("") || '<div class="empty">No conversations yet.</div>';
+      byId("thread-tabs").querySelectorAll("[data-thread]").forEach(function (button) {
+        button.addEventListener("click", function () { selectedThreadId = button.dataset.thread; renderChat(); });
+      });
+      var messages = conversations.messages.filter(function (message) { return message.threadId === selectedThreadId; });
+      var waits = conversations.scheduledReplies.filter(function (reply) { return reply.threadId === selectedThreadId; });
+      byId("message-log").innerHTML = messages.map(function (message) {
+        var sender = character(message.senderId);
+        var profile = message.inferredPlayerTags && message.inferredPlayerTags.length ? " · read: " + message.inferredPlayerTags.join(", ") : "";
+        return '<div class="message' + (message.senderId === world.commanderId ? " mine" : "") + '"><strong>' + esc(sender ? sender.name : message.senderId) + "</strong><div>" + esc(message.body) + '</div><div class="message-meta">Tick ' + message.createdTick + profile + "</div></div>";
+      }).join("") + waits.map(function (reply) {
+        var speaker = character(reply.characterId);
+        return '<div class="reply-wait">' + esc(speaker ? speaker.name : reply.characterId) + " may reply around day " + fmt(reply.dueTick / world.ticksPerDay, 1) + ".</div>";
+      }).join("") || '<div class="empty">Select a thread or create a new one.</div>';
+      byId("message-log").scrollTop = byId("message-log").scrollHeight;
+    }
+    function render() {
+      if (!world) return;
+      renderHeader();
+      renderMap();
+      renderInspector();
+      renderFooter();
+      renderChat();
+    }
+    document.querySelectorAll("[data-ticks]").forEach(function (button) {
+      button.addEventListener("click", function () { mutate("/api/advance", { ticks: Number(button.dataset.ticks) }); });
+    });
+    byId("chat-toggle").addEventListener("click", function () { byId("chat-drawer").classList.add("open"); });
+    byId("chat-close").addEventListener("click", function () { byId("chat-drawer").classList.remove("open"); });
+    byId("chat-create").addEventListener("click", createThread);
+    byId("message-send").addEventListener("click", sendMessage);
+    refresh().catch(function (error) { toast(error.message, true); });
+  </script>
+</body>
+</html>
