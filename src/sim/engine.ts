@@ -1,5 +1,14 @@
 import { DeterministicRng } from "./rng.ts";
 import {
+  believedGarrison,
+  believedPrice,
+  directObservation,
+  goalProgressForAction,
+  needsObservation,
+  planActionBoost,
+  reviewPlan,
+} from "./agency.ts";
+import {
   applyEvent,
   clamp,
   distanceBetween,
@@ -112,7 +121,11 @@ function travelDuration(world: WorldState, character: Character, destinationId: 
   return Math.max(2, Math.ceil((distance / 11) * navigationMultiplier));
 }
 
-function bestTradeResource(world: WorldState, settlementId: string): ResourceKey {
+function bestTradeResource(
+  world: WorldState,
+  settlementId: string,
+  character: Character,
+): ResourceKey {
   const settlement = world.settlements[settlementId];
   return [...RESOURCE_KEYS]
     .sort((left, right) => {
@@ -121,7 +134,7 @@ function bestTradeResource(world: WorldState, settlementId: string): ResourceKey
         const bestRemotePrice = Math.max(
           ...Object.values(world.settlements)
             .filter((destination) => destination.id !== settlementId)
-            .map((destination) => marketPrice(world, destination.id, resource)),
+            .map((destination) => believedPrice(world, character, destination.id, resource)),
         );
         const exportable = Math.max(0, settlement.stocks[resource] - settlement.targetStocks[resource] * 0.55);
         return Math.max(0, bestRemotePrice - localPrice) * Math.min(30, exportable) + exportable * 0.015;
@@ -151,7 +164,7 @@ function travelCandidates(world: WorldState, character: Character): DecisionCand
     .map((settlement) => {
       const distance = distanceBetween(world, character.locationId!, settlement.id);
       const tradeOpportunity = carried
-        ? Math.max(0, marketPrice(world, settlement.id, carried) - marketPrice(world, character.locationId!, carried)) * tradableAmount(character, carried)
+        ? Math.max(0, believedPrice(world, character, settlement.id, carried) - marketPrice(world, character.locationId!, carried)) * tradableAmount(character, carried)
         : 0;
       const factionInterest = settlement.factionId !== character.factionId && character.personality.ambition > 0.6 ? 8 : 0;
       const score =
@@ -215,7 +228,7 @@ function buildCandidates(
         (cargoLoad < capacity * 0.65 ? 9 : -8) +
         (dominantCargo(character) && character.currentGoal === "travel" ? 55 : 0),
       reason: dominantCargo(character) ? "sell carried goods into the local market" : "buy a local surplus for resale",
-      resource: dominantCargo(character) ?? bestTradeResource(world, settlement.id),
+      resource: dominantCargo(character) ?? bestTradeResource(world, settlement.id, character),
     },
     ...travelCandidates(world, character),
   ];
@@ -228,7 +241,8 @@ function buildCandidates(
     settlement.garrison >= 15 &&
     world.tick - character.lastBattleTick >= 18
   ) {
-    const perceivedDefense = settlement.garrison * settlement.fortification;
+    const defenseBelief = believedGarrison(world, character, settlement.id);
+    const perceivedDefense = defenseBelief.estimate * settlement.fortification;
     const perceivedRatio = partyPower(character) / Math.max(1, perceivedDefense);
     candidates.push({
       action: "raid",
@@ -238,12 +252,14 @@ function buildCandidates(
         character.personality.ambition * 42 -
         character.personality.caution * 38 +
         perceivedRatio * 15,
-      reason: `challenge ${settlement.name}'s garrison and seize supplies`,
+      reason: `challenge ${settlement.name}'s estimated garrison (${Math.round(defenseBelief.estimate)}, ${Math.round(defenseBelief.confidence * 100)}% confidence) and seize supplies`,
     });
   }
 
   for (const candidate of candidates) {
-    candidate.score = round(candidate.score + rng.between(-3.5, 3.5), 2);
+    const planInfluence = planActionBoost(character, candidate.action, candidate.targetId);
+    candidate.score = round(candidate.score + planInfluence.boost + rng.between(-3.5, 3.5), 2);
+    if (planInfluence.reason) candidate.reason += `; ${planInfluence.reason}`;
     if (candidate.action === "buy-provisions" && (settlement.stocks.provisions < 1 || character.money < 2)) {
       candidate.score = -1_000;
     }
@@ -272,7 +288,7 @@ function resolveTrade(
   const settlementId = character.locationId!;
   const settlement = world.settlements[settlementId];
   const carried = dominantCargo(character);
-  const resource = carried ?? requestedResource ?? bestTradeResource(world, settlementId);
+  const resource = carried ?? requestedResource ?? bestTradeResource(world, settlementId, character);
   const price = marketPrice(world, settlementId, resource);
   const characterCargo = cloneResources(character.cargo);
   const settlementStocks = cloneResources(settlement.stocks);
@@ -375,6 +391,132 @@ function resolveBattle(
       defenderGarrison: settlement.garrison - defenderLosses,
       settlementStability: round(clamp(settlement.stability - (attackerWon ? 12 : 3), 0, 100)),
       settlementStocks,
+    },
+  });
+
+  const goalKind = attackerWon ? "expand-influence" : "recover-strength";
+  const goalId = `${character.id}:${goalKind}`;
+  const existingGoal = character.goals.find((goal) => goal.id === goalId);
+  const evolvedGoal = existingGoal
+    ? {
+        ...existingGoal,
+        priority: round(clamp(existingGoal.priority + (attackerWon ? 0.025 : 0.08), 0, 1)),
+        progress: round(clamp(existingGoal.progress + (attackerWon ? 0.07 : 0), 0, 1)),
+        status: "active" as const,
+        origin: attackerWon
+          ? `reinforced by victory at ${settlement.name}`
+          : `renewed by defeat at ${settlement.name}`,
+      }
+    : {
+        id: goalId,
+        kind: goalKind,
+        label: attackerWon ? "Turn battlefield success into lasting influence" : "Recover strength after a consequential defeat",
+        priority: attackerWon ? 0.74 : 0.92,
+        progress: attackerWon ? 0.07 : 0,
+        status: "active" as const,
+        origin: attackerWon ? `victory at ${settlement.name}` : `defeat at ${settlement.name}`,
+        createdTick: world.tick,
+      };
+  emit(world, events, {
+    type: "goal-evolved",
+    actorId: character.id,
+    settlementId: settlement.id,
+    data: {
+      trigger: attackerWon ? "victory" : "defeat",
+      goal: evolvedGoal,
+    },
+  });
+
+  const relevantOrder = character.standingOrders.find((order) => order.issuerId in character.relationships);
+  if (relevantOrder) {
+    const prior = character.relationships[relevantOrder.issuerId];
+    const relationship = {
+      ...prior,
+      trust: round(clamp(prior.trust + (attackerWon ? 0.012 : -0.025), 0, 1)),
+      respect: round(clamp(prior.respect + (attackerWon ? 0.028 : -0.008), 0, 1)),
+      fear: round(clamp(prior.fear + (attackerWon ? -0.005 : 0.018), 0, 1)),
+      grievance: round(clamp(prior.grievance + (attackerWon ? -0.006 : 0.035), 0, 1)),
+      obligation: round(clamp(prior.obligation + (attackerWon ? -0.01 : 0.015), 0, 1)),
+      lastChangedTick: world.tick,
+    };
+    emit(world, events, {
+      type: "relationship-changed",
+      actorId: character.id,
+      targetId: relevantOrder.issuerId,
+      data: {
+        characterId: relevantOrder.issuerId,
+        trigger: attackerWon ? "victory under standing orders" : "costly defeat under standing orders",
+        relationship,
+      },
+    });
+  }
+}
+
+function progressActiveGoal(
+  world: WorldState,
+  character: Character,
+  action: string,
+  events: SimEvent[],
+): void {
+  const goal = character.goals.find((candidate) => candidate.id === character.activeGoalId);
+  const increment = goalProgressForAction(goal, action);
+  if (!goal || increment <= 0) return;
+  const progress = round(clamp(goal.progress + increment, 0, 1));
+  emit(world, events, {
+    type: "goal-progressed",
+    actorId: character.id,
+    data: {
+      goalId: goal.id,
+      action,
+      increment,
+      progress,
+      status: progress >= 1 ? "satisfied" : "active",
+    },
+  });
+}
+
+function evolveLocalRelationship(
+  world: WorldState,
+  character: Character,
+  events: SimEvent[],
+  rng: DeterministicRng,
+): void {
+  if (!character.locationId) return;
+  const numericId = Number.parseInt(character.id.slice(-2), 10);
+  if ((world.tick + numericId) % world.ticksPerDay !== 0) return;
+  const companions = Object.values(world.characters)
+    .filter((candidate) => candidate.id !== character.id && candidate.locationId === character.locationId)
+    .sort((left, right) => left.id.localeCompare(right.id));
+  if (companions.length === 0) return;
+  const companion = rng.pick(companions);
+  const prior = character.relationships[companion.id] ?? {
+    characterId: companion.id,
+    trust: 0.28,
+    affinity: 0.25,
+    respect: 0.28,
+    fear: 0.08,
+    grievance: 0,
+    obligation: 0,
+    lastChangedTick: world.tick,
+  };
+  const sharedFaction = character.factionId !== null && character.factionId === companion.factionId;
+  const relationship = {
+    ...prior,
+    trust: round(clamp(prior.trust + (sharedFaction ? 0.012 : 0.004), 0, 1)),
+    affinity: round(clamp(prior.affinity + 0.006 + character.personality.curiosity * 0.006, 0, 1)),
+    respect: round(clamp(prior.respect + (companion.troops.count > character.troops.count ? 0.008 : 0.003), 0, 1)),
+    grievance: round(clamp(prior.grievance - 0.003, 0, 1)),
+    lastChangedTick: world.tick,
+  };
+  emit(world, events, {
+    type: "relationship-changed",
+    actorId: character.id,
+    targetId: companion.id,
+    settlementId: character.locationId,
+    data: {
+      characterId: companion.id,
+      trigger: `shared time at ${world.settlements[character.locationId].name}`,
+      relationship,
     },
   });
 }
@@ -548,6 +690,30 @@ export function runTick(world: WorldState): TickResult {
 
   for (const character of Object.values(world.characters).sort((a, b) => a.id.localeCompare(b.id))) {
     upkeepCharacter(world, character, events, Boolean(character.travel));
+    if (needsObservation(world, character)) {
+      const knowledge = directObservation(world, character);
+      if (knowledge) {
+        emit(world, events, {
+          type: "knowledge-updated",
+          actorId: character.id,
+          settlementId: knowledge.settlementId,
+          data: {
+            settlementId: knowledge.settlementId,
+            knowledge,
+            reason: "direct local observation",
+          },
+        });
+      }
+    }
+    const planReview = reviewPlan(world, character, rng);
+    if (planReview) {
+      emit(world, events, {
+        type: "plan-reconsidered",
+        actorId: character.id,
+        targetId: planReview.plan.targetId,
+        data: planReview as unknown as Record<string, unknown>,
+      });
+    }
     if (character.travel) {
       progressTravel(world, character, events);
       continue;
@@ -563,11 +729,18 @@ export function runTick(world: WorldState): TickResult {
       data: {
         archetype: character.archetype,
         goal: chosen.action,
+        activeLongTermGoalId: character.activeGoalId,
+        planId: character.plan?.id,
+        planIntent: character.plan?.intent,
+        orderId: character.plan?.orderId,
+        targetKnowledge: chosen.targetId ? character.knowledge[chosen.targetId] : undefined,
         chosen,
         candidates: candidates.slice(0, 6),
       },
     });
     resolveDecision(world, character, chosen, events, rng);
+    progressActiveGoal(world, character, chosen.action, events);
+    evolveLocalRelationship(world, character, events, rng);
   }
 
   emit(world, events, { type: "metrics-recorded", data: metrics(world) });

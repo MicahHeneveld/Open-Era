@@ -1,10 +1,14 @@
 import { DeterministicRng } from "./rng.ts";
 import type {
   Character,
+  CharacterGoal,
   Faction,
   Personality,
+  Relationship,
   Resources,
+  SettlementKnowledge,
   Settlement,
+  StandingOrder,
   WorldState,
 } from "./types.ts";
 
@@ -25,6 +29,20 @@ function resources(
   shipMaterials: number,
 ): Resources {
   return { provisions, arms, medicine, shipMaterials };
+}
+
+function clamp(value: number, minimum: number, maximum: number): number {
+  return Math.max(minimum, Math.min(maximum, value));
+}
+
+function estimatedPrices(settlement: Settlement, factor: number): Resources {
+  const base = resources(1.8, 5.6, 7.4, 4.5);
+  return {
+    provisions: Math.round(base.provisions * clamp(settlement.targetStocks.provisions / Math.max(1, settlement.stocks.provisions), 0.55, 2.5) * factor * 100) / 100,
+    arms: Math.round(base.arms * clamp(settlement.targetStocks.arms / Math.max(1, settlement.stocks.arms), 0.55, 2.5) * factor * 100) / 100,
+    medicine: Math.round(base.medicine * clamp(settlement.targetStocks.medicine / Math.max(1, settlement.stocks.medicine), 0.55, 2.5) * factor * 100) / 100,
+    shipMaterials: Math.round(base.shipMaterials * clamp(settlement.targetStocks.shipMaterials / Math.max(1, settlement.stocks.shipMaterials), 0.55, 2.5) * factor * 100) / 100,
+  };
 }
 
 function makeSettlement(
@@ -106,11 +124,135 @@ function makeCharacter(
       trade: archetype === "merchant" ? rng.integer(64, 90) : rng.integer(15, 60),
     },
     personality: personalityFor(archetype, rng),
+    goals: [],
+    activeGoalId: null,
+    plan: null,
+    relationships: {},
+    knowledge: {},
+    standingOrders: [],
+    lastPlanReviewTick: -1,
     currentGoal: "establish-position",
     lastDecisionTick: -1,
     lastBattleTick: -100,
     victories: 0,
     defeats: 0,
+  };
+}
+
+function goalsFor(character: Character): CharacterGoal[] {
+  const goals: CharacterGoal[] = [
+    {
+      id: `${character.id}:material-security`,
+      kind: "material-security",
+      label: "Keep the party secure and well supplied",
+      priority: 0.52 + character.personality.caution * 0.28,
+      progress: 0,
+      status: "active",
+      origin: "universal survival motive",
+      createdTick: 0,
+    },
+  ];
+  const archetypeGoal = {
+    merchant: ["build-wealth", "Build a durable trading fortune"],
+    explorer: ["explore-world", "Discover distant opportunities"],
+    raider: ["expand-influence", "Win recognition through daring victories"],
+    officer: ["serve-faction", "Strengthen and protect the faction"],
+    steward: ["build-power", "Build a capable and respected party"],
+  }[character.archetype] as [CharacterGoal["kind"], string];
+  goals.push({
+    id: `${character.id}:${archetypeGoal[0]}`,
+    kind: archetypeGoal[0],
+    label: archetypeGoal[1],
+    priority: 0.58 + character.personality.ambition * 0.32,
+    progress: 0,
+    status: "active",
+    origin: `${character.archetype} root archetype`,
+    createdTick: 0,
+  });
+  if (character.factionId && archetypeGoal[0] !== "serve-faction") {
+    goals.push({
+      id: `${character.id}:serve-faction`,
+      kind: "serve-faction",
+      label: "Advance the faction's interests",
+      priority: 0.38 + character.personality.loyalty * 0.42,
+      progress: 0,
+      status: "active",
+      origin: "faction membership",
+      createdTick: 0,
+    });
+  }
+  return goals;
+}
+
+function relationshipTo(
+  characterId: string,
+  rng: DeterministicRng,
+  loyaltyBias = 0,
+): Relationship {
+  return {
+    characterId,
+    trust: clamp(rng.between(0.35, 0.68) + loyaltyBias, 0, 1),
+    affinity: rng.between(0.25, 0.72),
+    respect: clamp(rng.between(0.35, 0.72) + loyaltyBias * 0.7, 0, 1),
+    fear: rng.between(0.04, 0.3),
+    grievance: rng.between(0, 0.16),
+    obligation: rng.between(0, 0.24),
+    lastChangedTick: 0,
+  };
+}
+
+function knowledgeFor(
+  character: Character,
+  settlements: Record<string, Settlement>,
+  rng: DeterministicRng,
+): Record<string, SettlementKnowledge> {
+  return Object.fromEntries(Object.values(settlements).map((settlement) => {
+    const direct = character.locationId === settlement.id;
+    const factionReport = !direct && character.factionId !== null && character.factionId === settlement.factionId;
+    const confidence = direct ? 1 : factionReport ? 0.76 : rng.between(0.22, 0.42);
+    const factor = direct ? 1 : factionReport ? rng.between(0.88, 1.12) : rng.between(0.62, 1.42);
+    const belief: SettlementKnowledge = {
+      settlementId: settlement.id,
+      observedTick: direct ? 0 : -rng.integer(3, 30),
+      confidence,
+      factionId: settlement.factionId,
+      garrisonEstimate: Math.max(1, Math.round(settlement.garrison * factor)),
+      stocksEstimate: {
+        provisions: Math.round(settlement.stocks.provisions * factor),
+        arms: Math.round(settlement.stocks.arms * factor),
+        medicine: Math.round(settlement.stocks.medicine * factor),
+        shipMaterials: Math.round(settlement.stocks.shipMaterials * factor),
+      },
+      priceEstimate: estimatedPrices(settlement, direct ? 1 : 2 - factor),
+      source: direct ? "direct" : factionReport ? "faction-report" : "rumor",
+    };
+    return [settlement.id, belief];
+  }));
+}
+
+function orderFor(character: Character): StandingOrder | null {
+  if (!character.factionId) return null;
+  const issuerId = character.factionId === "world-government" ? "character-01" : "character-14";
+  if (character.id === issuerId) return null;
+  const directive = character.archetype === "merchant"
+    ? "trade-supplies"
+    : character.archetype === "explorer"
+      ? "explore"
+      : character.factionId === "free-tide" && character.archetype === "raider"
+        ? "pressure"
+        : "protect";
+  return {
+    id: `${issuerId}:order:${character.id}`,
+    issuerId,
+    directive,
+    targetId: directive === "pressure"
+      ? "world-government"
+      : directive === "protect"
+        ? character.factionId === "world-government" ? "crown-harbor" : "cinder-key"
+        : undefined,
+    priority: character.factionId === "world-government" ? 0.78 : 0.67,
+    issuedTick: 0,
+    expiresTick: null,
   };
 }
 
@@ -200,6 +342,30 @@ export function createPrototypeWorld(seed = 1847): WorldState {
   characters["character-14"].personality.aggression = 0.97;
   characters["character-14"].personality.ambition = 0.94;
   characters["character-14"].personality.caution = 0.08;
+
+  for (const character of Object.values(characters)) {
+    character.goals = goalsFor(character);
+    character.knowledge = knowledgeFor(character, settlements, rng);
+    const order = orderFor(character);
+    if (order) {
+      character.standingOrders.push(order);
+      character.relationships[order.issuerId] = relationshipTo(
+        order.issuerId,
+        rng,
+        character.personality.loyalty * 0.18,
+      );
+    }
+  }
+
+  // Give co-located characters a small social history independent of hierarchy.
+  for (const character of Object.values(characters)) {
+    const neighbor = Object.values(characters).find((candidate) =>
+      candidate.id !== character.id &&
+      candidate.locationId === character.locationId &&
+      !character.relationships[candidate.id]
+    );
+    if (neighbor) character.relationships[neighbor.id] = relationshipTo(neighbor.id, rng);
+  }
 
   return {
     version: 1,

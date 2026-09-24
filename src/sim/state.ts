@@ -129,6 +129,36 @@ export function applyEvent(world: WorldState, event: SimEvent): void {
       actor.currentGoal = event.data.goal as string;
       actor.lastDecisionTick = world.tick;
       break;
+    case "knowledge-updated":
+      if (!actor) throw new Error("Knowledge event has no actor");
+      actor.knowledge[event.data.settlementId as string] = event.data.knowledge as Character["knowledge"][string];
+      break;
+    case "plan-reconsidered":
+      if (!actor) throw new Error("Plan event has no actor");
+      actor.activeGoalId = event.data.selectedGoalId as string;
+      actor.plan = event.data.plan as Character["plan"];
+      actor.lastPlanReviewTick = world.tick;
+      break;
+    case "goal-progressed": {
+      if (!actor) throw new Error("Goal progress event has no actor");
+      const goal = actor.goals.find((candidate) => candidate.id === event.data.goalId);
+      if (!goal) throw new Error(`Unknown goal: ${event.data.goalId}`);
+      goal.progress = event.data.progress as number;
+      goal.status = event.data.status as typeof goal.status;
+      break;
+    }
+    case "goal-evolved": {
+      if (!actor) throw new Error("Goal evolution event has no actor");
+      const incoming = event.data.goal as Character["goals"][number];
+      const existingIndex = actor.goals.findIndex((goal) => goal.id === incoming.id);
+      if (existingIndex >= 0) actor.goals[existingIndex] = incoming;
+      else actor.goals.push(incoming);
+      break;
+    }
+    case "relationship-changed":
+      if (!actor) throw new Error("Relationship event has no actor");
+      actor.relationships[event.data.characterId as string] = event.data.relationship as Character["relationships"][string];
+      break;
     case "travel-started":
       if (!actor) throw new Error("Travel event has no actor");
       actor.travel = event.data.travel as Character["travel"];

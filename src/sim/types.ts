@@ -68,6 +68,72 @@ export interface TravelState {
   remainingTicks: number;
 }
 
+export type GoalKind =
+  | "material-security"
+  | "build-wealth"
+  | "build-power"
+  | "serve-faction"
+  | "explore-world"
+  | "expand-influence"
+  | "recover-strength";
+
+export interface CharacterGoal {
+  id: string;
+  kind: GoalKind;
+  label: string;
+  priority: number;
+  progress: number;
+  status: "active" | "satisfied" | "abandoned";
+  origin: string;
+  createdTick: number;
+}
+
+export interface CharacterPlan {
+  id: string;
+  goalId: string;
+  intent: string;
+  preferredActions: string[];
+  targetId?: string;
+  createdTick: number;
+  reviewAfterTick: number;
+  reason: string;
+  orderId?: string;
+}
+
+export interface Relationship {
+  characterId: string;
+  trust: number;
+  affinity: number;
+  respect: number;
+  fear: number;
+  grievance: number;
+  obligation: number;
+  lastChangedTick: number;
+}
+
+export interface SettlementKnowledge {
+  settlementId: string;
+  observedTick: number;
+  confidence: number;
+  factionId: string | null;
+  garrisonEstimate: number;
+  stocksEstimate: Resources;
+  priceEstimate: Resources;
+  source: "direct" | "faction-report" | "rumor";
+}
+
+export type OrderDirective = "protect" | "pressure" | "trade-supplies" | "explore";
+
+export interface StandingOrder {
+  id: string;
+  issuerId: string;
+  directive: OrderDirective;
+  targetId?: string;
+  priority: number;
+  issuedTick: number;
+  expiresTick: number | null;
+}
+
 export interface Character {
   id: string;
   name: string;
@@ -84,6 +150,13 @@ export interface Character {
   attributes: CharacterAttributes;
   skills: CharacterSkills;
   personality: Personality;
+  goals: CharacterGoal[];
+  activeGoalId: string | null;
+  plan: CharacterPlan | null;
+  relationships: Record<string, Relationship>;
+  knowledge: Record<string, SettlementKnowledge>;
+  standingOrders: StandingOrder[];
+  lastPlanReviewTick: number;
   currentGoal: string;
   lastDecisionTick: number;
   lastBattleTick: number;

@@ -90,6 +90,29 @@ function decisionTraces(world: WorldState, events: SimEvent[]): string {
     .join("\n");
 }
 
+function agencyTraces(world: WorldState, events: SimEvent[]): string {
+  const included = new Set([
+    "plan-reconsidered",
+    "knowledge-updated",
+    "goal-evolved",
+    "relationship-changed",
+  ]);
+  return events
+    .filter((event) => included.has(event.type))
+    .map((event) => JSON.stringify({
+      sequence: event.sequence,
+      tick: event.tick,
+      day: round(event.tick / world.ticksPerDay, 2),
+      type: event.type,
+      characterId: event.actorId,
+      character: event.actorId ? world.characters[event.actorId]?.name : undefined,
+      targetId: event.targetId,
+      settlementId: event.settlementId,
+      ...event.data,
+    }))
+    .join("\n");
+}
+
 function metricsCsv(events: SimEvent[]): string {
   const header = "tick,day,faction_id,faction,power,treasury,settlements,provisions,arms,medicine,ship_materials";
   const rows = [header];
@@ -131,6 +154,15 @@ function eventStory(world: WorldState, event: SimEvent): string | null {
   if (event.type === "market-trade" && event.data.direction === "sold" && Number(event.data.gross) >= 35) {
     return `- Day ${round(event.tick / world.ticksPerDay, 1)}: ${actor} sold ${event.data.quantity} ${event.data.resource} at **${settlement}** for ${event.data.gross}.`;
   }
+  if (event.type === "goal-evolved") {
+    const goal = event.data.goal as { label: string };
+    return `- Day ${round(event.tick / world.ticksPerDay, 1)}: ${actor}'s experience at **${settlement}** created or reshaped the ambition _${goal.label}_.`;
+  }
+  if (event.type === "relationship-changed") {
+    if (!String(event.data.trigger).includes("standing orders")) return null;
+    const target = event.targetId ? world.characters[event.targetId]?.name ?? event.targetId : "their superior";
+    return `- Day ${round(event.tick / world.ticksPerDay, 1)}: ${event.data.trigger} changed ${actor}'s relationship with **${target}**.`;
+  }
   return null;
 }
 
@@ -142,12 +174,46 @@ function summaryMarkdown(world: WorldState, events: SimEvent[], snapshotCount: n
   const active = Object.values(world.characters)
     .sort((left, right) => partyPower(right) - partyPower(left))
     .slice(0, 8)
-    .map((character) => `| ${character.name} | ${character.archetype} | ${character.factionId ? world.factions[character.factionId].name : "Unaffiliated"} | ${partyPower(character)} | ${character.victories}–${character.defeats} | ${character.currentGoal} |`)
+    .map((character) => {
+      const goal = character.goals.find((candidate) => candidate.id === character.activeGoalId);
+      return `| ${character.name} | ${character.archetype} | ${character.factionId ? world.factions[character.factionId].name : "Unaffiliated"} | ${partyPower(character)} | ${character.victories}–${character.defeats} | ${goal?.label ?? "Uncommitted"} |`;
+    })
     .join("\n");
-  const stories = events.map((event) => eventStory(world, event)).filter(Boolean).slice(-60).join("\n");
+  const majorTypes = new Set(["battle-resolved", "goal-evolved", "relationship-changed", "settlement-shortage"]);
+  const majorStories = events
+    .filter((event) => majorTypes.has(event.type))
+    .map((event) => eventStory(world, event))
+    .filter(Boolean)
+    .slice(-35)
+    .join("\n");
+  const recentStories = events
+    .filter((event) => !majorTypes.has(event.type))
+    .map((event) => eventStory(world, event))
+    .filter(Boolean)
+    .slice(-30)
+    .join("\n");
   const battles = events.filter((event) => event.type === "battle-resolved").length;
   const journeys = events.filter((event) => event.type === "travel-started").length;
   const trades = events.filter((event) => event.type === "market-trade").length;
+  const planReviews = events.filter((event) => event.type === "plan-reconsidered");
+  const orderAssessments = planReviews
+    .map((event) => event.data.orderAssessment as { willComply: boolean } | null)
+    .filter((assessment): assessment is { willComply: boolean } => Boolean(assessment));
+  const complied = orderAssessments.filter((assessment) => assessment.willComply).length;
+  const observations = events.filter((event) => event.type === "knowledge-updated").length;
+  const evolvedGoals = events.filter((event) => event.type === "goal-evolved").length;
+  const relationshipChanges = events.filter((event) => event.type === "relationship-changed").length;
+  const goalDistribution = Object.entries(
+    Object.values(world.characters).reduce<Record<string, number>>((counts, character) => {
+      const goal = character.goals.find((candidate) => candidate.id === character.activeGoalId);
+      const kind = goal?.kind ?? "uncommitted";
+      counts[kind] = (counts[kind] ?? 0) + 1;
+      return counts;
+    }, {}),
+  )
+    .sort((left, right) => right[1] - left[1])
+    .map(([kind, count]) => `${kind}: ${count}`)
+    .join("; ");
 
   return `# Open Era simulation report
 
@@ -159,6 +225,13 @@ The **${world.scenario}** scenario reached tick ${world.tick} (day ${round(world
 - ${events.length} persisted events across ${snapshotCount} snapshots
 - ${journeys} journeys, ${trades} market trades, and ${battles} battles
 
+## Agency diagnostics
+
+- ${planReviews.length} explicit plan reviews and ${observations} direct knowledge updates
+- ${orderAssessments.length} standing-order evaluations: ${complied} accepted and ${orderAssessments.length - complied} declined
+- ${evolvedGoals} goals reshaped by major experiences and ${relationshipChanges} relationship changes
+- Active long-term goals — ${goalDistribution}
+
 ## Faction balance
 
 | Faction | Power | Treasury | Settlements |
@@ -167,13 +240,17 @@ ${factions}
 
 ## Most powerful active parties
 
-| Character | Archetype | Allegiance | Party power | W–L | Current goal |
+| Character | Archetype | Allegiance | Party power | W–L | Active ambition |
 | --- | --- | --- | ---: | ---: | --- |
 ${active}
 
-## World chronicle
+## Consequential events
 
-${stories || "No major public events occurred during this run."}
+${majorStories || "No major public events occurred during this run."}
+
+## Recent activity
+
+${recentStories || "No recent public activity was recorded."}
 
 ## Final island markets
 
@@ -189,6 +266,7 @@ export function writeReports(
 ): void {
   mkdirSync(outputDirectory, { recursive: true });
   writeFileSync(join(outputDirectory, "decision-traces.jsonl"), decisionTraces(world, events) + "\n");
+  writeFileSync(join(outputDirectory, "agency-traces.jsonl"), agencyTraces(world, events) + "\n");
   writeFileSync(join(outputDirectory, "metrics.csv"), metricsCsv(events));
   writeFileSync(join(outputDirectory, "map.svg"), mapSvg(world));
   writeFileSync(join(outputDirectory, "report.md"), summaryMarkdown(world, events, snapshotCount));

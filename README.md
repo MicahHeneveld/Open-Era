@@ -13,6 +13,11 @@ This branch contains the first **headless world prototype**. It is intentionally
 - Party provisions, sailors, troop recruitment, morale, and attrition
 - Physical travel between islands and merchant arbitrage
 - Character-plus-troop combat against settlement garrisons
+- Persistent personality-rooted goals and structured multi-tick plans
+- Imperfect island knowledge that becomes stale and refreshes through direct observation
+- Trust, affinity, respect, fear, grievance, and obligation between characters
+- Standing orders that characters independently accept or reject based on loyalty, values, relationships, ambition, and risk
+- Goals and relationships that change after victories, defeats, and shared local experiences
 - Deterministic seeded outcomes with detailed decision traces
 - SQLite event persistence, daily snapshots, state hashes, and crash recovery
 - Markdown, CSV, JSONL, JSON, and SVG evaluation outputs
@@ -34,6 +39,7 @@ The default run advances twelve in-world days and writes:
 - `simulation-output/latest/report.md` — readable world chronicle and final balance
 - `simulation-output/latest/map.svg` — map of islands, parties, and active routes
 - `simulation-output/latest/decision-traces.jsonl` — scored alternatives behind every decision
+- `simulation-output/latest/agency-traces.jsonl` — plan reviews, beliefs, evolving goals, and relationships
 - `simulation-output/latest/metrics.csv` — faction power, treasury, and resource trends
 - `simulation-output/latest/final-state.json` — complete inspectable world state
 - `.open-era/world.sqlite` — durable event log and snapshots
@@ -66,6 +72,7 @@ The tests prove seeded determinism, divergent seeded histories, snapshot-plus-ev
 
 ```text
 src/sim/scenario.ts      deterministic pressure-test world
+src/sim/agency.ts        goals, plans, beliefs, relationships, orders
 src/sim/engine.ts        decisions, economy, travel, and combat
 src/sim/state.ts         event reducer, derived values, state hashing
 src/sim/persistence.ts   SQLite event log, atomic ticks, snapshots
@@ -78,4 +85,4 @@ The simulation files are intended to survive into the production server. The CLI
 
 ## Current boundary
 
-This is a behavioral probe, not a complete game. Dialogue, relationships, evolving personality trees, faction offices, settlement ownership, debt, captivity, lost technology, inner strength, inheritance, and human-issued orders are deliberately deferred until the base event loop demonstrates useful long-term dynamics.
+This is a behavioral probe, not a complete game. Dialogue, deeper personality branching, faction offices, settlement ownership, debt, captivity, lost technology, inner strength, inheritance, and human-issued orders are still deferred. The current standing orders are scenario fixtures used to validate autonomous obedience and refusal before adding player-controlled command flows.
