@@ -7,7 +7,8 @@ These documents capture the decisions made during the initial design conversatio
 - [Autonomous characters](autonomous-characters.md) — decision architecture, knowledge, memory, relationships, communication, and the bounded role of language models
 - [UI and art direction](ui-art-direction.md) — map structure, information hierarchy, character treatment, screen inventory, and mockup status
 - [Generated mockups](../assets/mockups/README.md) — all 13 image concepts produced during the conversation
-- [Human commander playtest 001](../playtests/human-commander-001.md) — first adaptive player run and the design gaps it exposed
+- [Development and playtest pipeline](../development-pipeline.md) — branch roles, automated gates, adaptive player protocol, and promotion rules
+- [Playtest template](../playtests/TEMPLATE.md) — evidence record for assistant and human sessions
 
 ## Decision status
 
