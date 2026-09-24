@@ -135,13 +135,14 @@ export type StandingOrderStatus =
   | "refused"
   | "awaiting-confirmation"
   | "completed"
-  | "expired";
+  | "expired"
+  | "cancelled";
 
 export type StandingOrderAdherence = "unassessed" | "following" | "deviating";
 
 export interface StandingOrderReport {
   tick: number;
-  kind: "accepted" | "refused" | "deviation" | "resumed" | "completion" | "confirmed" | "expired";
+  kind: "accepted" | "refused" | "deviation" | "resumed" | "completion" | "confirmed" | "expired" | "amended" | "cancelled";
   summary: string;
 }
 
@@ -153,6 +154,7 @@ export interface StandingOrder {
   priority: number;
   issuedTick: number;
   expiresTick: number | null;
+  revision: number;
   status: StandingOrderStatus;
   adherence: StandingOrderAdherence;
   statusChangedTick: number;
@@ -170,6 +172,9 @@ export interface Player {
   characterId: string;
   knownCharacterIds: string[];
   conversationTagScores: Record<string, number>;
+  briefingAcknowledgements: Record<string, number>;
+  routineBriefingThroughSequence: number;
+  reportingOfficerId: string | null;
 }
 
 export type ConversationKind = "direct" | "group";
@@ -254,6 +259,27 @@ export type PlayerCommand =
       playerId: string;
       issuedTick: number;
       type: "confirm-order";
+      characterId: string;
+      orderId: string;
+    }
+  | {
+      id: string;
+      playerId: string;
+      issuedTick: number;
+      type: "amend-order";
+      characterId: string;
+      orderId: string;
+      directive: OrderDirective;
+      targetId?: string;
+      priority: number;
+      expiresTick: number | null;
+      majorChange: boolean;
+    }
+  | {
+      id: string;
+      playerId: string;
+      issuedTick: number;
+      type: "cancel-order";
       characterId: string;
       orderId: string;
     };

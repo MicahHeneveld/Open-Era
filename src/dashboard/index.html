@@ -241,8 +241,12 @@
     .brief-badge.action { color: white; background: var(--gold); }
     .brief-badge.warning { color: white; background: var(--danger); }
     .brief-action { margin-top: 5px; border: 1px solid var(--blue); border-radius: 8px; padding: 4px 7px; color: var(--blue); background: white; font-size: 10px; }
+    .brief-tools { display: flex; gap: 6px; flex-wrap: wrap; }
     .order-detail { padding: 9px 0; border-bottom: 1px solid #e2dfd4; font-size: 12px; }
     .order-detail .subtle { margin-top: 3px; }
+    .manage-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; }
+    .manage-grid label { margin-top: 0; }
+    .compact-select { margin: 4px 0 7px; padding: 6px 8px; font-size: 11px; }
     .toast {
       position: fixed;
       right: 18px;
@@ -295,6 +299,7 @@
       <div class="footer-card">
         <div class="footer-title">Pending commands and time</div>
         <div id="pending" class="subtle"></div>
+        <select id="brief-officer" class="compact-select" aria-label="Reporting officer"></select>
         <div class="advance-row">
           <button class="advance" type="button" data-ticks="1">+4 hours</button>
           <button class="advance" type="button" data-ticks="6">+1 day</button>
@@ -302,7 +307,7 @@
         </div>
       </div>
       <div class="footer-card">
-        <div class="footer-title">Exception-first check-in</div>
+        <div class="footer-title" id="brief-title">Exception-first check-in</div>
         <div class="event-feed" id="events"></div>
       </div>
     </footer>
@@ -367,7 +372,7 @@
           headers: { "content-type": "application/json" },
           body: JSON.stringify(body)
         });
-        toast(result.command ? "Command queued" : result.thread ? "Conversation created" : result.message ? "Message sent" : "World advanced", false);
+        toast(result.command ? "Command queued" : result.thread ? "Conversation created" : result.message ? "Message sent" : result.itemId ? "Briefing item acknowledged" : Object.hasOwn(result, "characterId") ? "Reporting route updated" : "World advanced", false);
         await refresh();
       } catch (error) {
         toast(error.message, true);
@@ -407,6 +412,40 @@
         orderId: orderId
       });
     }
+    function amendOrder(characterId, orderId) {
+      var expires = byId("manage-expiry").value.trim();
+      mutate("/api/commands", {
+        playerId: world.player.id,
+        type: "amend-order",
+        characterId: characterId,
+        orderId: orderId,
+        directive: byId("manage-directive").value,
+        targetId: byId("manage-target").value || null,
+        priority: Number(byId("manage-priority").value),
+        expiresInTicks: expires === "" ? null : Number(expires)
+      });
+    }
+    function cancelOrder(characterId, orderId) {
+      mutate("/api/commands", {
+        playerId: world.player.id,
+        type: "cancel-order",
+        characterId: characterId,
+        orderId: orderId
+      });
+    }
+    function acknowledgeBriefing(itemId, throughSequence) {
+      mutate("/api/briefing/acknowledge", {
+        playerId: world.player.id,
+        itemId: itemId,
+        routineThroughSequence: throughSequence == null ? undefined : Number(throughSequence)
+      });
+    }
+    function assignReportingOfficer() {
+      mutate("/api/briefing/officer", {
+        playerId: world.player.id,
+        characterId: byId("brief-officer").value || null
+      });
+    }
     function createThread() {
       var participants = Array.from(byId("chat-participants").selectedOptions).map(function (option) { return option.value; });
       mutate("/api/threads", { playerId: world.player.id, kind: byId("chat-kind").value, participantIds: participants });
@@ -432,6 +471,24 @@
         return '<option value="' + esc(item[0]) + '">' + esc(item[1]) + "</option>";
       }).join("");
       if (selected.kind === "settlement") target.value = selected.id;
+    }
+    function updateManagedOrderTargets() {
+      var directive = byId("manage-directive");
+      var target = byId("manage-target");
+      if (!directive || !target) return;
+      var current = target.dataset.current;
+      var options = [];
+      if (directive.value === "pressure") {
+        options = world.factions.map(function (item) { return [item.id, item.name]; });
+      } else {
+        if (directive.value !== "protect") options.push(["", "No fixed destination"]);
+        options = options.concat(world.settlements.map(function (item) { return [item.id, item.name]; }));
+      }
+      target.innerHTML = options.map(function (item) {
+        return '<option value="' + esc(item[0]) + '">' + esc(item[1]) + "</option>";
+      }).join("");
+      if (options.some(function (item) { return item[0] === current; })) target.value = current;
+      target.dataset.current = target.value;
     }
     function renderHeader() {
       var c = commander();
@@ -514,6 +571,22 @@
       var place = item.locationId ? settlement(item.locationId).name : item.travel ? "Sailing" : "Unknown";
       var order = item.activeOrderAssessment;
       var liveOrder = item.standingOrders.slice().reverse().find(function (entry) { return entry.status === "pending" || entry.status === "active"; });
+      var managedOrder = item.standingOrders.slice().reverse().find(function (entry) {
+        return entry.issuerId === world.commanderId && (entry.status === "pending" || entry.status === "active");
+      });
+      var cancellableOrder = managedOrder || item.standingOrders.slice().reverse().find(function (entry) {
+        return entry.issuerId === world.commanderId && entry.status === "awaiting-confirmation";
+      });
+      var management = managedOrder
+        ? '<h3>Amend active order</h3><div class="manage-grid">' +
+          '<div><label for="manage-directive">Directive</label><select id="manage-directive"><option value="protect">Protect</option><option value="pressure">Pressure faction</option><option value="trade-supplies">Trade supplies</option><option value="explore">Explore</option></select></div>' +
+          '<div><label for="manage-target">Objective</label><select id="manage-target" data-current="' + esc(managedOrder.targetId || "") + '"></select></div>' +
+          '<div><label for="manage-priority">Priority</label><input id="manage-priority" type="range" min=".1" max="1" step=".05" value="' + managedOrder.priority + '"></div>' +
+          '<div><label for="manage-expiry">Ticks remaining</label><input id="manage-expiry" type="number" min="1" max="720" placeholder="No expiry" value="' + (managedOrder.expiresTick == null ? "" : Math.max(1, managedOrder.expiresTick - world.tick)) + '"></div>' +
+          '</div><div class="actions"><button class="action" id="amend-order" type="button">Queue amendment</button><button class="action danger" id="cancel-order" type="button">Cancel order</button></div>'
+        : cancellableOrder
+          ? '<h3>Manage reported order</h3><button class="action danger" id="cancel-order" type="button">Cancel instead of confirming</button>'
+          : "";
       return '<div class="eyebrow">' + (item.controller.kind === "human" ? "Human-controlled character" : "Autonomous character") + '</div><h2>' + esc(item.name) + "</h2>" +
         '<div class="subtle">' + esc(item.archetype) + " · " + esc(f ? f.name : "Unaffiliated") + " · " + esc(place) + "</div>" +
         '<div class="stat-grid">' +
@@ -533,9 +606,9 @@
             ? '<button class="brief-action" type="button" data-confirm-order="' + esc(entry.id) + '" data-confirm-character="' + esc(item.id) + '">Confirm completion</button>'
             : "";
           return '<div class="order-detail"><div class="order-row"><span>' + esc(entry.directive) + '</span><strong>' + esc(entry.status.replaceAll("-", " ")) + '</strong></div>' +
-            '<div class="subtle">' + esc(entry.adherence) + ' · priority ' + fmt(entry.priority * 100) + '% · ' + entry.deviationCount + ' deviation(s)</div>' +
+            '<div class="subtle">revision ' + entry.revision + ' · ' + esc(entry.adherence) + ' · priority ' + fmt(entry.priority * 100) + '% · ' + entry.deviationCount + ' deviation(s)</div>' +
             (entry.lastReport ? '<div class="subtle">' + esc(entry.lastReport.summary) + '</div>' : '') + confirm + '</div>';
-        }).join("") : '<div class="empty">No standing orders.</div>');
+        }).join("") : '<div class="empty">No standing orders.</div>') + management;
     }
     function commandPanel() {
       var c = commander();
@@ -574,6 +647,21 @@
       if (selected.kind === "character") {
         var select = byId("order-recipient");
         if (Array.from(select.options).some(function (option) { return option.value === selected.id; })) select.value = selected.id;
+        var managed = item.standingOrders.slice().reverse().find(function (entry) {
+          return entry.issuerId === world.commanderId && (entry.status === "pending" || entry.status === "active");
+        });
+        var cancellable = managed || item.standingOrders.slice().reverse().find(function (entry) {
+          return entry.issuerId === world.commanderId && entry.status === "awaiting-confirmation";
+        });
+        if (managed) {
+          byId("manage-directive").value = managed.directive;
+          updateManagedOrderTargets();
+          byId("manage-directive").addEventListener("change", updateManagedOrderTargets);
+          byId("amend-order").addEventListener("click", function () { amendOrder(item.id, managed.id); });
+        }
+        if (cancellable) {
+          byId("cancel-order").addEventListener("click", function () { cancelOrder(item.id, cancellable.id); });
+        }
       }
     }
     function renderFooter() {
@@ -586,13 +674,25 @@
         ? world.pendingCommands.length + " command(s) queued"
         : "No commands waiting";
       var briefing = world.briefing || { attentionCount: 0, items: [] };
+      byId("brief-title").textContent = briefing.attentionCount
+        ? "Check-in · " + briefing.attentionCount + " need attention"
+        : "Check-in · clear";
+      var officer = byId("brief-officer");
+      officer.innerHTML = '<option value="">Direct reports</option>' + (briefing.eligibleOfficers || []).map(function (item) {
+        return '<option value="' + esc(item.id) + '">' + esc(item.name) + ' · leadership ' + item.leadership + '</option>';
+      }).join("");
+      officer.value = briefing.reportingOfficer ? briefing.reportingOfficer.id : "";
+      officer.onchange = assignReportingOfficer;
       byId("events").innerHTML = briefing.items.map(function (item) {
-        var action = item.action === "confirm-order"
+        var decision = item.action === "confirm-order"
           ? '<button class="brief-action" type="button" data-brief-confirm="' + esc(item.orderId) + '" data-brief-character="' + esc(item.characterId) + '">Confirm completion</button>'
           : item.action === "claim-settlement"
             ? '<button class="brief-action" type="button" data-brief-claim="true">Review surrender</button>'
             : "";
-        return '<div class="brief-row"><div class="brief-head"><strong>' + esc(item.title) + '</strong><span class="brief-badge ' + esc(item.severity) + '">' + esc(item.severity) + '</span></div><div>' + esc(item.summary) + '</div>' + action + '</div>';
+        var acknowledge = item.acknowledgeable
+          ? '<button class="brief-action" type="button" data-brief-ack="' + esc(item.id) + '" data-brief-through="' + esc(item.throughSequence == null ? "" : item.throughSequence) + '">Acknowledge</button>'
+          : "";
+        return '<div class="brief-row"><div class="brief-head"><strong>' + esc(item.title) + '</strong><span class="brief-badge ' + esc(item.severity) + '">' + esc(item.severity) + '</span></div><div>' + esc(item.summary) + '</div><div class="brief-tools">' + decision + acknowledge + '</div></div>';
       }).join("") || '<div class="empty">No exceptions need attention.</div>';
       byId("events").querySelectorAll("[data-brief-confirm]").forEach(function (button) {
         button.addEventListener("click", function () { confirmOrder(button.dataset.briefCharacter, button.dataset.briefConfirm); });
@@ -601,6 +701,11 @@
         button.addEventListener("click", function () {
           var item = briefing.items.find(function (entry) { return entry.action === "claim-settlement"; });
           if (item) selectSettlement(item.settlementId);
+        });
+      });
+      byId("events").querySelectorAll("[data-brief-ack]").forEach(function (button) {
+        button.addEventListener("click", function () {
+          acknowledgeBriefing(button.dataset.briefAck, button.dataset.briefThrough || undefined);
         });
       });
     }

@@ -255,6 +255,7 @@ function orderFor(character: Character): StandingOrder | null {
     priority: character.factionId === "world-government" ? 0.78 : 0.67,
     issuedTick: 0,
     expiresTick: null,
+    revision: 1,
     status: "pending",
     adherence: "unassessed",
     statusChangedTick: 0,
@@ -376,6 +377,14 @@ export function createPrototypeWorld(seed = 1847): WorldState {
     if (neighbor) character.relationships[neighbor.id] = relationshipTo(neighbor.id, rng);
   }
 
+  const initialReportingOfficerId = Object.values(characters)
+    .filter((character) => character.controller.kind === "autonomous" && character.factionId === "world-government")
+    .sort((left, right) =>
+      (right.skills.leadership + right.personality.loyalty * 50) -
+        (left.skills.leadership + left.personality.loyalty * 50) ||
+      left.id.localeCompare(right.id)
+    )[0]?.id ?? null;
+
   return {
     version: 3,
     scenario: "four-island-pressure-test",
@@ -398,6 +407,9 @@ export function createPrototypeWorld(seed = 1847): WorldState {
         characterId: "character-01",
         knownCharacterIds: Object.keys(characters),
         conversationTagScores: {},
+        briefingAcknowledgements: {},
+        routineBriefingThroughSequence: 0,
+        reportingOfficerId: initialReportingOfficerId,
       },
     },
     pendingCommands: [],

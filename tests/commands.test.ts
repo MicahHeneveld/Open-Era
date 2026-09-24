@@ -233,6 +233,117 @@ test("an uncompleted timed order expires and no longer drives the character's pl
   assert.ok(result.events.some((event) => event.type === "standing-order-expired" && event.data.orderId === order.id));
 });
 
+test("a major amendment creates a new revision and requires fresh acceptance", () => {
+  const world = createPrototypeWorld(1847);
+  const recipient = world.characters["character-04"];
+  assert.equal(submitCommand(world, {
+    playerId: "prototype-player",
+    type: "issue-order",
+    characterId: recipient.id,
+    directive: "protect",
+    targetId: "glassport",
+    priority: 0.97,
+    expiresInTicks: 72,
+  }).ok, true);
+  runTick(world);
+  const orderId = "command-00001:standing-order";
+
+  assert.equal(submitCommand(world, {
+    playerId: "prototype-player",
+    type: "amend-order",
+    characterId: recipient.id,
+    orderId,
+    directive: "explore",
+    targetId: "verdant-cay",
+    priority: 0.97,
+    expiresInTicks: 72,
+  }).ok, true);
+  const result = runTick(world);
+  const order = recipient.standingOrders.find((candidate) => candidate.id === orderId)!;
+  assert.equal(order.revision, 2);
+  assert.equal(order.directive, "explore");
+  assert.equal(order.targetId, "verdant-cay");
+  assert.equal(order.status, "active");
+  assert.ok(result.events.some((event) =>
+    event.type === "standing-order-amended" && event.data.orderId === orderId && event.data.majorChange === true
+  ));
+  assert.ok(result.events.some((event) => event.type === "standing-order-accepted" && event.data.orderId === orderId));
+});
+
+test("a deadline or priority amendment preserves an accepted objective", () => {
+  const world = createPrototypeWorld(1847);
+  const recipient = world.characters["character-04"];
+  submitCommand(world, {
+    playerId: "prototype-player",
+    type: "issue-order",
+    characterId: recipient.id,
+    directive: "protect",
+    targetId: "glassport",
+    priority: 0.97,
+    expiresInTicks: 72,
+  });
+  runTick(world);
+  const orderId = "command-00001:standing-order";
+
+  assert.equal(submitCommand(world, {
+    playerId: "prototype-player",
+    type: "amend-order",
+    characterId: recipient.id,
+    orderId,
+    priority: 0.88,
+    expiresInTicks: 120,
+  }).ok, true);
+  const result = runTick(world);
+  const order = recipient.standingOrders.find((candidate) => candidate.id === orderId)!;
+  assert.equal(order.revision, 2);
+  assert.equal(order.priority, 0.88);
+  assert.equal(order.status, "active");
+  assert.ok(result.events.some((event) =>
+    event.type === "standing-order-amended" && event.data.orderId === orderId && event.data.majorChange === false
+  ));
+  assert.ok(!result.events.some((event) => event.type === "standing-order-accepted" && event.data.orderId === orderId));
+});
+
+test("an issuer may cancel an open order but cannot modify another character's order", () => {
+  const world = createPrototypeWorld(1847);
+  const recipient = world.characters["character-04"];
+  submitCommand(world, {
+    playerId: "prototype-player",
+    type: "issue-order",
+    characterId: recipient.id,
+    directive: "protect",
+    targetId: "glassport",
+    priority: 0.97,
+    expiresInTicks: 72,
+  });
+  runTick(world);
+  const orderId = "command-00001:standing-order";
+  assert.equal(submitCommand(world, {
+    playerId: "prototype-player",
+    type: "cancel-order",
+    characterId: recipient.id,
+    orderId,
+  }).ok, true);
+  const result = runTick(world);
+  const order = recipient.standingOrders.find((candidate) => candidate.id === orderId)!;
+  assert.equal(order.status, "cancelled");
+  assert.notEqual(recipient.plan?.orderId, order.id);
+  assert.ok(result.events.some((event) => event.type === "standing-order-cancelled" && event.data.orderId === order.id));
+
+  const foreignOrder = world.characters["character-15"].standingOrders[0];
+  assert.deepEqual(submitCommand(world, {
+    playerId: "prototype-player",
+    type: "amend-order",
+    characterId: "character-15",
+    orderId: foreignOrder.id,
+    priority: 1,
+  }), {
+    ok: false,
+    code: "not-issuer",
+    error: "Only the character who issued an order may change it",
+  });
+});
+
 test("an accepted command survives restart and resolves after event replay", () => {
   const directory = mkdtempSync(join(tmpdir(), "open-era-command-"));
   const path = join(directory, "world.sqlite");
@@ -275,8 +386,13 @@ test("schema-3 saves without lifecycle fields recover with pending legacy orders
         delete legacy.statusChangedTick;
         delete legacy.deviationCount;
         delete legacy.lastReport;
+        delete legacy.revision;
       }
     }
+    const legacyPlayer = world.players["prototype-player"] as unknown as Record<string, unknown>;
+    delete legacyPlayer.briefingAcknowledgements;
+    delete legacyPlayer.routineBriefingThroughSequence;
+    delete legacyPlayer.reportingOfficerId;
     const store = new WorldStore(path);
     store.initialize(world);
     store.close();
@@ -288,9 +404,13 @@ test("schema-3 saves without lifecycle fields recover with pending legacy orders
     assert.ok(orders.every((order) =>
       order.status === "pending" &&
       order.adherence === "unassessed" &&
+      order.revision === 1 &&
       order.deviationCount === 0 &&
       order.lastReport === null
     ));
+    assert.deepEqual(recovered.players["prototype-player"].briefingAcknowledgements, {});
+    assert.equal(recovered.players["prototype-player"].routineBriefingThroughSequence, 0);
+    assert.equal(recovered.players["prototype-player"].reportingOfficerId, null);
     reopened.close();
   } finally {
     rmSync(directory, { recursive: true, force: true });

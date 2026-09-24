@@ -17,6 +17,10 @@ function eventSummary(world: WorldState, event: SimEvent): string {
       return `${actor}'s command failed: ${event.data.reason}`;
     case "standing-order-issued":
       return `${actor} issued ${String((event.data.order as { directive: string }).directive).replaceAll("-", " ")} orders to ${target}`;
+    case "standing-order-amended":
+      return String(event.data.summary);
+    case "standing-order-cancelled":
+      return String(event.data.summary);
     case "standing-order-accepted":
       return String(event.data.summary);
     case "standing-order-refused":
@@ -62,7 +66,23 @@ function eventSummary(world: WorldState, event: SimEvent): string {
 
 function checkInBriefing(world: WorldState, commanderId: string, events: SimEvent[]): Record<string, unknown> {
   const commander = world.characters[commanderId];
-  const items: Array<Record<string, unknown>> = [];
+  const player = Object.values(world.players).find((candidate) => candidate.characterId === commanderId)!;
+  const actionItems: Array<Record<string, unknown>> = [];
+  const warningItems: Array<Record<string, unknown>> = [];
+  const infoItems: Array<Record<string, unknown>> = [];
+  const assignedOfficer = player.reportingOfficerId ? world.characters[player.reportingOfficerId] : null;
+  const reportingOfficer = assignedOfficer?.controller.kind === "autonomous" &&
+      assignedOfficer.factionId !== null &&
+      assignedOfficer.factionId === commander.factionId
+    ? assignedOfficer
+    : null;
+  const acknowledged = (id: string): boolean => id in player.briefingAcknowledgements;
+  const addItem = (item: Record<string, unknown>): void => {
+    if (!item.actionRequired && acknowledged(item.id as string)) return;
+    if (item.actionRequired) actionItems.push(item);
+    else if (item.severity === "warning") warningItems.push(item);
+    else infoItems.push(item);
+  };
   const relevantOrder = (event: SimEvent) => {
     const recipient = event.targetId ? world.characters[event.targetId] : undefined;
     const orderId = typeof event.data.orderId === "string" ? event.data.orderId : null;
@@ -72,7 +92,7 @@ function checkInBriefing(world: WorldState, commanderId: string, events: SimEven
   for (const character of Object.values(world.characters)) {
     for (const order of character.standingOrders) {
       if (order.issuerId !== commanderId || order.status !== "awaiting-confirmation") continue;
-      items.push({
+      addItem({
         id: `confirm:${order.id}`,
         severity: "action",
         actionRequired: true,
@@ -90,7 +110,7 @@ function checkInBriefing(world: WorldState, commanderId: string, events: SimEven
     commander.locationId === settlement.id && settlementClaimAvailableTo(settlement, commander.id)
   );
   if (surrender) {
-    items.push({
+    addItem({
       id: `surrender:${surrender.id}`,
       severity: "action",
       actionRequired: true,
@@ -109,7 +129,7 @@ function checkInBriefing(world: WorldState, commanderId: string, events: SimEven
     .sort((left, right) => left.knowledge.observedTick - right.knowledge.observedTick)
     .slice(0, 2);
   for (const { settlement, knowledge } of staleIntelligence) {
-    items.push({
+    addItem({
       id: `intel:${settlement.id}:${knowledge.observedTick}`,
       severity: "warning",
       actionRequired: false,
@@ -117,11 +137,13 @@ function checkInBriefing(world: WorldState, commanderId: string, events: SimEven
       summary: `${settlement.name}'s report is ${world.tick - knowledge.observedTick} ticks old.`,
       day: round(world.tick / world.ticksPerDay, 2),
       settlementId: settlement.id,
+      acknowledgeable: true,
     });
   }
 
   const includedTypes = new Set([
     "player-command-failed",
+    "standing-order-accepted",
     "standing-order-refused",
     "standing-order-deviated",
     "standing-order-resumed",
@@ -131,6 +153,8 @@ function checkInBriefing(world: WorldState, commanderId: string, events: SimEven
     "settlement-shortage",
     "settlement-claimed",
   ]);
+  const routineTypes = new Set(["standing-order-accepted", "standing-order-resumed", "standing-order-completed"]);
+  const routineEvents: SimEvent[] = [];
   for (const event of [...events].reverse()) {
     if (!includedTypes.has(event.type)) continue;
     if (event.type.startsWith("standing-order-") && !relevantOrder(event)) continue;
@@ -144,7 +168,11 @@ function checkInBriefing(world: WorldState, commanderId: string, events: SimEven
       event.type === "standing-order-deviated" || event.type === "standing-order-expired" ||
       event.type === "settlement-shortage" ||
       (event.type === "battle-resolved" && event.data.outcome !== "attacker-victory");
-    items.push({
+    if (reportingOfficer && routineTypes.has(event.type)) {
+      if (event.sequence > player.routineBriefingThroughSequence) routineEvents.push(event);
+      continue;
+    }
+    addItem({
       id: `event:${event.sequence}`,
       severity: warning ? "warning" : "info",
       actionRequired: false,
@@ -154,13 +182,54 @@ function checkInBriefing(world: WorldState, commanderId: string, events: SimEven
       characterId: event.targetId && world.characters[event.targetId] ? event.targetId : event.actorId,
       settlementId: event.settlementId,
       orderId: event.data.orderId,
+      acknowledgeable: true,
     });
-    if (items.length >= 12) break;
   }
 
+  if (reportingOfficer && routineEvents.length > 0) {
+    const throughSequence = Math.max(...routineEvents.map((event) => event.sequence));
+    const counts = Object.fromEntries(
+      [...routineTypes].map((type) => [type, routineEvents.filter((event) => event.type === type).length]),
+    ) as Record<string, number>;
+    const details = [
+      counts["standing-order-accepted"] ? `${counts["standing-order-accepted"]} accepted` : null,
+      counts["standing-order-resumed"] ? `${counts["standing-order-resumed"]} resumed` : null,
+      counts["standing-order-completed"] ? `${counts["standing-order-completed"]} confirmed` : null,
+    ].filter(Boolean).join(", ");
+    addItem({
+      id: `routine:${reportingOfficer.id}:${throughSequence}`,
+      severity: "info",
+      actionRequired: false,
+      title: `${reportingOfficer.name}'s routine digest`,
+      summary: `${routineEvents.length} routine order updates: ${details}. No command decision is required.`,
+      day: round(Math.max(...routineEvents.map((event) => event.tick)) / world.ticksPerDay, 2),
+      reportingOfficerId: reportingOfficer.id,
+      throughSequence,
+      routed: true,
+      acknowledgeable: true,
+    });
+  }
+
+  const items = [...actionItems, ...warningItems, ...infoItems].slice(0, 10);
+  const eligibleOfficers = Object.values(world.characters)
+    .filter((character) =>
+      character.controller.kind === "autonomous" &&
+      character.factionId !== null &&
+      character.factionId === commander.factionId &&
+      player.knownCharacterIds.includes(character.id)
+    )
+    .sort((left, right) => right.skills.leadership - left.skills.leadership || left.id.localeCompare(right.id))
+    .map((character) => ({ id: character.id, name: character.name, leadership: character.skills.leadership }));
+
   return {
-    attentionCount: items.filter((item) => item.actionRequired || item.severity === "warning").length,
-    items: items.slice(0, 10),
+    attentionCount: actionItems.length + warningItems.length,
+    reportingOfficer: reportingOfficer ? {
+      id: reportingOfficer.id,
+      name: reportingOfficer.name,
+      leadership: reportingOfficer.skills.leadership,
+    } : null,
+    eligibleOfficers,
+    items,
   };
 }
 

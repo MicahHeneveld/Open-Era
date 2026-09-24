@@ -73,6 +73,8 @@ A named character weighs an order using loyalty, relationship, values, perceived
 
 Characters judge when they believe an objective is satisfied. That judgment produces a completion report rather than closing the order automatically. The issuer must confirm the report before the order becomes completed. This preserves player authority while allowing characters to interpret broad directives through personality and circumstances.
 
+Issuers may amend or cancel an open order. Changing the directive or objective is a material revision and sends the order back through the character's acceptance judgment. Adjusting only priority or expiry preserves the existing acceptance. A reporting officer may collect and summarize routine acceptance, resumption, and confirmation notices, but does not gain authority to change or close orders.
+
 Troop officers have lower judgment and leadership ceilings but follow commands exactly. Named characters can produce better local decisions and beneficial side activity at the cost of control.
 
 ## Memory

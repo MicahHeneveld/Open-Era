@@ -97,6 +97,8 @@ function agencyTraces(world: WorldState, events: SimEvent[]): string {
     "goal-evolved",
     "relationship-changed",
     "standing-order-issued",
+    "standing-order-amended",
+    "standing-order-cancelled",
     "standing-order-accepted",
     "standing-order-refused",
     "standing-order-deviated",
@@ -107,6 +109,8 @@ function agencyTraces(world: WorldState, events: SimEvent[]): string {
     "settlement-claimed",
     "player-action-executed",
     "player-command-failed",
+    "briefing-item-acknowledged",
+    "reporting-officer-assigned",
   ]);
   return events
     .filter((event) => included.has(event.type))
@@ -230,6 +234,8 @@ function summaryMarkdown(world: WorldState, events: SimEvent[], snapshotCount: n
     "relationship-changed",
     "settlement-shortage",
     "standing-order-issued",
+    "standing-order-amended",
+    "standing-order-cancelled",
     "standing-order-refused",
     "standing-order-deviated",
     "standing-order-resumed",
@@ -263,6 +269,10 @@ function summaryMarkdown(world: WorldState, events: SimEvent[], snapshotCount: n
   const orderResumptions = events.filter((event) => event.type === "standing-order-resumed").length;
   const completionReports = events.filter((event) => event.type === "standing-order-completion-reported").length;
   const confirmedOrders = events.filter((event) => event.type === "standing-order-completed").length;
+  const amendedOrders = events.filter((event) => event.type === "standing-order-amended").length;
+  const cancelledOrders = events.filter((event) => event.type === "standing-order-cancelled").length;
+  const briefingAcknowledgements = events.filter((event) => event.type === "briefing-item-acknowledged").length;
+  const reportingAssignments = events.filter((event) => event.type === "reporting-officer-assigned").length;
   const observations = events.filter((event) => event.type === "knowledge-updated").length;
   const evolvedGoals = events.filter((event) => event.type === "goal-evolved").length;
   const relationshipChanges = events.filter((event) => event.type === "relationship-changed").length;
@@ -303,6 +313,7 @@ The **${world.scenario}** scenario reached tick ${world.tick} (day ${round(world
 - ${planReviews.length} explicit plan reviews and ${observations} direct knowledge updates
 - ${orderAssessments.length} plan-time order assessments; ${acceptedOrders} orders accepted and ${refusedOrders} refused
 - ${orderDeviations} reported order deviations, ${orderResumptions} resumptions, ${completionReports} completion reports, and ${confirmedOrders} issuer confirmations
+- ${amendedOrders} order amendments, ${cancelledOrders} cancellations, ${briefingAcknowledgements} briefing acknowledgements, and ${reportingAssignments} reporting-officer assignments
 - ${evolvedGoals} goals reshaped by major experiences and ${relationshipChanges} relationship changes
 - Active long-term goals — ${goalDistribution}
 

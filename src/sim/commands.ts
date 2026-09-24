@@ -28,6 +28,22 @@ export type CommandRequest =
       type: "confirm-order";
       characterId: string;
       orderId: string;
+    }
+  | {
+      playerId: string;
+      type: "amend-order";
+      characterId: string;
+      orderId: string;
+      directive?: OrderDirective;
+      targetId?: string | null;
+      priority?: number;
+      expiresInTicks?: number | null;
+    }
+  | {
+      playerId: string;
+      type: "cancel-order";
+      characterId: string;
+      orderId: string;
     };
 
 export type CommandSubmission =
@@ -186,6 +202,19 @@ function validateStandingOrder(
   return { ok: true, command, event: acceptedEvent(world, command) };
 }
 
+function validOrderTarget(world: WorldState, directive: OrderDirective, targetId: string | undefined): string | null {
+  if (directive === "protect" && (!targetId || !world.settlements[targetId])) {
+    return "A protection order requires a settlement target";
+  }
+  if (directive === "pressure" && (!targetId || !world.factions[targetId])) {
+    return "A pressure order requires a faction target";
+  }
+  if ((directive === "trade-supplies" || directive === "explore") && targetId && !world.settlements[targetId]) {
+    return "That order target is not a known settlement";
+  }
+  return null;
+}
+
 function validateOrderConfirmation(
   world: WorldState,
   request: Extract<CommandRequest, { type: "confirm-order" }>,
@@ -212,10 +241,96 @@ function validateOrderConfirmation(
   return { ok: true, command, event: acceptedEvent(world, command) };
 }
 
+function issuerOrder(
+  world: WorldState,
+  playerId: string,
+  characterId: string,
+  orderId: string,
+): { issuerId: string; recipient: WorldState["characters"][string]; order: WorldState["characters"][string]["standingOrders"][number] } | CommandSubmission {
+  const player = world.players[playerId];
+  const issuerId = player.characterId;
+  const recipient = world.characters[characterId];
+  if (!recipient) return reject("unknown-character", "The order recipient is unknown");
+  const order = recipient.standingOrders.find((candidate) => candidate.id === orderId);
+  if (!order) return reject("unknown-order", "That standing order does not exist");
+  if (order.issuerId !== issuerId) return reject("not-issuer", "Only the character who issued an order may change it");
+  return { issuerId, recipient, order };
+}
+
+function validateOrderAmendment(
+  world: WorldState,
+  request: Extract<CommandRequest, { type: "amend-order" }>,
+): CommandSubmission {
+  const found = issuerOrder(world, request.playerId, request.characterId, request.orderId);
+  if ("ok" in found) return found;
+  const { order, recipient } = found;
+  if (order.status !== "pending" && order.status !== "active") {
+    return reject("order-not-amendable", "Only pending or active orders may be amended");
+  }
+  const directive = request.directive ?? order.directive;
+  if (!directives.has(directive)) return reject("unknown-directive", "That standing-order directive is not supported");
+  const targetId = request.targetId === null ? undefined : request.targetId ?? order.targetId;
+  const targetError = validOrderTarget(world, directive, targetId);
+  if (targetError) return reject("invalid-target", targetError);
+  const priority = request.priority ?? order.priority;
+  if (!Number.isFinite(priority) || priority < 0.1 || priority > 1) {
+    return reject("invalid-priority", "Order priority must be between 0.1 and 1");
+  }
+  let expiresTick = order.expiresTick;
+  if (Object.hasOwn(request, "expiresInTicks")) {
+    const duration = request.expiresInTicks;
+    if (duration !== null && (!Number.isInteger(duration) || duration! < 1 || duration! > 720)) {
+      return reject("invalid-duration", "Order duration must be between 1 and 720 ticks");
+    }
+    expiresTick = duration === null ? null : world.tick + duration!;
+  }
+  const majorChange = directive !== order.directive || targetId !== order.targetId;
+  if (!majorChange && priority === order.priority && expiresTick === order.expiresTick) {
+    return reject("no-change", "The amendment does not change the order");
+  }
+  const command: PlayerCommand = {
+    id: `command-${String(world.nextCommandSequence).padStart(5, "0")}`,
+    playerId: request.playerId,
+    issuedTick: world.tick,
+    type: "amend-order",
+    characterId: recipient.id,
+    orderId: order.id,
+    directive,
+    targetId,
+    priority: clamp(priority, 0.1, 1),
+    expiresTick,
+    majorChange,
+  };
+  return { ok: true, command, event: acceptedEvent(world, command) };
+}
+
+function validateOrderCancellation(
+  world: WorldState,
+  request: Extract<CommandRequest, { type: "cancel-order" }>,
+): CommandSubmission {
+  const found = issuerOrder(world, request.playerId, request.characterId, request.orderId);
+  if ("ok" in found) return found;
+  const { order, recipient } = found;
+  if (!new Set(["pending", "active", "awaiting-confirmation"]).has(order.status)) {
+    return reject("order-not-cancellable", "That order is already closed");
+  }
+  const command: PlayerCommand = {
+    id: `command-${String(world.nextCommandSequence).padStart(5, "0")}`,
+    playerId: request.playerId,
+    issuedTick: world.tick,
+    type: "cancel-order",
+    characterId: recipient.id,
+    orderId: order.id,
+  };
+  return { ok: true, command, event: acceptedEvent(world, command) };
+}
+
 export function submitCommand(world: WorldState, request: CommandRequest): CommandSubmission {
   const player = world.players[request.playerId];
   if (!player) return reject("unknown-player", "The player session is unknown");
   if (request.type === "character-action") return validateCharacterAction(world, request);
   if (request.type === "issue-order") return validateStandingOrder(world, request);
-  return validateOrderConfirmation(world, request);
+  if (request.type === "confirm-order") return validateOrderConfirmation(world, request);
+  if (request.type === "amend-order") return validateOrderAmendment(world, request);
+  return validateOrderCancellation(world, request);
 }

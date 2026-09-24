@@ -16,6 +16,7 @@ export const CLAIM_STABILITY_FLOOR = 55;
 export function normalizeStandingOrder(order: StandingOrder): StandingOrder {
   return {
     ...order,
+    revision: order.revision ?? 1,
     status: order.status ?? "pending",
     adherence: order.adherence ?? "unassessed",
     statusChangedTick: order.statusChangedTick ?? order.issuedTick,
@@ -27,6 +28,11 @@ export function normalizeStandingOrder(order: StandingOrder): StandingOrder {
 export function normalizeWorldState(world: WorldState): WorldState {
   for (const character of Object.values(world.characters)) {
     character.standingOrders = character.standingOrders.map(normalizeStandingOrder);
+  }
+  for (const player of Object.values(world.players)) {
+    player.briefingAcknowledgements ??= {};
+    player.routineBriefingThroughSequence ??= 0;
+    player.reportingOfficerId ??= null;
   }
   return world;
 }
@@ -174,6 +180,23 @@ export function applyEvent(world: WorldState, event: SimEvent): void {
       }
       break;
     }
+    case "briefing-item-acknowledged": {
+      const player = world.players[event.data.playerId as string];
+      if (!player) throw new Error("Briefing acknowledgement has no player");
+      player.briefingAcknowledgements[event.data.itemId as string] = world.tick;
+      const throughSequence = event.data.routineThroughSequence;
+      if (typeof throughSequence === "number") {
+        player.routineBriefingThroughSequence = Math.max(player.routineBriefingThroughSequence, throughSequence);
+      }
+      break;
+    }
+    case "reporting-officer-assigned": {
+      const player = world.players[event.data.playerId as string];
+      if (!player) throw new Error("Reporting-officer assignment has no player");
+      player.reportingOfficerId = event.data.characterId as string | null;
+      player.routineBriefingThroughSequence = event.sequence;
+      break;
+    }
     case "player-command-accepted":
       world.pendingCommands.push(event.data.command as WorldState["pendingCommands"][number]);
       world.nextCommandSequence = event.data.nextCommandSequence as number;
@@ -188,6 +211,27 @@ export function applyEvent(world: WorldState, event: SimEvent): void {
       const recipient = event.targetId ? world.characters[event.targetId] : undefined;
       if (!recipient) throw new Error("Standing order has no recipient");
       recipient.standingOrders.push(normalizeStandingOrder(event.data.order as Character["standingOrders"][number]));
+      break;
+    }
+    case "standing-order-amended": {
+      const recipient = event.targetId ? world.characters[event.targetId] : undefined;
+      if (!recipient) throw new Error("Standing-order amendment has no recipient");
+      const incoming = normalizeStandingOrder(event.data.order as StandingOrder);
+      const index = recipient.standingOrders.findIndex((candidate) => candidate.id === incoming.id);
+      if (index < 0) throw new Error(`Unknown standing order: ${incoming.id}`);
+      recipient.standingOrders[index] = incoming;
+      if (event.data.majorChange || incoming.status === "pending") {
+        if (recipient.plan?.orderId === incoming.id) recipient.plan = null;
+      }
+      break;
+    }
+    case "standing-order-cancelled": {
+      const order = standingOrderFromEvent(world, event);
+      const recipient = event.targetId ? world.characters[event.targetId] : undefined;
+      order.status = "cancelled";
+      order.statusChangedTick = world.tick;
+      order.lastReport = { tick: world.tick, kind: "cancelled", summary: event.data.summary as string };
+      if (recipient?.plan?.orderId === order.id) recipient.plan = null;
       break;
     }
     case "standing-order-accepted": {

@@ -593,6 +593,99 @@ function processPlayerCommands(
       continue;
     }
 
+    if (command.type === "amend-order") {
+      const recipient = world.characters[command.characterId];
+      const order = recipient?.standingOrders.find((candidate) => candidate.id === command.orderId);
+      if (
+        !recipient ||
+        !order ||
+        order.issuerId !== commander.id ||
+        (order.status !== "pending" && order.status !== "active")
+      ) {
+        emit(world, events, {
+          type: "player-command-failed",
+          actorId: commander.id,
+          targetId: command.characterId,
+          data: { commandId: command.id, reason: "the order is no longer available for amendment" },
+        });
+        continue;
+      }
+      const amended: StandingOrder = {
+        ...order,
+        directive: command.directive,
+        targetId: command.targetId,
+        priority: command.priority,
+        expiresTick: command.expiresTick,
+        revision: order.revision + 1,
+        status: command.majorChange ? "pending" : order.status,
+        adherence: command.majorChange ? "unassessed" : order.adherence,
+        statusChangedTick: command.majorChange ? world.tick : order.statusChangedTick,
+        lastReport: {
+          tick: world.tick,
+          kind: "amended",
+          summary: command.majorChange
+            ? `${commander.name} materially revised the order; ${recipient.name} must reassess it.`
+            : `${commander.name} adjusted the order's priority or deadline without changing its objective.`,
+        },
+      };
+      emit(world, events, {
+        type: "standing-order-amended",
+        actorId: commander.id,
+        targetId: recipient.id,
+        data: {
+          commandId: command.id,
+          orderId: order.id,
+          majorChange: command.majorChange,
+          previousRevision: order.revision,
+          order: amended,
+          summary: amended.lastReport!.summary,
+        },
+      });
+      emit(world, events, {
+        type: "player-command-resolved",
+        actorId: commander.id,
+        targetId: recipient.id,
+        data: { commandId: command.id, outcome: "order-amended", orderId: order.id, revision: amended.revision },
+      });
+      continue;
+    }
+
+    if (command.type === "cancel-order") {
+      const recipient = world.characters[command.characterId];
+      const order = recipient?.standingOrders.find((candidate) => candidate.id === command.orderId);
+      if (
+        !recipient ||
+        !order ||
+        order.issuerId !== commander.id ||
+        !new Set(["pending", "active", "awaiting-confirmation"]).has(order.status)
+      ) {
+        emit(world, events, {
+          type: "player-command-failed",
+          actorId: commander.id,
+          targetId: command.characterId,
+          data: { commandId: command.id, reason: "the order is no longer available for cancellation" },
+        });
+        continue;
+      }
+      emit(world, events, {
+        type: "standing-order-cancelled",
+        actorId: commander.id,
+        targetId: recipient.id,
+        data: {
+          commandId: command.id,
+          orderId: order.id,
+          summary: `${commander.name} cancelled ${recipient.name}'s ${order.directive.replaceAll("-", " ")} order.`,
+        },
+      });
+      emit(world, events, {
+        type: "player-command-resolved",
+        actorId: commander.id,
+        targetId: recipient.id,
+        data: { commandId: command.id, outcome: "order-cancelled", orderId: order.id },
+      });
+      continue;
+    }
+
     if (command.type === "confirm-order") {
       const recipient = world.characters[command.characterId];
       const order = recipient?.standingOrders.find((candidate) => candidate.id === command.orderId);
@@ -643,6 +736,7 @@ function processPlayerCommands(
         priority: command.priority,
         issuedTick: world.tick,
         expiresTick: command.expiresTick,
+        revision: 1,
         status: "pending",
         adherence: "unassessed",
         statusChangedTick: world.tick,

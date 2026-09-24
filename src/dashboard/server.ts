@@ -4,6 +4,12 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { submitCommand, type CommandRequest } from "../sim/commands.ts";
 import {
+  acknowledgeBriefingItem,
+  assignReportingOfficer,
+  type BriefingAcknowledgementRequest,
+  type ReportingOfficerRequest,
+} from "../sim/briefing.ts";
+import {
   createConversationThread,
   DeterministicDialogueProvider,
   resolveDueReplies,
@@ -122,6 +128,28 @@ export function createDashboardApp(options: DashboardOptions): DashboardApp {
         }
         store.appendTick([result.event], world);
         json(response, 202, { ok: true, command: result.command });
+        return;
+      }
+      if (request.method === "POST" && url.pathname === "/api/briefing/acknowledge") {
+        const body = await requestBody(request) as BriefingAcknowledgementRequest;
+        const result = acknowledgeBriefingItem(world, body);
+        if (!result.ok) {
+          json(response, 400, result);
+          return;
+        }
+        store.appendTick([result.event], world);
+        json(response, 200, { ok: true, itemId: body.itemId });
+        return;
+      }
+      if (request.method === "POST" && url.pathname === "/api/briefing/officer") {
+        const body = await requestBody(request) as ReportingOfficerRequest;
+        const result = assignReportingOfficer(world, body);
+        if (!result.ok) {
+          json(response, 400, result);
+          return;
+        }
+        store.appendTick([result.event], world);
+        json(response, 200, { ok: true, characterId: body.characterId });
         return;
       }
       if (request.method === "POST" && url.pathname === "/api/threads") {

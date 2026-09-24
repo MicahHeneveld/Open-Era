@@ -20,6 +20,7 @@ This branch contains the first **headless world prototype**. It is intentionally
 - Imperfect island knowledge that becomes stale and refreshes through direct observation
 - Trust, affinity, respect, fear, grievance, and obligation between characters
 - Standing orders with durable acceptance, refusal, deviation, resumption, completion-report, confirmation, and expiry states
+- Validated order amendments and cancellations; major objective changes require fresh character acceptance
 - Goals and relationships that change after victories, defeats, and shared local experiences
 - A human-controlled commander who never receives autonomous decisions
 - Server-validated direct actions and durable player-issued standing orders
@@ -78,6 +79,7 @@ Open `http://127.0.0.1:4317`. The dashboard provides:
 - Direct player actions such as travel, trade, recruitment, work, and rest
 - Standing orders that autonomous faction members may accept, refuse, temporarily deviate from, resume, and report complete
 - An exception-first check-in briefing with completion confirmations, deviations, failures, shortages, battles, and stale intelligence
+- Persistent briefing acknowledgements and subordinate officers who bundle routine reports without gaining command authority
 - Accelerated time controls and a live world-event feed
 
 Player actions are validated by the simulation server and persisted before execution. The dashboard binds to loopback by default and intentionally has no production authentication; it is a local development observer, not a deployable multiplayer server.
@@ -106,6 +108,7 @@ The tests prove seeded determinism, divergent seeded histories, snapshot-plus-ev
 src/sim/scenario.ts      deterministic pressure-test world
 src/sim/agency.ts        goals, plans, beliefs, relationships, orders
 src/sim/commands.ts      validated and durable human command boundary
+src/sim/briefing.ts      persisted acknowledgements and reporting-officer assignment
 src/sim/conversations.ts persistent threads, timing, tags, safeguards, dialogue adapter
 src/sim/engine.ts        decisions, economy, travel, and combat
 src/sim/state.ts         event reducer, derived values, state hashing
