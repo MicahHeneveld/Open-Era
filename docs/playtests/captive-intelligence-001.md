@@ -109,7 +109,9 @@ Mina Vale (`character-15`):
 
 The 12 on the row is not the live `troops.count`. The live count is 0, and the live `partyPower` is 0.
 
-Crown Harbor's settlement `garrison` on this read is 223. Cinder Key is 7. Glassport is 7. None of those three numbers is on `captiveIntel`. The string `110.08` is Mina's `money` and is not inside `captiveIntel`.
+Crown Harbor's settlement `garrison` on this read is 223. Cinder Key is 131, source `rumor`, `observedTick` 0, `ageTicks` 72. Glassport is 138, source `faction-report`, `observedTick` 0, `ageTicks` 72. None of those three numbers is on `captiveIntel`. The string `110.08` is Mina's `money` and is not inside `captiveIntel`.
+
+Correction after the blind session: the plan quoted the wrong field; the settlement garrison reads 131 / 138; neither is on the port list, so the revise bar was unaffected.
 
 Mina is the only character whose `captiveIntel` is not null.
 
@@ -158,7 +160,7 @@ The release record is not on Mara's reading of Mina. That null is the boundary. 
 Leave the played findings blank until the session. These are the boundaries the session is there to see:
 
 - The captured 12 is on `captiveIntel` and is not written into live `troops`.
-- `ports` is empty. Cinder Key and Glassport, both garrison 7, are not on the row. Crown Harbor's live garrison 223 is not on the row either.
+- `ports` is empty. Cinder Key and Glassport, garrison 131 and 138, are not on the row. Crown Harbor's live garrison 223 is not on the row either.
 - Mina's money 110.08 is on her character, because Mara is standing next to her, and it is not inside `captiveIntel`.
 - The feed row for the capture does not carry the troop count. The briefing sentence does not either. The count is the character read.
 - After release, `captiveIntel` is null, and `releaseSighting` stays null on both characters in this player's state.
