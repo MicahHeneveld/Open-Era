@@ -30,10 +30,10 @@ Git remains the complete history. This file exists for three things git does not
 
 ## Current state
 
-- **Baseline:** branched from `e8cc395` (garrison-regrowth on `main`). This branch is `feature/party-sightings` (M21). No pull request.
-- **Last verified:** finish gate on `7bfc54d`, Node v24.21.0, ICU 78.3. Typecheck clean, **162 tests**, `./scripts/evaluate-milestone.sh party-sightings` exits 0. `origin/main` was still `789e48f`, so nothing was merged for this run.
-- **Gate status:** golden hashes unchanged from M20: `d3b79fce…` (seed 1847, 8338 events), `03d6d4bc…` (seed 2718, 8411 events), `a7cbf2a8…` (seed 4096, 8298 events). `npm run golden:update` was not run.
-- **Headline risk:** a surveyed port, or a targeted explore, now stores the parties anchored there. Sea sightings, a passive glance, and a faction total are still unbuilt. An autonomous party can still sail a voyage its purse cannot cover. A human who issues no commands eats the opening hold and then starves in place; the purse is not spent on food.
+- **Baseline:** branched from `827b4cb`. This branch is `feature/autonomous-short-purse` (M22). No pull request.
+- **Last verified:** `./scripts/evaluate-milestone.sh autonomous-short-purse` passes on this branch, Node v24.21.0, ICU 78.3. Typecheck clean, **164 tests**.
+- **Gate status:** golden hashes regenerated. Tick-72 counts are 8275 / 8489 / 8003.
+- **Headline risk:** sea sightings, a passive glance, and a faction total are still unbuilt. A human who issues no commands eats the opening hold and then starves in place; the purse is not spent on food.
 - **Runtime:** Node 24.21.0, pinned by `.node-version`. ICU 78.3.
 
 ## Open items
@@ -61,7 +61,7 @@ Git remains the complete history. This file exists for three things git does not
 | A destination's `taxRate` is invisible until arrival, because it lives under `market`, which is `null` remotely | Design gap | Cursor | **Fixed** in M17, and the foreign reading was tightened in M21. Every settlement still publishes a rate. Offshore, a report uses the known faction's current rate, so a change of hands does not move the number while the label stays. Standing there, or no report at all, still uses the live holder. Treasury and power stay withheld |
 | A player order has no depth limit, while the autonomous path caps itself at 16% of local stock, so dumping a whole market at the pre-trade price is dominant | Balance gap | Cursor | **Fixed** in M17. One order may clear 16% of the settlement's *target* stock, on both the player path and the autonomous path. A purchase is still also capped by the stock on the shelf. The playtest's 20-arm order was refused `market-depth` and the 14-arm order filled at the quoted price. The cap is a fraction of target stock rather than of live stock, so a shortage can still absorb a cargo; that choice is logged in the M17 entry |
 | Travel costs nothing but time, since provisions are eaten at the same rate sailing or standing, so every positive spread is worth chasing | Design gap | Cursor | **Fixed** in M17. A party underway pays 3 money per tick. Provisions still burn at the same rate at sea and at anchor. The cost is quoted as `passageCost` before sailing. The played voyage paid 24, matching 8 sea ticks × 3 |
-| An autonomous party still sails when its purse cannot cover the quoted passage | Design gap | Unassigned | Open. A player voyage is refused as `insufficient-passage` before the ship leaves. The autonomous path pays `min(money, 3)` per sea tick. M19 measured a score-gate refusal and did not take it: tick-72 counts moved from 8338 / 8417 / 8298 to 8275 / 8482 / 8003, and the claimant of Glassport and Cinder Key changed on every seed |
+| An autonomous party still sails when its purse cannot cover the quoted passage | Design gap | Cursor | **Fixed** in M22. `quotedPassage` is the player refusal and the autonomous score gate. An unaffordable voyage scores −1000. A voyage already underway still pays `min(money, 3)` per sea tick. Tick-72 counts are 8275 / 8489 / 8003. In 400 ticks every seed still has at least four claims, and Free Tide returns after every stretch with no port |
 | A battered faction port sits under the raid gate and above the surrender line, so a neighbour who could take it is not offered the raid | Design gap | Cursor | **Fixed** in M19. After an attacker victory, in both battle paths, surrender is offered when garrison is still at most 15 and stability is at or below `min(80, 30 + 10 × max(0, 15 − garrison))`. The raid gate, the player raid check, and peacetime upkeep are unchanged |
 | A claimed port stays under the raid gate for the rest of the run, so the new owner is never offered another raid | Design gap | Cursor | **Fixed** in M20. A fed settlement under `round(population / 70)` gains one garrison every `max(6, round(200000 / population))` world ticks, on the existing upkeep event. Neutral ports count. The raid gate and the slope-10 slide are unchanged |
 | The trade road runs one way: no good flowed homeward profitably, and the one candidate inverted within five ticks, so a rational merchant never sails home | Design gap | Cursor | **Fixed** in M17. Settlements use the goods they do not focus on, and Crown Harbor opens short of medicine while Glassport opens short of arms. The played return leg bought 11 medicine at 4.07 and sold them at 18.50. At tick 72 of a headless run those two prices are still at the ceiling and the floor |
@@ -146,6 +146,10 @@ Backfilled from the commit graph on 2026-09-25. **Attribution caveat:** commits 
 - **Agent:** Cursor | **PR:** [#8](https://github.com/taia-0/Open-Era/pull/8)
 - Six defects closed without touching simulation behavior: duplicate order mutations, four unpublished endpoints, backdated staleness, unqualified estimates, a fragile cadence parse, and Node 20 actions. The first dashboard render test executes the shipped inline script against a real projection.
 
+### 2026-09-29 — M22: Autonomous short purse
+- **Agent:** Open Era Engineer (Cursor cloud agent) | **Branch:** `feature/autonomous-short-purse` | **Playtest:** [autonomous-short-purse-001](docs/playtests/autonomous-short-purse-001.md)
+- An autonomous character no longer starts a voyage the purse cannot cover. `quotedPassage` is shared with the player `insufficient-passage` check: `passageCost(travelDuration)`, and no destination tax. The unaffordable candidate scores −1000. Golden hashes were regenerated. Tick-72 counts are 8275 / 8489 / 8003.
+
 ### 2026-09-29 — M21: Party sightings
 - **Agent:** Open Era Engineer (Cursor cloud agent) | **Branch:** `feature/party-sightings` | **Playtest:** [party-sightings-001](docs/playtests/party-sightings-001.md)
 - A survey, and a targeted explore delivered to the issuer, records every other party anchored at that port: troop count and `partyPower`, dated, confidence 1. A remote forecast adds that stored power and names the oldest age. Golden hashes were not regenerated. Three projection readings ride along: a foreign tax follows the holder the viewer last knew, an offshore faction label stays on that report, and a foreign beach names `ownerId`.
@@ -175,6 +179,55 @@ Backfilled from the commit graph on 2026-09-25. **Attribution caveat:** commits 
 - A player can name a good and a quantity and see the price before paying, on any of the four resources, with every limit quoted before it is hit. A voyage pays for itself (+113.27 on 108 starting money in playtest). Whether it out-earns working the same ticks is a separate, deferred milestone.
 
 ## Entries
+
+### 2026-09-29 — M22: an autonomous party does not sail a voyage it cannot pay for
+- **Agent:** Open Era Engineer (Cursor cloud agent) | **Branch:** `feature/autonomous-short-purse` | **Commits:** `fd21558` (the shared quote, the −1000 score, the tests, and the golden fixture). The playtest and this entry are the record commit. | **Type:** Balance
+- **Changed** — `quotedPassage` in `src/sim/engine.ts`. It is `passageCost(travelDuration)` and nothing else. The money is spent at sea, not paid to the destination, so the player check's lack of a destination tax is the whole rule. `validateCharacterAction` refuses a player voyage with the same `insufficient-passage` prose when `quotedPassage.affordable` is false. Equality still sails: the refusal is `money < cost`. In `buildCandidates`, after the plan boost, an autonomous travel the purse cannot cover scores −1000, the same gate as an unaffordable recruit, and the next candidate is chosen. `resolveDecision` does not re-check. A voyage already underway still pays `min(money, PASSAGE_COST_PER_TICK)` per sea tick.
+- **Why** — since M18.1 a player who cannot cover the quote is refused before the ship leaves. An autonomous party skipped that check and sailed anyway. M19 measured the −1000 score and did not take it. Those tick-72 counts (8275 / 8482 / 8003) were from the raid-floor tree, before garrison regrowth, so they were re-measured here.
+- **Verified** — baseline on `827b4cb`, before any of this, Node v24.21.0, ICU 78.3: `npm run typecheck` clean, **162 tests** pass, `./scripts/evaluate-milestone.sh baseline-autonomous-short-purse` passes. Hashes `d3b79fce02045cf312ad00d886005499fd18046c47fc0fd95c7e5f021e9bd653` (1847, 8338 events), `03d6d4bc643e8867f08cb12c7ec951f5c3105dd6e87b9608a2df34cd3dcee0cb` (2718, 8411), `a7cbf2a8d7d4d1bdeb7142e6891152942eeda3e3b4f580c4168aec42616010c6` (4096, 8298). Split recovery replayed 571 events to the 1847 hash. After `fd21558`: typecheck clean, **164 tests** pass. The old test that an autonomous party still sails when broke was replaced by three: a short purse does not pick the voyage, a purse that covers the quote still sails, and travel returns once the purse is funded. `npm run golden:update` on the same Node and ICU. New hashes `d7eb02eb0e6b835ee923147b855d0a91969a416115d0c3bd5c2650ff0e2b6a3f` (1847, **8275** events), `d0b4b449ce9bc3fc27f0cfa15a5cc8ef04d5a2e6a9cdded2c2b11b6c4ca6583d` (2718, **8489**), `d5d9da8bb1e9c9bd86c93ccbaa570f04ea9052ea1b5d4b48f3452e2db6f0c0c7` (4096, **8003**). Deltas −63 / +78 / −295. Split recovery replayed 572 events to the new 1847 hash. The 400-tick raid loop still holds: 5 / 6 / 4 claims, and Free Tide returns after every stretch with no port. The playtest is [autonomous-short-purse-001](docs/playtests/autonomous-short-purse-001.md), verdict `PROMOTE`. Finish gate `./scripts/evaluate-milestone.sh autonomous-short-purse` on Node v24.21.0, ICU 78.3: typecheck clean, **164 tests**, hashes `d7eb02eb…` / `d0b4b449…` / `d5d9da8b…` (8275 / 8489 / 8003), split recovery replayed 572 events.
+- **Hash move, by event type at tick 72** — characters who cannot pay stay in port, so `travel-started`, `travel-progressed`, and `arrived` fall, and the dock emits `decision-made` and `goal-progressed` on ticks that used to be sea ticks. Who reaches which port changes, so battles, claims, upkeep, and the rest of the window move with them. A settlement in a major battle skips `settlement-produced` and `settlement-upkeep` together. A character in battle or captivity skips `character-upkeep`. Seed 1847's first Glassport claim moves from tick 98 to tick 51, inside the window. Seed 2718 adds Cinder Key's return at tick 63. Seed 4096's Cinder Key claim at tick 51 and Glassport claim at tick 54 are both inside the window; the baseline had only Glassport at tick 46.
+
+| Event type | 1847 | 2718 | 4096 |
+| --- | ---: | ---: | ---: |
+| arrived | −15 | −3 | −19 |
+| battle-phase-resolved | +4 | −5 | +3 |
+| battle-resolved | +3 | +2 | 0 |
+| battle-retreated | −3 | +1 | +1 |
+| battle-started | 0 | −1 | +2 |
+| character-captured | +1 | −1 | +1 |
+| character-upkeep | −39 | +11 | −77 |
+| decision-made | +21 | +27 | −50 |
+| goal-evolved | +3 | +2 | 0 |
+| goal-progressed | +21 | +27 | −50 |
+| knowledge-updated | −10 | −7 | −14 |
+| market-trade | +19 | +10 | −34 |
+| plan-reconsidered | +2 | +4 | −5 |
+| post-defeat-withdrawal-started | +1 | 0 | −1 |
+| recruited | +2 | +1 | +3 |
+| relationship-changed | −11 | +13 | −2 |
+| rested | +4 | +8 | −6 |
+| settlement-claimed | +1 | +1 | +1 |
+| settlement-produced | −2 | +3 | −2 |
+| settlement-upkeep | −2 | +3 | −2 |
+| standing-order-completion-reported | 0 | +2 | 0 |
+| standing-order-deviated | −2 | −3 | −2 |
+| standing-order-resumed | −2 | −3 | −2 |
+| travel-progressed | −60 | −16 | −27 |
+| travel-started | −8 | −9 | −18 |
+| worked | +9 | +11 | +5 |
+
+- **Conquest, 400 ticks, no player commands** — a zero stretch runs from the claim that removes the last port until the claim that returns one, the same reading as the landless note. End power is World Government then Free Tide.
+
+| Seed | Baseline claims | Baseline with no port | Baseline power | New claims | New with no port | New power |
+| --- | --- | --- | --- | --- | --- | --- |
+| 1847 | 5. Cinder Key 70 Niko Wren (`character-03`) garrison 13. Glassport 98 Zara Gale garrison 8. Cinder Key 139 Esme Dusk garrison 7. Glassport 231 Bram Quill garrison 6. Cinder Key 375 Niko Wren garrison 6 | Free Tide after 70 until 98, and after 375 until 400 | 2960.5 / 1244.54 | 5. Glassport 51 Finn Frost (`character-18`) garrison 13. Cinder Key 70 Jun Marrow garrison 8. Glassport 77 Iris Stone garrison 7. Glassport 231 Pax Ash garrison 6. Cinder Key 282 Pax Ash garrison 6 | Free Tide after 77 until 231 | 3276.92 / 1668.52 |
+| 2718 | 5. Cinder Key 32 Orin Rill (`character-09`) garrison 11. Glassport 55 Mara Calder garrison 8. Cinder Key 156 Esme Dusk garrison 5. Glassport 172 Sable Morrow garrison 5. Glassport 362 Finn Frost garrison 7 | Free Tide after 32 until 55 | 2956.17 / 1470.13 | 6. Cinder Key 35 Vale Drake (`character-08`) garrison 14. Glassport 48 Esme Dusk garrison 6. Cinder Key 63 Dax Pike garrison 7. Glassport 210 Niko Wren garrison 6. Cinder Key 311 Niko Wren garrison 5. Glassport 383 Mina Vale garrison 6 | Free Tide after 35 until 48, and after 311 until 383 | 2988.03 / 1853.79 |
+| 4096 | 5. Glassport 46 Pax Ash garrison 6. Cinder Key 107 Rook Tern garrison 9. Glassport 210 Jun Marrow garrison 8. Cinder Key 280 Mina Vale garrison 7. Glassport 345 Pax Ash garrison 6 | Free Tide after 210 until 280 | 2982.44 / 1749.98 | 4. Cinder Key 51 Iris Stone (`character-06`) garrison 6. Glassport 54 Mara Calder garrison 13. Glassport 77 Iris Stone garrison 5. Glassport 324 Mina Vale garrison 7 | Free Tide after 51 until 54, and after 77 until 324 | 3053.99 / 1349.41 |
+
+  World Government does not hit zero on either tree. Crown Harbor stays World Government. Verdant Cay stays unowned. Every new zero stretch ends in a Free Tide claim before tick 400. The stop condition (0 or 1 claims, or Free Tide unable to come back) does not fire.
+- **Playtest** — seed 1847, Mara Vane, dashboard HTTP, ticks 0–10, no command. Jun Ash (`character-25`) stands at Crown Harbor. At tick 6 he holds 4.77 against the panel's passages of 12 and 15. The tick works. At 19.36 every quote is affordable and he works once more. At tick 8 he sails to Cinder Key. Verdict `PROMOTE`.
+- **Left open** — sea sightings, a passive glance, informants, captives as a channel, and a faction total. The planner does not read sightings. An idle human still starves in place with money left. A voyage already underway can still spend the purse down to zero.
+- **Links** — [playtest](docs/playtests/autonomous-short-purse-001.md) | [world simulation](docs/design/world-simulation.md) | [roadmap](docs/roadmap.md) | [open items](#open-items)
 
 ### 2026-09-29 — M21: a survey records who was anchored at the port
 - **Agent:** Open Era Engineer (Cursor cloud agent) | **Branch:** `feature/party-sightings` | **Commits:** `6bfdeea` (the sightings, the tests, and the playtest), `db8db8b` (foreign tax), `4927ad4` (offshore faction label), `a223118` (foreign beach `ownerId`). This entry is the record commit on the same branch. | **Type:** Feature
