@@ -129,6 +129,13 @@ test("every resource can be bought and sold, not only provisions", () => {  cons
 test("a purchase larger than the hold is refused and names the free capacity", () => {
   const { world, commander } = worldAt();
   commander.money = 10_000;
+  // Depth is tighter than a nearly empty hold, so the hold has to be the
+  // smallest ceiling or the refusal would correctly name the market instead.
+  const capacity = cargoCapacity(commander);
+  commander.cargo.provisions = capacity - 4;
+  commander.cargo.arms = 0;
+  commander.cargo.medicine = 0;
+  commander.cargo.shipMaterials = 0;
   const free = cargoCapacity(commander) - cargoLoad(commander);
   const tooMuch = Math.min(COMMAND_LIMIT_MAX, Math.floor(free) + 5);
   assert.ok(tooMuch > free, "the request must exceed the free hold for this to be a hold refusal");
@@ -274,7 +281,7 @@ test("the market block describes the market, not the commander standing in it", 
   // Nothing the commander owns may appear inside the market block.
   assert.deepEqual(
     Object.keys(here.market).sort(),
-    ["resources", "settlementId", "taxRate"],
+    ["expiresTick", "quotedTick", "resources", "settlementId", "taxRate"],
     "the market block must carry market facts only",
   );
   for (const ownerField of ["money", "load", "free", "capacity", "provisionsReserve"]) {
@@ -336,14 +343,17 @@ test("a voyage is solvent: a hold bought cheap and sold dear grows the purse", (
 
   sail(best!.from);
   const price = marketPrice(world, best!.from, best!.resource);
-  const free = cargoCapacity(commander) - cargoLoad(commander);
-  const quantity = Math.min(Math.floor(free), Math.floor(commander.money / price), COMMAND_LIMIT_MAX);
+  const buyQuote = tradeQuote(world, commander, best!.resource, "buy", COMMAND_LIMIT_MAX);
+  const quantity = Math.floor(buyQuote.maxQuantity);
   assert.ok(quantity >= 1, "the commander must be able to afford a hold");
   assert.equal(trade(world, "buy-resource", best!.resource, quantity).ok, true);
   runTick(world);
 
   const ticks = sail(best!.to);
-  assert.equal(trade(world, "sell-resource", best!.resource, Math.floor(commander.cargo[best!.resource])).ok, true);
+  const sellQuote = tradeQuote(world, commander, best!.resource, "sell", COMMAND_LIMIT_MAX);
+  const selling = Math.floor(sellQuote.maxQuantity);
+  assert.ok(selling >= 1, "the destination must be able to clear some of the cargo");
+  assert.equal(trade(world, "sell-resource", best!.resource, selling).ok, true);
   runTick(world);
 
   const net = Number((commander.money - startMoney).toFixed(2));

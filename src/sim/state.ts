@@ -320,6 +320,12 @@ export function applyEvent(world: WorldState, event: SimEvent): void {
       actor.health = event.data.health as number;
       actor.morale = event.data.morale as number;
       actor.troops.count = event.data.troopCount as number;
+      // Present only while the party is underway. Anchored upkeep does not
+      // touch the purse, and older events that predate the charge must not
+      // either.
+      if (event.type === "character-upkeep" && typeof event.data.characterMoney === "number") {
+        actor.money = event.data.characterMoney;
+      }
       if (event.type === "travel-progressed" && actor.travel) {
         actor.travel.remainingTicks = event.data.remainingTicks as number;
       }

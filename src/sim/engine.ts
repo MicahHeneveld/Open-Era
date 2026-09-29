@@ -58,6 +58,68 @@ import {
 
 const CAPTIVITY_MAX_DAYS = 14;
 
+/**
+ * Fraction of a market's normal holding that one order may clear.
+ *
+ * The autonomous buyer already refused to take more than this share of a
+ * board. Player orders did not, so emptying a market at the pre-trade price
+ * was the dominant trade. Both paths now use `marketDepth`.
+ */
+export const MARKET_DEPTH_FRACTION = 0.16;
+
+/**
+ * Money a party spends per tick underway, on top of the provisions it eats
+ * whether it sails or stands. Flat on purpose: the question is "is this trip
+ * worth it", and a rate that depends on crew size would hide that question
+ * inside a second formula.
+ */
+export const PASSAGE_COST_PER_TICK = 3;
+
+/** Money a voyage of `ticks` charges if the purse can cover it. */
+export function passageCost(ticks: number): number {
+  return round(Math.max(0, ticks) * PASSAGE_COST_PER_TICK, 2);
+}
+
+/**
+ * Units one order may move before the board is asked to clear more than a
+ * tick of trade should.
+ *
+ * The cap is a fraction of the settlement's *target* holding, not of the
+ * stock on the shelf. A shortage is why a merchant sailed, and sizing the
+ * cap off the empty shelf would make the dearest market the one that buys
+ * the least. A purchase is still also capped by the stock that is actually
+ * there, in `tradeQuote`.
+ */
+export function marketDepth(
+  settlement: { targetStocks: Resources },
+  resource: ResourceKey,
+): number {
+  return round(settlement.targetStocks[resource] * MARKET_DEPTH_FRACTION, 3);
+}
+
+/**
+ * Non-provision goods a settlement uses in one tick.
+ *
+ * An island uses little of the good it focuses on and more of the others, so
+ * a focus stays an export and a neighbour's focus stays an import. Provisions
+ * are omitted: they already have a population demand, and a second one would
+ * double-count the ration.
+ */
+export function localResourceUse(
+  settlement: { population: number; focus: ResourceKey },
+  resource: ResourceKey,
+): number {
+  if (resource === "provisions") return 0;
+  const perCapita = settlement.population / 2_800;
+  const focusFactor = settlement.focus === resource ? 0.2 : 1.4;
+  return round(perCapita * focusFactor, 3);
+}
+
+/** Gross pay for one tick of `work`, before the local sales-and-work tax. */
+export function workGross(character: Character): number {
+  return round(10 + character.skills.leadership * 0.08 + character.skills.trade * 0.07, 2);
+}
+
 function cloneResources(resources: Resources): Resources {
   return { ...resources };
 }
@@ -92,6 +154,15 @@ function produceSettlements(world: WorldState, events: SimEvent[]): void {
     const demand = round(settlement.population / 3_600, 3);
     const consumed = Math.min(afterConsumption.provisions, demand);
     afterConsumption.provisions = round(afterConsumption.provisions - consumed);
+    // Arms, medicine and ship materials are used as well. Without a sink those
+    // stocks only rise, every price falls to the floor, and a cargo that paid
+    // on the way out has nothing to do on the way home. Provisions keep the
+    // shortage path above; running out of timber is a price, not a garrison loss.
+    for (const resource of RESOURCE_KEYS) {
+      if (resource === "provisions") continue;
+      const use = localResourceUse(settlement, resource);
+      afterConsumption[resource] = round(Math.max(0, afterConsumption[resource] - use));
+    }
     const shortage = round(demand - consumed);
     const stability = clamp(settlement.stability - shortage * 0.35 + (shortage === 0 ? 0.03 : 0), 0, 100);
     const garrisonLoss = shortage > 0 ? Math.min(settlement.garrison, Math.floor(shortage * 0.18)) : 0;
@@ -243,7 +314,7 @@ export interface TradeQuote {
   quantity: number;
   /** Units of the requested amount that cannot be filled, and why. */
   shortfall: number;
-  limitedBy: "none" | "stock" | "money" | "hold" | "cargo" | "reserve";
+  limitedBy: "none" | "stock" | "money" | "hold" | "cargo" | "reserve" | "depth";
   /** Price per unit, before any tax. */
   unitPrice: number;
   /** quantity x unitPrice. */
@@ -276,14 +347,15 @@ export function tradeQuote(
   const unitPrice = marketPrice(world, settlement.id, resource);
   const capacity = cargoCapacity(character);
   const load = cargoLoad(character);
+  const depth = marketDepth(settlement, resource);
 
   let maxQuantity: number;
   if (direction === "buy") {
     const byHold = Math.max(0, capacity - load);
     const byMoney = unitPrice > 0 ? character.money / unitPrice : 0;
-    maxQuantity = Math.max(0, Math.min(settlement.stocks[resource], byHold, byMoney));
+    maxQuantity = Math.max(0, Math.min(settlement.stocks[resource], depth, byHold, byMoney));
   } else {
-    maxQuantity = tradableUnits(character, resource);
+    maxQuantity = Math.min(tradableUnits(character, resource), depth);
   }
   maxQuantity = round(maxQuantity, 3);
 
@@ -294,19 +366,23 @@ export function tradeQuote(
   // Named so a refusal can say which limit was reached rather than only that one
   // was. A partial fill the player did not ask for is the defect this replaces.
   //
-  // A purchase has three ceilings and they bind in whichever order the market
+  // A purchase has several ceilings and they bind in whichever order the market
   // puts them, so the *smallest* decides and must be the one named. Testing the
   // stock first told a player the island held only what their purse could buy.
+  // Ties keep the earlier name: stock before depth before hold before money.
   let limitedBy: TradeQuote["limitedBy"] = "none";
   if (quantity < requested) {
     if (direction === "sell") {
-      limitedBy = tradableUnits(character, resource) < requested ? (resource === "provisions" ? "reserve" : "cargo") : "none";
+      const byCargo = tradableUnits(character, resource);
+      limitedBy = depth < byCargo ? "depth" : resource === "provisions" ? "reserve" : "cargo";
     } else {
-      const byStock = settlement.stocks[resource];
-      const byHold = Math.max(0, capacity - load);
-      const byMoney = unitPrice > 0 ? character.money / unitPrice : 0;
-      const binding = Math.min(byStock, byHold, byMoney);
-      limitedBy = binding === byStock ? "stock" : binding === byHold ? "hold" : "money";
+      const candidates: Array<[TradeQuote["limitedBy"], number]> = [
+        ["stock", settlement.stocks[resource]],
+        ["depth", depth],
+        ["hold", Math.max(0, capacity - load)],
+        ["money", unitPrice > 0 ? character.money / unitPrice : 0],
+      ];
+      limitedBy = candidates.reduce((best, candidate) => candidate[1] < best[1] ? candidate : best)[0];
     }
   }
 
@@ -340,6 +416,11 @@ function upkeepCharacter(
   const troopLoss = shortage > 0 ? Math.min(character.troops.count, Math.floor(shortage * 0.5)) : 0;
   const morale = clamp(character.morale - shortage * 2.4 - (traveling ? 0.03 : 0) + (shortage === 0 ? 0.04 : 0), 0, 100);
   const health = clamp(character.health - shortage * 0.8, 1, 100);
+  // Provisions burn at the same rate at sea and at anchor. The passage charge
+  // is the part that does not: a voyage has to be worth the money it costs,
+  // not only the ticks it takes. A party that cannot pay spends what it has.
+  const passage = traveling ? round(Math.min(character.money, PASSAGE_COST_PER_TICK), 2) : 0;
+  const characterMoney = round(character.money - passage, 2);
 
   emit(world, events, {
     type: "character-upkeep",
@@ -353,6 +434,7 @@ function upkeepCharacter(
       health: round(health),
       troopCount: character.troops.count - troopLoss,
       troopLoss,
+      ...(traveling ? { passageCost: passage, characterMoney } : {}),
     },
   });
 }
@@ -665,7 +747,7 @@ function resolveTrade(
   let factionTreasury = settlement.factionId ? world.factions[settlement.factionId].treasury : 0;
 
   if (carried && tradableAmount(character, resource) >= 2) {
-    quantity = round(Math.min(tradableAmount(character, resource), 16 + character.skills.trade / 7));
+    quantity = round(Math.min(tradableAmount(character, resource), 16 + character.skills.trade / 7, marketDepth(settlement, resource)));
     gross = round(quantity * price, 2);
     const taxation = tradeTax(world, settlementId, gross);
     tax = taxation.tax;
@@ -677,7 +759,7 @@ function resolveTrade(
   } else {
     const capacity = 40 + character.sailors * 2;
     const load = RESOURCE_KEYS.reduce((sum, key) => sum + character.cargo[key], 0);
-    quantity = round(Math.min(20 + character.skills.trade / 8, capacity - load, settlement.stocks[resource] * 0.16, character.money / price));
+    quantity = round(Math.min(20 + character.skills.trade / 8, capacity - load, marketDepth(settlement, resource), settlement.stocks[resource], character.money / price));
     if (quantity <= 0) {
       return;
     }
@@ -1790,9 +1872,10 @@ function resolveDecision(
       // the event records what actually moved rather than claiming the request.
       const affordable = unitPrice > 0 ? character.money / unitPrice : 0;
       const spare = Math.max(0, cargoCapacity(character) - cargoLoad(character));
+      const depth = marketDepth(settlement, resource);
       const limit = direction === "buy"
-        ? Math.min(settlement.stocks[resource], spare, affordable)
-        : tradableUnits(character, resource);
+        ? Math.min(settlement.stocks[resource], spare, affordable, depth)
+        : Math.min(tradableUnits(character, resource), depth);
       const quantity = round(Math.max(0, Math.min(chosen.quantity ?? 0, limit)), 3);
       if (quantity <= 0) break;
       const taxRate = settlement.factionId ? world.factions[settlement.factionId].taxRate : 0;
@@ -1856,7 +1939,7 @@ function resolveDecision(
       resolveTrade(world, character, events, chosen.resource);
       break;
     case "work": {
-      const gross = round(10 + character.skills.leadership * 0.08 + character.skills.trade * 0.07, 2);
+      const gross = workGross(character);
       const taxation = tradeTax(world, settlementId, gross);
       emit(world, events, {
         type: "worked",

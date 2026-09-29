@@ -217,7 +217,9 @@ export function projectFactions(world: WorldState, commander: Character): Record
         name: faction.name,
         color: faction.color,
         treasury: owned ? faction.treasury : null,
-        taxRate: owned ? faction.taxRate : null,
+        // A faction's tax is public in a way its treasury is not: every sale in
+        // its ports pays it, and a merchant has to know the rate before sailing.
+        taxRate: faction.taxRate,
         power: owned ? factionPower(world, faction.id) : null,
         intelligence: {
           exact: owned,

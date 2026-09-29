@@ -279,6 +279,10 @@ test("foreign faction strength is withheld while the commander's own is exact", 
     assert.equal(faction.power, null, `${faction.id} power must be withheld`);
     assert.equal(faction.treasury, null);
     assert.equal(faction.intelligence.exact, false);
+    // Tax is what a sale in that faction's ports will pay. It is public even
+    // though the treasury the tax flows into is not.
+    assert.equal(faction.taxRate, world.factions[faction.id].taxRate);
+    assert.equal(typeof faction.taxRate, "number");
     // Names and colours survive because the map and order targets need them.
     assert.equal(typeof faction.name, "string");
     assert.equal(typeof faction.color, "string");

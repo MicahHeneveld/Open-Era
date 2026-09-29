@@ -54,9 +54,9 @@ Taxes cannot be evaded through a hidden action. A settlement owner can escape a 
 
 ### Player trade
 
-A player trades by naming what to buy or sell and how much, and can see the price before committing. Any of the four resources may be traded on any market. Three constraints apply: the stock the market actually holds, the money the buyer actually holds, and the hold the party can actually carry. Trade is the player verb that moves goods between islands, and it is the physical transport the resource model assumes.
+A player trades by naming what to buy or sell and how much, and can see the price before committing. Any of the four resources may be traded on any market. Four constraints apply: the stock the market actually holds, the depth that market will clear in one order, the money the buyer actually holds, and the hold the party can actually carry. Trade is the player verb that moves goods between islands, and it is the physical transport the resource model assumes.
 
-A market is quoted only where the commander is standing, because trading needs a market they are physically at and a remote figure would be an estimate presented as a price. Standing there is direct observation: the stock and price rows in a settlement the commander occupies are present truth, not a decaying report, while the rows for a settlement they are away from remain a report with an age.
+A market is quoted only where the commander is standing, because trading needs a market they are physically at and a remote figure would be an estimate presented as a price. Standing there is direct observation: the stock and price rows in a settlement the commander occupies are present truth, not a decaying report, while the rows for a settlement they are away from remain a report with an age. A live price is only the board as of this tick: it carries the tick it was read and expires on the next one, because production and trade recompute it. A destination's tax rate is visible from offshore. The tax is public in a way the price is not.
 
 Prototype choices, made to make this evaluable rather than decided:
 
@@ -65,11 +65,16 @@ Prototype choices, made to make this evaluable rather than decided:
 - Provisions below the party reserve cannot be sold. A trader cannot strand their own crew to make a sale.
 - Selling pays the tax rate of the faction holding the settlement. Buying pays none, because a purchase is not money earned in the settlement.
 - One price covers both directions. A purchase moves the quoted unit price times the quantity; a sale moves the same figure less the local tax. The market re-quotes afterwards from the stock it now holds, so a trade does not price itself as it fills.
+- One order may clear 16% of the settlement's target stock. The same depth binds the player and the autonomous trader. It is a fraction of the normal holding, not of the stock on the shelf, so a shortage can still absorb a cargo. A purchase cannot exceed the stock that is actually there.
+- A party underway pays a flat passage cost each tick. Provisions burn at the same rate at sea and at anchor; the passage is the cost that makes "is this trip worth it" a real question. The money is spent, not paid to a port.
+- Settlements use arms, medicine, and ship materials as well as provisions. An island uses little of its focus and more of the other goods, so a specialty stays worth exporting and a neighbour's specialty stays worth carrying home. That use does not reduce stability or the garrison. Running out of timber is a price, not a political crisis.
 - A request beyond any limit is refused and names the limit that bound it, rather than quietly filling short. A player who asks for more than they can have is told which ceiling they hit and what the ceiling was.
 - Money moves in whole cents. The panel and the boundary run the same rounding cascade, so a total printed before the button is pressed is the total the purse shows after it.
-- The autonomous path uses the same prices and constraints with its own heuristics for choosing volume. It is not the player's path, and the two are deliberately not required to agree.
+- The autonomous path uses the same prices, taxes, and depth, with its own heuristics for choosing volume. It is not the player's path.
 
-Open: whether a voyage should out-earn working the same ticks, and the margins that would make it do so. The measurements behind that question, and the decision to defer it, are recorded in [progress.md](../../progress.md) and [roadmap.md](../roadmap.md). Also open: whether a merchant should be able to learn a remote price at all, or must sail to find out what a market pays; and whether cargo can be lost, spoiled or taken rather than only bought and sold.
+The opening stocks at Crown Harbor and Glassport start in the imbalance those use rates sustain: Crown is short of medicine, Glassport is short of arms. On seed 1847 a round trip in those two goods out-earns the same number of ticks of `work`. The measurement is in [progress.md](../../progress.md).
+
+Open: whether a merchant should be able to learn a remote price at all, or must sail to find out what a market pays. A live price for a faction's own ports is published and marked as expiring next tick; a foreign price stays an estimate. Also open: whether cargo can be lost, spoiled or taken rather than only bought and sold. The one-click provisions top-up is still not depth-capped and still has no cost preview.
 
 ## Settlements, ownership, and secession
 
