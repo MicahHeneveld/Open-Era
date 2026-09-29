@@ -3,6 +3,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
+import { dashboardState, fullEventFeed } from "../src/dashboard/view-model.ts";
 import { combatForecast } from "../src/sim/combat.ts";
 import { submitCommand } from "../src/sim/commands.ts";
 import { createPrototypeWorld } from "../src/sim/scenario.ts";
@@ -672,6 +673,65 @@ test("a projected settlement has the same keys whether or not the commander owns
     await app.close();
     rmSync(directory, { recursive: true, force: true });
   }
+});
+
+test("offshore surrender stays null, and the exact branch runs only for the commander's faction", () => {
+  const world = createPrototypeWorld(1847);
+  const commander = world.characters[world.players["prototype-player"].characterId];
+  assert.equal(commander.factionId, "world-government");
+  commander.locationId = null;
+  commander.travel = { fromId: "crown-harbor", toId: "verdant-cay", totalTicks: 5, remainingTicks: 3 };
+
+  const foreignOffer = {
+    offeredToId: "character-14",
+    offeredTick: 0,
+    previousFactionId: "free-tide",
+  };
+  const ownedOffer = {
+    offeredToId: commander.id,
+    offeredTick: 0,
+    previousFactionId: "world-government",
+  };
+  world.settlements["cinder-key"].surrender = foreignOffer;
+  world.settlements["crown-harbor"].surrender = ownedOffer;
+
+  const project = () => dashboardState(world, [], fullEventFeed([])) as {
+    settlements: Array<{
+      id: string;
+      factionId: string | null;
+      surrender: unknown;
+      intelligence: { exact: boolean } | null;
+    }>;
+  };
+  const settlement = (id: string) => {
+    const projected = project().settlements.find((candidate) => candidate.id === id);
+    assert.ok(projected);
+    return projected;
+  };
+
+  const crown = settlement("crown-harbor");
+  const cinder = settlement("cinder-key");
+  assert.equal(crown.intelligence?.exact, true);
+  assert.deepEqual(crown.surrender, ownedOffer);
+  assert.equal(cinder.intelligence?.exact, false);
+  assert.equal(cinder.surrender, null, "an offshore port another faction holds does not show its surrender");
+
+  for (const candidate of project().settlements) {
+    const live = world.settlements[candidate.id];
+    const factionMatch: boolean = live.factionId === commander.factionId;
+    assert.equal(Boolean(candidate.intelligence?.exact), factionMatch, `${candidate.id} exact branch`);
+    if (!factionMatch) assert.equal(candidate.surrender, null);
+  }
+
+  world.settlements["cinder-key"].factionId = commander.factionId;
+  const taken = settlement("cinder-key");
+  assert.equal(taken.intelligence?.exact, true);
+  assert.deepEqual(taken.surrender, foreignOffer);
+
+  world.settlements["cinder-key"].factionId = "free-tide";
+  const restored = settlement("cinder-key");
+  assert.equal(restored.intelligence?.exact, false);
+  assert.equal(restored.surrender, null);
 });
 
 test("every rejection carries a machine-readable code, not just prose", async () => {

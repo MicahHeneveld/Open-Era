@@ -6,7 +6,7 @@ import test from "node:test";
 import { characterCadence, runTick, runTicks } from "../src/sim/engine.ts";
 import { WorldStore } from "../src/sim/persistence.ts";
 import { createPrototypeWorld } from "../src/sim/scenario.ts";
-import { canonicalJson, stateHash } from "../src/sim/state.ts";
+import { canonicalJson, factionPower, stateHash } from "../src/sim/state.ts";
 
 test("the same seed produces byte-for-byte deterministic events and state", () => {
   const first = runTicks(createPrototypeWorld(1847), 24);
@@ -75,6 +75,72 @@ test("the pressure-test scenario exercises its connected systems", () => {
 
   const sequences = result.events.map((event) => event.sequence);
   assert.deepEqual(sequences, Array.from({ length: sequences.length }, (_, index) => index + 1));
+});
+
+test("a faction that loses its last port keeps its record until a claim restores one", () => {
+  const world = createPrototypeWorld(1847);
+  const factionId = "free-tide";
+  const faction = world.factions[factionId];
+  const memberIds = Object.values(world.characters)
+    .filter((character) => character.factionId === factionId)
+    .map((character) => character.id)
+    .sort();
+  const treasury = faction.treasury;
+  assert.equal(
+    Object.values(world.settlements).filter((settlement) => settlement.factionId === factionId).length,
+    1,
+    "Free Tide opens with one port, so reassigning it is the landless case",
+  );
+
+  world.settlements["cinder-key"].factionId = "world-government";
+  assert.equal(world.factions[factionId], faction, "the faction record is not deleted");
+  assert.equal(faction.id, factionId);
+  assert.equal(faction.treasury, treasury);
+  assert.deepEqual(
+    Object.values(world.characters)
+      .filter((character) => character.factionId === factionId)
+      .map((character) => character.id)
+      .sort(),
+    memberIds,
+  );
+  assert.equal(Number.isFinite(factionPower(world, factionId)), true);
+  assert.equal(
+    Object.values(world.settlements).some((settlement) => settlement.factionId === factionId),
+    false,
+  );
+
+  const early: ReturnType<typeof runTick>["events"] = [];
+  assert.doesNotThrow(() => {
+    for (let index = 0; index < 40; index += 1) early.push(...runTick(world).events);
+  });
+  assert.equal(world.tick, 40);
+  assert.equal(world.factions[factionId], faction);
+  assert.equal(faction.treasury, treasury);
+  assert.equal(Number.isFinite(factionPower(world, factionId)), true);
+  assert.deepEqual(
+    Object.values(world.characters)
+      .filter((character) => character.factionId === factionId)
+      .map((character) => character.id)
+      .sort(),
+    memberIds,
+  );
+
+  const restores = (events: typeof early) => events.find((event) =>
+    event.type === "settlement-claimed" && event.data.factionId === factionId
+  );
+  let claim = restores(early);
+  for (let index = 0; index < 160 && !claim; index += 1) {
+    claim = restores(runTick(world).events);
+  }
+  assert.ok(claim, "a later claim restores a port onto the landless faction");
+  assert.equal(world.settlements[claim.settlementId!].factionId, factionId);
+  assert.deepEqual(
+    Object.values(world.characters)
+      .filter((character) => character.factionId === factionId)
+      .map((character) => character.id)
+      .sort(),
+    memberIds,
+  );
 });
 
 test("a character's periodic cadence stays distinct once ids outgrow two digits", () => {

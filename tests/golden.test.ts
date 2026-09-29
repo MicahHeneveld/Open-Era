@@ -33,6 +33,34 @@ test("the committed golden hashes describe the configured seeds and tick count",
   );
 });
 
+test("the protect predicate leaves the committed golden hashes in place", () => {
+  assert.deepEqual(
+    golden.seeds.map((entry) => ({
+      seed: entry.seed,
+      stateHash: entry.stateHash,
+      eventCount: entry.eventCount,
+    })),
+    [
+      {
+        seed: 1847,
+        stateHash: "d7eb02eb0e6b835ee923147b855d0a91969a416115d0c3bd5c2650ff0e2b6a3f",
+        eventCount: 8275,
+      },
+      {
+        seed: 2718,
+        stateHash: "d0b4b449ce9bc3fc27f0cfa15a5cc8ef04d5a2e6a9cdded2c2b11b6c4ca6583d",
+        eventCount: 8489,
+      },
+      {
+        seed: 4096,
+        stateHash: "d5d9da8bb1e9c9bd86c93ccbaa570f04ea9052ea1b5d4b48f3452e2db6f0c0c7",
+        eventCount: 8003,
+      },
+    ],
+  );
+  assert.equal(golden.recovery.replayedEvents, 572);
+});
+
 test("pinned seeds reproduce their committed state hash and event count", () => {
   for (const seed of GOLDEN_SEEDS) {
     const recorded = golden.seeds.find((entry) => entry.seed === seed);
