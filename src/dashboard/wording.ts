@@ -191,16 +191,53 @@ export function seatSummaryFor(world: WorldState, faction: Faction): string | nu
 
 /**
  * Which figure the seat sort reads, on the commander's own card.
- * `displayedLoyalty` is that sum rounded to 3 decimals, the `loyalty` field.
+ *
+ * Only the rounded figure. The raw seed stays on `personality.loyalty` and is
+ * not copied into this sentence.
  */
-export function loyaltyNoteFor(character: Character, displayedLoyalty: number): string {
-  const seed = character.personality.loyalty;
-  const adjustment = character.loyaltyAdjustment;
-  const sum = seed + (adjustment ?? 0);
-  if (adjustment === undefined || adjustment === 0) {
-    return `The seat reads ${sum}, personality loyalty with no stored adjustment. The loyalty figure on this card rounds that to ${displayedLoyalty}.`;
+export function loyaltyNoteFor(_character: Character, displayedLoyalty: number): string {
+  return `The seat reads ${displayedLoyalty}. personality.loyalty is the seed and is not the figure the seat reads.`;
+}
+
+/**
+ * Briefing title for an event row.
+ *
+ * A raw type (`character captured`) reads as if the prisoner did the capturing.
+ * These are sentences. They do not depend on actorId.
+ */
+export function eventBriefingTitle(type: string): string {
+  switch (type) {
+    case "character-captured":
+      return "A captain was taken";
+    case "battle-resolved":
+      return "A battle was decided";
+    case "captivity-released":
+      return "A captain was released";
+    case "captivity-escaped":
+      return "A captain escaped";
+    case "player-command-failed":
+      return "A command failed";
+    case "standing-order-accepted":
+      return "An order was accepted";
+    case "standing-order-refused":
+      return "An order was refused";
+    case "standing-order-deviated":
+      return "An order deviated";
+    case "standing-order-resumed":
+      return "An order resumed";
+    case "standing-order-completed":
+      return "An order was completed";
+    case "standing-order-expired":
+      return "An order expired";
+    case "scattered-troops-returned":
+      return "Scattered troops returned";
+    case "settlement-shortage":
+      return "A port is short of provisions";
+    case "settlement-claimed":
+      return "A port was claimed";
+    default:
+      return type.replaceAll("-", " ");
   }
-  return `The seat reads ${sum}, personality loyalty ${seed} plus the stored adjustment ${adjustment}. The loyalty figure on this card rounds that to ${displayedLoyalty}. personality.loyalty is the seed and is not the figure the seat reads.`;
 }
 
 export function skillsWithheldNote(name: string, tier: string, source: string): string {

@@ -7,6 +7,7 @@ import { dashboardState, fullEventFeed } from "../src/dashboard/view-model.ts";
 import { combatForecast } from "../src/sim/combat.ts";
 import { submitCommand } from "../src/sim/commands.ts";
 import { createPrototypeWorld } from "../src/sim/scenario.ts";
+import { round } from "../src/sim/state.ts";
 import { createDashboardApp } from "../src/dashboard/server.ts";
 
 /**
@@ -339,7 +340,7 @@ test("accelerated time pauses at a player battle phase", async () => {
     assert.deepEqual(advanceShape(advanceBody), {
       ok: true,
       tick: 1,
-      day: 1 / world.ticksPerDay,
+      day: round(1 / world.ticksPerDay, 2),
       ticksAdvanced: 1,
       combatUpdated: true,
       attentionUpdated: false,
@@ -409,7 +410,7 @@ test("accelerated time pauses when mandatory captivity release changes player st
     assert.deepEqual(advanceShape(advanceBody), {
       ok: true,
       tick: 1,
-      day: 1 / world.ticksPerDay,
+      day: round(1 / world.ticksPerDay, 2),
       ticksAdvanced: 1,
       combatUpdated: false,
       attentionUpdated: true,
@@ -422,7 +423,7 @@ test("accelerated time pauses when mandatory captivity release changes player st
     };
     assert.equal(state.captivity.active, null);
     assert.ok(state.briefing.items.some((item) =>
-      item.title === "captivity released" && item.summary.includes("recorded as debt")
+      item.title === "A captain was released" && item.summary.includes("recorded as debt")
     ));
   } finally {
     await app.close();

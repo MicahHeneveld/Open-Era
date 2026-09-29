@@ -145,10 +145,11 @@ export function visibleStandingOrders(commander: Character, character: Character
 function projectPartySighting(
   world: WorldState,
   sighting: PartySighting,
-): PartySighting & { ageTicks: number } {
+): PartySighting & { ageTicks: number; label: "Sighted troops" } {
   return {
     ...sighting,
     ageTicks: Math.max(0, world.tick - sighting.observedTick),
+    label: "Sighted troops",
   };
 }
 
@@ -161,7 +162,7 @@ function projectPartySighting(
 function projectPartySightings(
   world: WorldState,
   sightings: Character["partySightings"],
-): Record<string, PartySighting & { ageTicks: number }> | null {
+): Record<string, PartySighting & { ageTicks: number; label: "Sighted troops" }> | null {
   if (!sightings) return null;
   return Object.fromEntries(
     Object.entries(sightings).map(([characterId, sighting]) => [
@@ -337,7 +338,21 @@ function seaSummary(
   const from = world.settlements[travel.fromId]?.name ?? travel.fromId;
   const to = world.settlements[travel.toId]?.name ?? travel.toId;
   const dock = arriving ? ` Docks at ${to} on this tick.` : "";
-  return `${subject.name} is ${kind}, ${from} to ${to}.${dock} ${troops} troops, ${ageTicks} ticks old.`;
+  return `${subject.name} is ${seaRelation(kind)}, ${from} to ${to}.${dock} ${troops} troops, ${ageTicks} ticks old.`;
+}
+
+/** Plain sentence for a sea kind. The stored kind value is unchanged. */
+function seaRelation(kind: SeaSightingKind): string {
+  switch (kind) {
+    case "sharing":
+      return "in the same stretch of water";
+    case "overtaking":
+      return "overtaking on this route";
+    case "passing":
+      return "passing on the opposite course";
+    case "arriving":
+      return "arriving at the same port";
+  }
 }
 
 export interface OutOfStretch {
@@ -423,6 +438,11 @@ export interface CaptiveIntel {
   source: "direct";
   confidence: 1;
   ports: CaptivePortBelief[];
+  /**
+   * Set when `ports` is empty. An empty list is not a report that they hold no ports.
+   * Null when the row names at least one port.
+   */
+  portsNote: string | null;
 }
 
 export interface ProjectedReleaseSighting extends ReleaseSighting {
@@ -487,6 +507,7 @@ export function captiveIntelFor(
   if (!captivity || character.id === commander.id) return null;
   if (!captivity.captorFactionId || commander.factionId !== captivity.captorFactionId) return null;
   const observedTick = captivity.capturedTick;
+  const ports = captivePorts(world, character);
   return {
     characterId: character.id,
     factionId: character.factionId,
@@ -499,8 +520,26 @@ export function captiveIntelFor(
     ageTicks: reportAge(world, observedTick),
     source: "direct",
     confidence: 1,
-    ports: captivePorts(world, character),
+    ports,
+    portsNote: ports.length === 0
+      ? `${character.name} named no ports. The list may be incomplete.`
+      : null,
   };
+}
+
+/**
+ * Why the live troop count is not the captured count.
+ * The live count is the world's figure and stays 0 while the prisoner is held.
+ */
+function heldTroopsNote(
+  world: WorldState,
+  character: Character,
+  intel: CaptiveIntel,
+  live: number,
+): string {
+  const captorId = character.captivity?.captorFactionId;
+  const captor = captorId ? world.factions[captorId]?.name ?? captorId : "the captor";
+  return `${live} with ${character.name}; ${intel.troops} held by ${captor}.`;
 }
 
 function projectReleaseSighting(
@@ -645,6 +684,13 @@ export function projectCharacter(
     morale: condition ? round(character.morale, 1) : null,
     sailors: condition ? character.sailors : null,
     troops: condition ? character.troops : null,
+    /**
+     * Why live troops are 0 beside the captured count. Only on a captor's card,
+     * and only when that card already shows the live count. The count stays 0.
+     */
+    troopsNote: condition && captiveIntel && character.captivity
+      ? heldTroopsNote(world, character, captiveIntel, character.troops.count)
+      : null,
     /**
      * The dated record, beside troops. Co-located troops stay live. Away, troops
      * stay null and this is the record, or null when the commander has not seen

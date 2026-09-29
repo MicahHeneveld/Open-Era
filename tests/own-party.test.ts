@@ -319,7 +319,7 @@ test("repeated reports about one subject collapse into a single counted item", (
   }));
 
   const view = briefing(world, reports as ReturnType<typeof runTick>["events"]);
-  const arrived = view.items.filter((item) => item.title.startsWith("scattered troops returned"));
+  const arrived = view.items.filter((item) => item.title.startsWith("Scattered troops returned"));
   assert.equal(arrived.length, 1, "five identical reports are one piece of news");
   assert.equal(arrived[0].count, 5);
   assert.equal(arrived[0].throughSequence, 5005);

@@ -280,6 +280,10 @@ test("the commanded Glassport crossing names Ada at tick 2 and is gone at tick 4
   assert.equal(adaRow.observedTick, 2);
   assert.equal(adaRow.ageTicks, 0);
   assert.equal(adaRow.factionId, "world-government");
+  assert.equal(
+    adaRow.summary,
+    "Ada Sorn is overtaking on this route, Crown Harbor to Glassport. 35 troops, 0 ticks old.",
+  );
   const adaProjected = projectCharacter(world, mara, ada);
   assert.equal(adaProjected.troops, null);
   assert.equal(adaProjected.partyPower, null);
@@ -297,6 +301,25 @@ test("the commanded Glassport crossing names Ada at tick 2 and is gone at tick 4
   assert.equal(sableRow.sailors, 14);
   assert.equal(sableRow.troops, 36);
   assert.equal(sableRow.partyPower, 100.168);
+  assert.equal(
+    sableRow.summary,
+    "Sable Sorn is passing on the opposite course, Glassport to Crown Harbor. 36 troops, 0 ticks old.",
+  );
+  const adaLater = row(world, mara, ada);
+  assert.equal(adaLater?.kind, "overtaking");
+  assert.equal(adaLater?.arriving, true);
+  assert.equal(
+    adaLater?.summary,
+    "Ada Sorn is overtaking on this route, Crown Harbor to Glassport. Docks at Glassport on this tick. 35 troops, 0 ticks old.",
+  );
+  const toma = world.characters["character-07"];
+  assert.equal(toma.name, "Toma Reef");
+  const tomaRow = row(world, mara, toma);
+  assert.equal(tomaRow?.kind, "arriving");
+  assert.equal(
+    tomaRow?.summary,
+    "Toma Reef is arriving at the same port, Cinder Key to Glassport. Docks at Glassport on this tick. 42 troops, 0 ticks old.",
+  );
 
   runTick(world);
   assert.equal(world.tick, 4);
