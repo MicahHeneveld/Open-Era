@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import test from "node:test";
 import { assessStandingOrder, judgeOrderCompletion, reviewPlan } from "../src/sim/agency.ts";
 import { submitCommand } from "../src/sim/commands.ts";
@@ -7,7 +8,7 @@ import { projectEventFeed } from "../src/dashboard/view-model.ts";
 import { runTick, runTicks } from "../src/sim/engine.ts";
 import { DeterministicRng } from "../src/sim/rng.ts";
 import { createPrototypeWorld } from "../src/sim/scenario.ts";
-import { clamp, round, stateHash } from "../src/sim/state.ts";
+import { applyEvent, clamp, round, stateHash } from "../src/sim/state.ts";
 import type { Relationship, SimEvent, WorldState } from "../src/sim/types.ts";
 
 test("characters begin with rooted goals, beliefs, relationships, and faction orders", () => {
@@ -1029,4 +1030,82 @@ test("an active protect order does not complete once the target's faction has ch
   assert.ok(review, "losing the last port does not leave the character with no goal");
   assert.equal(review.selectedGoalId, "character-19:serve-faction");
   assert.equal(review.goalScores[0]?.kind, "serve-faction");
+});
+
+test("a captive issuer's order is not retargeted, refused, or confirmed, and the cover is not read", () => {
+  const world = createPrototypeWorld(4096);
+  const issuer = world.characters["character-14"];
+  assert.equal(issuer.name, "Pax Ash");
+  const recipient = Object.values(world.characters).find((character) =>
+    character.standingOrders.some((order) => order.issuerId === issuer.id)
+  );
+  assert.ok(recipient);
+  const order = recipient.standingOrders.find((candidate) => candidate.issuerId === issuer.id);
+  assert.ok(order);
+  order.status = "active";
+  const targetId = order.targetId;
+  const directive = order.directive;
+  const tax = world.factions["free-tide"].taxRate;
+  const rng = world.rngState;
+  const settlementId = issuer.locationId ?? "crown-harbor";
+  applyEvent(world, {
+    sequence: world.nextEventSequence,
+    tick: world.tick,
+    type: "character-captured",
+    actorId: issuer.id,
+    settlementId,
+    data: {
+      battleId: "seat-test-issuer",
+      health: issuer.health,
+      morale: issuer.morale,
+      captivity: {
+        captorFactionId: world.settlements[settlementId].factionId,
+        settlementId,
+        capturedTick: world.tick,
+        mandatoryReleaseTick: world.tick + 84,
+        cause: "major-defeat",
+        displayedRisk: "high",
+        scatteredTroops: { ...issuer.troops },
+        releaseDestinationId: null,
+      },
+    },
+  });
+  assert.equal(order.status, "active");
+  assert.equal(order.targetId, targetId);
+  assert.equal(order.directive, directive);
+  assert.equal(order.issuerId, issuer.id);
+  assert.equal(world.factions["free-tide"].taxRate, tax);
+  assert.equal(world.rngState, rng);
+  const actingId = world.factions["free-tide"].actingCommanderId;
+  assert.equal(actingId, "character-16");
+  assert.ok(actingId);
+  assert.equal(world.characters[actingId].standingOrders.some((entry) => entry.issuerId === actingId), false);
+
+  const covered = reviewPlan(world, recipient, new DeterministicRng(4));
+  delete world.factions["free-tide"].actingCommanderId;
+  const bare = reviewPlan(world, recipient, new DeterministicRng(4));
+  world.factions["free-tide"].actingCommanderId = actingId;
+  assert.deepEqual(covered, bare);
+  assert.equal(reviewPlan.toString().includes("actingCommanderId"), false);
+  const engine = readFileSync(new URL("../src/sim/engine.ts", import.meta.url), "utf8");
+  const candidatesAt = engine.indexOf("function buildCandidates(");
+  const candidatesEnd = engine.indexOf("\nfunction ", candidatesAt + 1);
+  assert.equal(engine.slice(candidatesAt, candidatesEnd).includes("actingCommanderId"), false);
+
+  order.status = "awaiting-confirmation";
+  order.statusChangedTick = world.tick;
+  const ticked = runTick(world);
+  assert.equal(order.status, "awaiting-confirmation");
+  assert.equal(order.targetId, targetId);
+  assert.equal(order.issuerId, issuer.id);
+  assert.equal(ticked.events.some((event) =>
+    (event.type === "standing-order-completed" || event.type === "standing-order-refused") &&
+    event.data.orderId === order.id
+  ), false);
+  assert.equal(ticked.events.some((event) =>
+    event.type === "standing-order-completed" && event.actorId === actingId
+  ), false);
+  assert.equal(Object.values(world.characters).some((character) =>
+    character.standingOrders.some((entry) => entry.issuerId === actingId)
+  ), false);
 });

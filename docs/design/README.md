@@ -22,7 +22,7 @@ These documents capture the decisions made during the initial design conversatio
 - [Contracts](contracts.md) — Open / proposal: a paid provisions delivery the sim would enforce, once a standing order is one job rather than two
 - [Order confirmation](order-confirmation.md) — Open / proposal: a completion report closes when its issuer signs it, or after a day when nobody can
 - [Captivity debts](captivity-debts.md) — Open / proposal: the unpaid ransom comes out of the prisoner's purse, up to one day's wages, on each world day
-- [Political layer](political-layer.md) — Open / proposal: the person who already issues a faction's orders is named in command, and a captive commander's seat is covered until release
+- [Political layer](political-layer.md) — Built in M30: the person who already issues a faction's orders is named in command, and a captive commander's seat is covered until release
 - [Loyalty drift](loyalty-drift.md) — Open / proposal: loyalty falls by 0.04 when a release leaves the ransom unpaid, and nothing else reads that change except who covers the seat
 - [Autonomous orders](autonomous-orders.md) — Open / proposal: Free Tide does not mint protect orders after tick 0; once a report has closed, the four-day sketch accepts the next one and rewrites the first 72 ticks
 - [Autonomous orders after M29](autonomous-orders-after-m29.md) — Open / proposal: remeasured with the landless raid and the outscore rule both on; the four-day sketch still rewrites the first 72 ticks, and a protect order does not settle Crown Harbor

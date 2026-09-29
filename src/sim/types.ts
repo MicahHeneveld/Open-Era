@@ -13,6 +13,11 @@ export interface Faction {
   color: string;
   treasury: number;
   taxRate: number;
+  /**
+   * Who covers the seat while the command holder is captive.
+   * Absent, not null, once that holder is free. The holder is not stored here.
+   */
+  actingCommanderId?: string;
 }
 
 export interface Settlement {

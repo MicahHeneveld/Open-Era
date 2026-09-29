@@ -6,7 +6,8 @@ import test from "node:test";
 import { characterCadence, runTick, runTicks } from "../src/sim/engine.ts";
 import { WorldStore } from "../src/sim/persistence.ts";
 import { createPrototypeWorld } from "../src/sim/scenario.ts";
-import { canonicalJson, factionPower, stateHash } from "../src/sim/state.ts";
+import { applyEvent, canonicalJson, factionPower, stateHash } from "../src/sim/state.ts";
+import type { WorldState } from "../src/sim/types.ts";
 
 test("the same seed produces byte-for-byte deterministic events and state", () => {
   const first = runTicks(createPrototypeWorld(1847), 24);
@@ -141,6 +142,150 @@ test("a faction that loses its last port keeps its record until a claim restores
       .sort(),
     memberIds,
   );
+});
+
+function forceCapture(world: WorldState, characterId: string): void {
+  const character = world.characters[characterId];
+  const settlementId = character.locationId ?? "crown-harbor";
+  const settlement = world.settlements[settlementId];
+  applyEvent(world, {
+    sequence: world.nextEventSequence,
+    tick: world.tick,
+    type: "character-captured",
+    actorId: characterId,
+    targetId: settlement.factionId ?? undefined,
+    settlementId,
+    data: {
+      battleId: `seat-test-${characterId}`,
+      cause: "major-defeat",
+      displayedRisk: "high",
+      health: character.health,
+      morale: character.morale,
+      captivity: {
+        captorFactionId: settlement.factionId,
+        settlementId,
+        capturedTick: world.tick,
+        mandatoryReleaseTick: world.tick + 84,
+        cause: "major-defeat",
+        displayedRisk: "high",
+        scatteredTroops: { ...character.troops },
+        releaseDestinationId: null,
+      },
+    },
+  });
+}
+
+function forceRelease(world: WorldState, characterId: string): void {
+  const character = world.characters[characterId];
+  applyEvent(world, {
+    sequence: world.nextEventSequence,
+    tick: world.tick,
+    type: "captivity-released",
+    actorId: characterId,
+    settlementId: character.captivity?.settlementId,
+    data: {
+      characterMoney: character.money,
+      releaseLocationId: character.captivity?.settlementId ?? character.locationId,
+      troopRecovery: null,
+      travel: null,
+    },
+  });
+}
+
+function forceEscape(world: WorldState, characterId: string): void {
+  const character = world.characters[characterId];
+  applyEvent(world, {
+    sequence: world.nextEventSequence,
+    tick: world.tick,
+    type: "captivity-escaped",
+    actorId: characterId,
+    settlementId: character.captivity?.settlementId,
+    data: {
+      health: character.health,
+      morale: character.morale,
+      attributes: character.attributes,
+      releaseLocationId: character.captivity?.settlementId ?? character.locationId,
+      troopRecovery: null,
+      travel: null,
+    },
+  });
+}
+
+function issuedOrders(world: WorldState, issuerId: string) {
+  return Object.values(world.characters).flatMap((character) =>
+    character.standingOrders
+      .filter((order) => order.issuerId === issuerId)
+      .map((order) => ({
+        id: order.id,
+        holderId: character.id,
+        issuerId: order.issuerId,
+        targetId: order.targetId ?? null,
+        status: order.status,
+        directive: order.directive,
+      }))
+  );
+}
+
+test("a captive command holder is covered until release, and the cover does not take the orders", () => {
+  for (const seed of [1847, 2718, 4096]) {
+    const world = createPrototypeWorld(seed);
+    const player = world.players["prototype-player"];
+    const mara = world.characters[player.characterId];
+    assert.equal(mara.name, "Mara Vane");
+    assert.equal(Object.hasOwn(world.factions["world-government"], "actingCommanderId"), false);
+    assert.equal(Object.hasOwn(world.factions["free-tide"], "actingCommanderId"), false);
+
+    const orders = issuedOrders(world, mara.id);
+    const tax = world.factions["world-government"].taxRate;
+    const rng = world.rngState;
+    forceCapture(world, mara.id);
+    assert.equal(world.factions["world-government"].actingCommanderId, player.reportingOfficerId);
+    assert.deepEqual(issuedOrders(world, mara.id), orders);
+    assert.equal(world.factions["world-government"].taxRate, tax);
+    assert.equal(world.rngState, rng);
+    const cover = world.characters[player.reportingOfficerId!];
+    assert.equal(cover.standingOrders.some((order) => order.issuerId === cover.id), false);
+    forceRelease(world, mara.id);
+    assert.equal(Object.hasOwn(world.factions["world-government"], "actingCommanderId"), false);
+  }
+
+  const covered = createPrototypeWorld(4096);
+  const pax = covered.characters["character-14"];
+  assert.equal(pax.name, "Pax Ash");
+  const corin = covered.characters["character-16"];
+  assert.equal(corin.name, "Corin Hale");
+  const paxOrders = issuedOrders(covered, pax.id);
+  const paxTax = covered.factions["free-tide"].taxRate;
+  const paxRng = covered.rngState;
+  forceCapture(covered, pax.id);
+  assert.equal(covered.factions["free-tide"].actingCommanderId, corin.id);
+  assert.deepEqual(issuedOrders(covered, pax.id), paxOrders);
+  assert.equal(covered.factions["free-tide"].taxRate, paxTax);
+  assert.equal(covered.rngState, paxRng);
+  forceCapture(covered, corin.id);
+  assert.equal(covered.characters["character-22"].name, "Bram Tern");
+  assert.equal(covered.factions["free-tide"].actingCommanderId, "character-22");
+  assert.deepEqual(issuedOrders(covered, pax.id), paxOrders);
+  forceRelease(covered, pax.id);
+  assert.equal(Object.hasOwn(covered.factions["free-tide"], "actingCommanderId"), false);
+  assert.equal(corin.captivity === null, false);
+
+  const locked = createPrototypeWorld(4096);
+  forceCapture(locked, "character-16");
+  assert.equal(Object.hasOwn(locked.factions["free-tide"], "actingCommanderId"), false);
+  forceCapture(locked, "character-14");
+  assert.equal(locked.factions["free-tide"].actingCommanderId, "character-22");
+  forceRelease(locked, "character-16");
+  assert.equal(locked.factions["free-tide"].actingCommanderId, "character-22");
+  forceRelease(locked, "character-14");
+  assert.equal(Object.hasOwn(locked.factions["free-tide"], "actingCommanderId"), false);
+
+  const escaped = createPrototypeWorld(4096);
+  forceCapture(escaped, "character-14");
+  assert.equal(escaped.factions["free-tide"].actingCommanderId, "character-16");
+  forceEscape(escaped, "character-14");
+  assert.equal(Object.hasOwn(escaped.factions["free-tide"], "actingCommanderId"), false);
+  assert.equal(escaped.characters["character-14"].captivity, null);
 });
 
 test("a character's periodic cadence stays distinct once ids outgrow two digits", () => {

@@ -1,5 +1,5 @@
 import { assessStandingOrder } from "../sim/agency.ts";
-import { factionPower, partyPower, round } from "../sim/state.ts";
+import { commandHolderId, factionPower, partyPower, round } from "../sim/state.ts";
 import type { Character, PartySighting, SimEvent, StandingOrder, SupplyContract, WorldState } from "../sim/types.ts";
 
 /**
@@ -317,6 +317,8 @@ export function projectFactions(world: WorldState, commander: Character): Record
         id: faction.id,
         name: faction.name,
         color: faction.color,
+        commanderId: commandHolderId(world, faction.id),
+        actingCommanderId: faction.actingCommanderId ?? null,
         treasury: owned ? faction.treasury : null,
         // A faction's tax is public in a way its treasury is not: every sale in
         // its ports pays it, and a merchant has to know the rate before sailing.

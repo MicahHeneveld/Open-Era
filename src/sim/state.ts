@@ -182,6 +182,76 @@ export function partyPower(character: Character): number {
   return round(personalPower(character) * 1.5 + troopPower * leaderEffect);
 }
 
+/**
+ * The one person who issues this faction's standing orders.
+ *
+ * The seat is that issuer. It is not stored on the faction. Two issuers, or
+ * none, leave the seat unnamed. Trust, grievance, troops, and location are not read.
+ */
+export function commandHolderId(world: WorldState, factionId: string): string | null {
+  let holderId: string | null = null;
+  for (const character of Object.values(world.characters)) {
+    for (const order of character.standingOrders) {
+      const issuer = world.characters[order.issuerId];
+      if (issuer?.factionId !== factionId) continue;
+      if (holderId === null) holderId = issuer.id;
+      else if (holderId !== issuer.id) return null;
+    }
+  }
+  return holderId;
+}
+
+function commandScore(character: Character): number {
+  return character.skills.leadership + character.personality.loyalty * 50;
+}
+
+/**
+ * The free faction mate who covers a captive holder.
+ *
+ * Highest leadership plus loyalty times 50. The holder is skipped, and so is
+ * anyone already captive. A tie breaks toward the lower id, the same comparison
+ * `createPrototypeWorld` uses for the reporting officer. No draw.
+ */
+function selectActingCommanderId(
+  world: WorldState,
+  factionId: string,
+  holderId: string,
+): string | undefined {
+  const ranked = Object.values(world.characters)
+    .filter((character) =>
+      character.factionId === factionId &&
+      character.id !== holderId &&
+      character.captivity === null
+    )
+    .sort((left, right) =>
+      commandScore(right) - commandScore(left) ||
+      left.id.localeCompare(right.id)
+    );
+  return ranked[0]?.id;
+}
+
+function assignActingCommander(world: WorldState, captured: Character): void {
+  if (!captured.factionId) return;
+  const faction = world.factions[captured.factionId];
+  if (!faction) return;
+  const holderId = commandHolderId(world, captured.factionId);
+  if (!holderId) return;
+  const holderCaptured = captured.id === holderId;
+  const actingCaptured = faction.actingCommanderId === captured.id;
+  if (!holderCaptured && !actingCaptured) return;
+  const next = selectActingCommanderId(world, captured.factionId, holderId);
+  if (next) faction.actingCommanderId = next;
+  else delete faction.actingCommanderId;
+}
+
+function clearActingCommander(world: WorldState, freed: Character): void {
+  if (!freed.factionId) return;
+  const faction = world.factions[freed.factionId];
+  if (!faction) return;
+  if (commandHolderId(world, freed.factionId) !== freed.id) return;
+  delete faction.actingCommanderId;
+}
+
 export function factionPower(world: WorldState, factionId: string): number {
   let total = world.factions[factionId].treasury * 0.012;
   for (const settlement of Object.values(world.settlements)) {
@@ -532,6 +602,7 @@ export function applyEvent(world: WorldState, event: SimEvent): void {
       actor.travel = null;
       actor.lastBattleTick = world.tick;
       delete world.activeBattles[event.data.battleId as string];
+      assignActingCommander(world, actor);
       break;
     case "captivity-escaped":
       if (!actor) throw new Error("Captivity escape event has no actor");
@@ -545,6 +616,7 @@ export function applyEvent(world: WorldState, event: SimEvent): void {
         ? { ...(event.data.travel as NonNullable<Character["travel"]>) }
         : null;
       actor.locationId = event.data.releaseLocationId as string | null;
+      clearActingCommander(world, actor);
       break;
     case "captivity-released":
       if (!actor) throw new Error("Captivity release event has no actor");
@@ -556,6 +628,7 @@ export function applyEvent(world: WorldState, event: SimEvent): void {
         ? { ...(event.data.travel as NonNullable<Character["travel"]>) }
         : null;
       actor.locationId = event.data.releaseLocationId as string | null;
+      clearActingCommander(world, actor);
       break;
     case "scattered-troops-returned":
       if (!actor) throw new Error("Troop return event has no actor");
