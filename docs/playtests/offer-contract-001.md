@@ -270,10 +270,12 @@ Conservation: 108 at the start. After the offer, purse 78 + escrow 30 = 108, and
 
 A player would find three things odd. The price was 30, and the score still records `costBasis` 0 and `margin` 0, so the 30 never shows up as a margin. He left for Cinder Key, two ticks the other way, on the tick the offer was applied, and the contract event does not say that. And as soon as he sailed, the 19 provisions and the 117 that had been on his card became null; the refusal event is the only later purse figure, and it did not move.
 
+That score is not the travel gate. He was already at sea when the offer was judged, `travelDuration` reported 1, and 1 did not exceed the 23 ticks left, so the assessment scored a market price of 0. An underway carrier now refuses under `gate` `travel`, reason `The carrier is already at sea.`, before any score, and the escrow still comes back once.
+
 ## Recommendation
 
 `PROMOTE`
 
 The success signal was the two contract ids, Mara's money at 108, then 82, then 90, the escrows, Zara's payment, Orin's refund, and Crown Harbor's shelf. All of those matched the plan, on seed 1847, through the dashboard JSON. Zara was paid on the landing, from the escrow, once. Orin's 8 came back once and was not paid to him. The shelf gained 10 on the fulfilment event, and that event is not a `market-trade`. `offer-contract` was accepted and did leave the purse.
 
-Part 2 does not enter this verdict. The carrier who was not already at Crown Harbor refused on `gate` `score` (`score` 0.15, `threshold` 0.599, `costBasis` 0), and the escrow came back once.
+Part 2 does not enter this verdict. The carrier who was not already at Crown Harbor was scored while at sea (`gate` `score`, `score` 0.15, `threshold` 0.599, `costBasis` 0), and the escrow came back once. That judgment was the missing travel gate, not a price he declined.
