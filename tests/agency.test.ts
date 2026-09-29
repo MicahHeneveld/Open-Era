@@ -384,6 +384,111 @@ test("accepted orders report temporary deviations, resumptions, and completion j
   }));
 });
 
+test("a free autonomous issuer confirms the report on the next tick without drawing rng", () => {
+  const world = createPrototypeWorld(1847);
+  const reported = runTick(world);
+  const report = reported.events.find((event) =>
+    event.type === "standing-order-completion-reported" && event.data.issuerId === "character-14"
+  );
+  assert.ok(report);
+  const holder = world.characters[report.actorId!];
+  const order = holder.standingOrders.find((candidate) => candidate.id === report.data.orderId)!;
+  const issuer = world.characters["character-14"];
+  assert.equal(order.status, "awaiting-confirmation");
+  assert.equal(issuer.controller.kind, "autonomous");
+  assert.equal(issuer.captivity, null);
+
+  const held = structuredClone(world);
+  for (const character of Object.values(held.characters)) {
+    for (const waiting of character.standingOrders) {
+      if (waiting.status === "awaiting-confirmation") waiting.statusChangedTick = held.tick;
+    }
+  }
+  const closed = runTick(world);
+  runTick(held);
+  const completion = closed.events.find((event) =>
+    event.type === "standing-order-completed" && event.data.orderId === order.id
+  );
+  assert.ok(completion);
+  assert.equal(completion.data.reason, "issuer-judgment");
+  assert.equal(completion.actorId, issuer.id);
+  assert.equal(completion.targetId, holder.id);
+  assert.equal(completion.data.commandId, undefined);
+  assert.equal(closed.events.some((event) => event.type === "player-command-resolved" && event.data.orderId === order.id), false);
+  assert.equal(order.status, "completed");
+  assert.equal(world.rngState, held.rngState);
+});
+
+test("a pressure completion writes no relationship, and a protect completion writes the victory deltas once", () => {
+  const victory = { trust: 0.012, respect: 0.028, fear: -0.005, grievance: -0.006, obligation: -0.01 };
+
+  const pressureWorld = createPrototypeWorld(1847);
+  const esme = pressureWorld.characters["character-19"];
+  const pax = pressureWorld.characters["character-14"];
+  assert.equal(esme.name, "Esme Dusk");
+  const pressure = esme.standingOrders.find((order) => order.directive === "pressure" && order.issuerId === pax.id);
+  assert.ok(pressure);
+  pressure.status = "awaiting-confirmation";
+  pressure.adherence = "following";
+  pressure.statusChangedTick = -1;
+  const pressureTick = runTick(pressureWorld);
+  assert.equal(pressure.status, "completed");
+  assert.equal(pressureTick.events.some((event) =>
+    event.type === "standing-order-completed" &&
+    event.data.orderId === pressure.id &&
+    event.data.reason === "issuer-judgment"
+  ), true);
+  assert.equal(pressureTick.events.some((event) =>
+    event.type === "relationship-changed" && event.data.trigger === "order confirmed"
+  ), false);
+
+  const protectWorld = createPrototypeWorld(1847);
+  const zara = protectWorld.characters["character-17"];
+  const issuer = protectWorld.characters["character-14"];
+  assert.equal(zara.name, "Zara Gale");
+  const protect = zara.standingOrders[0];
+  assert.ok(protect);
+  protect.directive = "protect";
+  protect.targetId = "cinder-key";
+  protect.issuerId = issuer.id;
+  protect.status = "awaiting-confirmation";
+  protect.adherence = "following";
+  protect.statusChangedTick = -1;
+  const prior = zara.relationships[issuer.id];
+  assert.ok(prior);
+  const protectTick = runTick(protectWorld);
+  const completion = protectTick.events.find((event) =>
+    event.type === "standing-order-completed" && event.data.orderId === protect.id
+  );
+  const relationship = protectTick.events.find((event) =>
+    event.type === "relationship-changed" &&
+    event.data.trigger === "order confirmed" &&
+    event.actorId === zara.id
+  );
+  assert.ok(completion);
+  assert.equal(completion.data.reason, "issuer-judgment");
+  assert.ok(relationship);
+  const written = relationship.data.relationship as Relationship;
+  assert.equal(written.trust, round(clamp(prior.trust + victory.trust, 0, 1)));
+  assert.equal(written.respect, round(clamp(prior.respect + victory.respect, 0, 1)));
+  assert.equal(written.fear, round(clamp(prior.fear + victory.fear, 0, 1)));
+  assert.equal(written.grievance, round(clamp(prior.grievance + victory.grievance, 0, 1)));
+  assert.equal(written.obligation, round(clamp(prior.obligation + victory.obligation, 0, 1)));
+  assert.equal(written.affinity, prior.affinity);
+  assert.equal(protect.status, "completed");
+
+  const again = runTick(protectWorld);
+  assert.equal(again.events.some((event) =>
+    event.type === "relationship-changed" &&
+    event.data.trigger === "order confirmed" &&
+    event.actorId === zara.id &&
+    event.targetId === issuer.id
+  ), false);
+  assert.equal(again.events.some((event) =>
+    event.type === "standing-order-completed" && event.data.orderId === protect.id
+  ), false);
+});
+
 const VICTORY = { trust: 0.012, respect: 0.028, fear: -0.005, grievance: -0.006, obligation: -0.01 };
 const DEFEAT = { trust: -0.025, respect: -0.008, fear: 0.018, grievance: 0.035, obligation: 0.015 };
 
@@ -495,6 +600,19 @@ test("a carrier already at sea refuses under the travel gate and the escrow retu
   assert.equal(refusal.data.gate, "travel");
   assert.notEqual(refusal.data.gate, "score");
   assert.equal(refusal.data.reason, AT_SEA_REASON);
+  assert.equal(refusal.data.score, null);
+  assert.equal(refusal.data.costBasis, null);
+  assert.equal(typeof refusal.data.threshold, "number");
+  assert.deepEqual(refusal.data.factors, {
+    commerce: 0,
+    margin: 0,
+    trust: 0,
+    respect: 0,
+    grievance: 0,
+    obligation: 0,
+    perceivedRisk: 0,
+  });
+  assert.equal(refusal.data.travelTicks, 2);
   assert.equal(refusal.data.escrow, 0);
   assert.equal(refusal.data.buyerMoney, 108);
   assert.equal(world.contracts?.[contract.id].status, "refused");
@@ -532,13 +650,16 @@ test("scoring a contract always has a positive cost basis", () => {
       });
       if (assessment.gate === null || assessment.gate === "score" || assessment.gate === "purse") {
         assert.ok(
-          assessment.costBasis > 0,
+          assessment.costBasis !== null && assessment.costBasis > 0,
           `${carrier.id} price ${price} gate ${assessment.gate} costBasis ${assessment.costBasis}`,
         );
       }
       if (assessment.gate === "travel") {
         assert.equal(assessment.reason, VOYAGE_REASON);
-        assert.ok(assessment.costBasis > 0, `${carrier.id} voyage refusal still has a market price`);
+        assert.ok(
+          assessment.costBasis !== null && assessment.costBasis > 0,
+          `${carrier.id} voyage refusal still has a market price`,
+        );
       }
     }
   }
@@ -556,7 +677,9 @@ test("scoring a contract always has a positive cost basis", () => {
   assert.equal(atSea.gate, "travel");
   assert.equal(atSea.reason, AT_SEA_REASON);
   assert.notEqual(atSea.gate, "score");
-  assert.equal(atSea.costBasis, 0);
+  assert.equal(atSea.score, null);
+  assert.equal(atSea.costBasis, null);
+  assert.equal(atSea.threshold, round(0.54 + corin.personality.ambition * 0.08));
 
   corin.locationId = "glassport";
   corin.travel = null;
@@ -569,8 +692,45 @@ test("scoring a contract always has a positive cost basis", () => {
   });
   assert.equal(tooShort.gate, "travel");
   assert.equal(tooShort.reason, VOYAGE_REASON);
-  assert.ok(tooShort.costBasis > 0);
+  assert.equal(typeof tooShort.score, "number");
+  assert.notEqual(tooShort.score, null);
+  assert.ok(tooShort.costBasis !== null && tooShort.costBasis > 0);
   assert.ok(tooShort.travelTicks > tooShort.ticksLeft);
+});
+
+test("a docked voyage that misses the deadline keeps the computed score on the refusal", () => {
+  const world = createPrototypeWorld(1847);
+  const corin = world.characters["character-16"];
+  assert.equal(corin.locationId, "glassport");
+  assert.equal(corin.travel, null);
+  const submission = submitCommand(world, {
+    playerId: "prototype-player",
+    type: "offer-contract",
+    characterId: "character-16",
+    quantity: 10,
+    destinationId: "crown-harbor",
+    price: 30,
+    expiresInTicks: 1,
+  });
+  assert.equal(submission.ok, true);
+  const offered = runTick(world);
+  assert.equal(offered.events.some((event) => event.type === "contract-refused"), false);
+  // The offer tick can send him to sea. Put him back on the dock before the
+  // judgment, which is the next tick, so this refusal is the voyage gate.
+  corin.locationId = "glassport";
+  corin.travel = null;
+
+  const judged = runTick(world);
+  const refusal = judged.events.find((event) => event.type === "contract-refused");
+  assert.ok(refusal);
+  assert.equal(refusal.data.gate, "travel");
+  assert.equal(refusal.data.reason, VOYAGE_REASON);
+  assert.equal(typeof refusal.data.score, "number");
+  assert.notEqual(refusal.data.score, null);
+  assert.equal(typeof refusal.data.costBasis, "number");
+  assert.ok(Number(refusal.data.costBasis) > 0);
+  assert.notEqual(refusal.data.factors, undefined);
+  assert.notEqual((refusal.data.factors as { commerce: number }).commerce, 0);
 });
 
 test("fulfilling a delivery of 10 adds 10 provisions to Crown Harbor, pays the carrier from escrow, and is not a market-trade", () => {
