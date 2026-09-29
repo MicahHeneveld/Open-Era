@@ -1,13 +1,14 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { eventPayloadVisible } from "../src/dashboard/visibility.ts";
-import { dashboardState, fullEventFeed } from "../src/dashboard/view-model.ts";
+import { dashboardState, fullEventFeed, projectEventFeed } from "../src/dashboard/view-model.ts";
 import { directObservation } from "../src/sim/agency.ts";
 import { combatForecast } from "../src/sim/combat.ts";
 import { ACTION_CAPABILITIES, COMMAND_LIMITS, submitCommand } from "../src/sim/commands.ts";
-import { runTick } from "../src/sim/engine.ts";
+import { passageCost, runTick, travelDuration } from "../src/sim/engine.ts";
 import { createPrototypeWorld } from "../src/sim/scenario.ts";
-import type { Character, Settlement, SettlementKnowledge, StandingOrder, WorldState } from "../src/sim/types.ts";
+import { applyEvent } from "../src/sim/state.ts";
+import type { Character, Settlement, SettlementGround, SettlementKnowledge, SimEvent, StandingOrder, WorldState } from "../src/sim/types.ts";
 
 function commanderOf(world: WorldState): Character {
   return world.characters[world.players["prototype-player"].characterId];
@@ -54,9 +55,21 @@ interface PanelSettlement {
   stocks: Record<string, number> | null;
   prices: Record<string, number> | null;
   factionId: string | null;
-  combatForecast: { revealedFactors: string[]; defenderPower: { low: number; high: number } } | null;
   groundIntelligence: { source: string; observedTick: number; ageTicks: number } | null;
-  intelligence: { exact: boolean; present: boolean; source: string } | null;
+  garrisonIntelligence: { source: string; observedTick: number; ageTicks: number } | null;
+  intelligence: {
+    exact: boolean;
+    present: boolean;
+    source: string;
+    observedTick: number;
+    ageTicks: number;
+    confidence: number;
+  } | null;
+  combatForecast: {
+    revealedFactors: string[];
+    defenderPower: { low: number; high: number };
+    intelligence: { ageTicks: number | null; confidence: number };
+  } | null;
 }
 
 function panel(world: WorldState, settlementId: string): PanelSettlement {
@@ -481,6 +494,7 @@ test("no projected field is zero where the commander has no report", () => {
     "priceQuote",
     "combatForecast",
     "groundIntelligence",
+    "garrisonIntelligence",
     "ownerId",
     "intelligence",
     "factionId",
@@ -511,4 +525,328 @@ test("no projected field is zero where the commander has no report", () => {
   const owned = state.settlements.find((settlement) => settlement.id === "glassport")!;
   const ownedGround = owned.groundIntelligence as { source: string };
   assert.equal(ownedGround.source, "owned");
+});
+
+test("a remote garrison carries the report's tick and age, and a negative tick is not shown", () => {
+  const world = createPrototypeWorld(1847);
+  const commander = commanderOf(world);
+  const port = foreignPort(world, commander);
+  assert.ok(commander.knowledge[port.id].observedTick < 0, "the seeded rumor is backdated inside the simulation");
+
+  const shown = panel(world, port.id);
+  assert.equal(shown.garrison, commander.knowledge[port.id].garrisonEstimate);
+  assert.notEqual(shown.garrison, port.garrison, "the panel must not substitute the live garrison");
+  assert.ok(shown.garrisonIntelligence, "a remote garrison estimate must name its provenance");
+  assert.equal(shown.garrisonIntelligence.source, commander.knowledge[port.id].source);
+  assert.ok(shown.garrisonIntelligence.observedTick >= 0);
+  assert.equal(shown.garrisonIntelligence.observedTick, shown.intelligence?.observedTick);
+  assert.equal(shown.garrisonIntelligence.ageTicks, shown.intelligence?.ageTicks);
+  assert.ok(shown.combatForecast, "the forecast is the other surface that ages this report");
+  assert.equal(shown.garrisonIntelligence.ageTicks, shown.combatForecast.intelligence.ageTicks);
+  assert.ok(shown.garrisonIntelligence.ageTicks > 0, "a backdated rumor is old on day one, not fresh");
+  assert.ok(shown.intelligence && shown.intelligence.observedTick >= 0, "settlement intelligence must not print a tick before the world");
+});
+
+test("standing on an island, the forecast names the same fortification the panel shows", () => {
+  const world = createPrototypeWorld(1847);
+  const commander = commanderOf(world);
+  const port = foreignPort(world, commander);
+  place(commander, port.id);
+  commander.skills = { ...commander.skills, strategy: 80 };
+  commander.troops.count = 80;
+
+  const shown = panel(world, port.id);
+  assert.equal(shown.fortification, port.fortification);
+  const factor = shown.combatForecast?.revealedFactors.find((entry) => entry.includes("defensive ground"));
+  assert.equal(factor, `defensive ground is ${port.fortification.toFixed(2)}×, skill-scaled`);
+  const quoted = shown.combatForecast?.revealedFactors.join(" ") ?? "";
+  assert.equal(quoted.includes("estimated near"), false);
+  assert.equal(shown.garrisonIntelligence?.source, "direct-observation");
+  assert.equal(shown.garrisonIntelligence?.ageTicks, 0);
+});
+
+test("an officer already on the target is named, and the survey still completes immediately", () => {
+  const world = createPrototypeWorld(1847);
+  const commander = commanderOf(world);
+  const port = foreignPort(world, commander);
+  const officer = explorer(world, commander);
+  place(commander, "crown-harbor");
+  place(officer, port.id);
+
+  const away = submitCommand(world, {
+    playerId: "prototype-player",
+    type: "issue-order",
+    characterId: officer.id,
+    directive: "explore",
+    targetId: "crown-harbor",
+    priority: 0.95,
+  });
+  assert.equal(away.ok, true);
+  assert.equal(away.ok ? away.notice : "set", undefined, "an officer who must still sail is not described as already there");
+
+  const fresh = createPrototypeWorld(1847);
+  const freshCommander = commanderOf(fresh);
+  const freshPort = foreignPort(fresh, freshCommander);
+  const freshOfficer = explorer(fresh, freshCommander);
+  place(freshOfficer, freshPort.id);
+  const ordered = submitCommand(fresh, {
+    playerId: "prototype-player",
+    type: "issue-order",
+    characterId: freshOfficer.id,
+    directive: "explore",
+    targetId: freshPort.id,
+    priority: 0.95,
+  });
+  assert.equal(ordered.ok, true);
+  assert.match(ordered.ok ? ordered.notice ?? "" : "", /already at/);
+  assert.match(ordered.ok ? ordered.notice ?? "" : "", /officer already there/);
+
+  const completing = createPrototypeWorld(1847);
+  const completingCommander = commanderOf(completing);
+  const completingPort = foreignPort(completing, completingCommander);
+  const completingOfficer = explorer(completing, completingCommander);
+  stationExplorer(completing, completingOfficer, completingPort.id, true);
+  const events = runTick(completing).events;
+  const completion = events.find((event) =>
+    event.type === "standing-order-completion-reported" && event.actorId === completingOfficer.id
+  );
+  assert.ok(completion, "an officer already on the target still finishes on the issue tick");
+  assert.match(String(completion.data.summary), /officer already there/);
+  const report = events.find((event) => event.type === "knowledge-updated" && event.data.reason === "explore-report");
+  assert.equal(report?.data.alreadyPresent, true);
+  const lines = projectEventFeed(completing, completingCommander.id, events).map((event) => String(event.summary));
+  assert.ok(lines.some((line) => line.includes("officer already there")));
+
+  const later = createPrototypeWorld(1847);
+  const laterCommander = commanderOf(later);
+  const laterPort = foreignPort(later, laterCommander);
+  const laterOfficer = explorer(later, laterCommander);
+  stationExplorer(later, laterOfficer, laterPort.id, true);
+  laterOfficer.standingOrders[0].issuedTick = later.tick - 4;
+  laterOfficer.knowledge[laterPort.id].observedTick = later.tick;
+  const sailed = runTick(later).events.find((event) =>
+    event.type === "standing-order-completion-reported" && event.actorId === laterOfficer.id
+  );
+  assert.ok(sailed);
+  assert.match(String(sailed.data.summary), /considers the survey/);
+  assert.equal(String(sailed.data.summary).includes("already there"), false);
+});
+
+test("a player voyage the quoted passage cannot cover is refused", () => {
+  const world = createPrototypeWorld(1847);
+  const commander = commanderOf(world);
+  const destination = Object.values(world.settlements).find((settlement) => settlement.id !== commander.locationId)!;
+  const cost = passageCost(travelDuration(world, commander, destination.id));
+  commander.money = Math.max(0, cost - 0.01);
+  const refused = submitCommand(world, {
+    playerId: "prototype-player",
+    type: "character-action",
+    action: "travel",
+    targetId: destination.id,
+  });
+  assert.equal(refused.ok, false);
+  assert.equal(refused.ok === false ? refused.code : null, "insufficient-passage");
+  assert.match(refused.ok === false ? refused.error : "", new RegExp(String(cost)));
+  assert.equal(world.pendingCommands.length, 0);
+
+  commander.money = cost;
+  const accepted = submitCommand(world, {
+    playerId: "prototype-player",
+    type: "character-action",
+    action: "travel",
+    targetId: destination.id,
+  });
+  assert.equal(accepted.ok, true);
+});
+
+test("an autonomous party still sails when the purse cannot cover the passage", () => {
+  const world = createPrototypeWorld(1847);
+  const traveler = Object.values(world.characters).find((character) => character.controller.kind === "autonomous" && character.factionId)!;
+  const home = Object.values(world.settlements).find((settlement) => settlement.factionId === traveler.factionId)!;
+  place(traveler, home.id);
+  const away = Object.values(world.settlements).find((settlement) => settlement.id !== home.id)!;
+  traveler.money = 0;
+  traveler.health = 100;
+  traveler.morale = 100;
+  traveler.cargo = { provisions: 80, arms: 0, medicine: 0, shipMaterials: 0 };
+  traveler.personality = { caution: 0, ambition: 0, aggression: 0, loyalty: 0, commerce: 0, curiosity: 1 };
+  traveler.troops = { ...traveler.troops, count: 0 };
+  traveler.standingOrders = [];
+  traveler.captivity = null;
+  const goal = traveler.goals[0];
+  goal.status = "active";
+  goal.kind = "explore-world";
+  traveler.activeGoalId = goal.id;
+  traveler.plan = {
+    id: "sail-broke",
+    goalId: goal.id,
+    intent: "sail anyway",
+    preferredActions: ["travel"],
+    targetId: away.id,
+    createdTick: world.tick,
+    reviewAfterTick: world.tick + 500,
+    reason: "the passage check is not on this path",
+  };
+  traveler.lastPlanReviewTick = world.tick;
+  const cost = passageCost(travelDuration(world, traveler, away.id));
+  assert.ok(cost > traveler.money);
+
+  const sailed = runTick(world).events.find((event) => event.type === "travel-started" && event.actorId === traveler.id);
+  assert.ok(sailed, "autonomous travel does not use the player passage refusal");
+});
+
+const PLANTED_GROUND: SettlementGround = {
+  population: 1111,
+  fortification: 2.5,
+  observedTick: 0,
+  source: "direct",
+};
+
+function plantGround(character: Character, settlementId: string, ground: SettlementGround = PLANTED_GROUND): void {
+  const current = character.knowledge[settlementId];
+  character.knowledge[settlementId] = { ...current, ground: { ...ground } };
+}
+
+function replaceKnowledge(world: WorldState, actor: Character, settlementId: string, knowledge: SettlementKnowledge): void {
+  const event: SimEvent = {
+    sequence: world.nextEventSequence,
+    tick: world.tick,
+    type: "knowledge-updated",
+    actorId: actor.id,
+    settlementId,
+    data: { settlementId, knowledge, reason: "synthetic replacement" },
+  };
+  applyEvent(world, event);
+}
+
+test("every knowledge replacement carries ground forward unless the new record is newer ground", () => {
+  const seeded = createPrototypeWorld(1847);
+  const sources = new Set<string>();
+  for (const character of Object.values(seeded.characters)) {
+    for (const entry of Object.values(character.knowledge)) {
+      sources.add(entry.source);
+      assert.equal(entry.ground, undefined, `${entry.source} seeding must not invent ground`);
+    }
+  }
+  assert.deepEqual([...sources].sort(), ["direct", "faction-report", "rumor"]);
+
+  const world = createPrototypeWorld(1847);
+  const commander = commanderOf(world);
+  const port = foreignPort(world, commander);
+  place(commander, port.id);
+  plantGround(commander, port.id);
+
+  let daily: SimEvent | undefined;
+  for (let step = 0; step < 3 && !daily; step += 1) {
+    daily = runTick(world).events.find((event) =>
+      event.type === "knowledge-updated" &&
+      event.actorId === commander.id &&
+      event.settlementId === port.id &&
+      event.data.reason === "direct local observation"
+    );
+  }
+  assert.ok(daily, "daily refresh is a knowledge-updated writer");
+  assert.deepEqual((daily.data.knowledge as SettlementKnowledge).ground, PLANTED_GROUND);
+  assert.deepEqual(commander.knowledge[port.id].ground, PLANTED_GROUND);
+
+  const home = "crown-harbor";
+  assert.equal(submitCommand(world, {
+    playerId: "prototype-player",
+    type: "character-action",
+    action: "travel",
+    targetId: home,
+  }).ok, true);
+  let arrivedHome = false;
+  for (let step = 0; step < 20 && !arrivedHome; step += 1) {
+    arrivedHome = runTick(world).events.some((event) =>
+      event.type === "arrived" && event.actorId === commander.id && event.settlementId === home
+    );
+  }
+  assert.ok(arrivedHome);
+  assert.deepEqual(commander.knowledge[port.id].ground, PLANTED_GROUND, "leaving must not drop the survey");
+
+  assert.equal(submitCommand(world, {
+    playerId: "prototype-player",
+    type: "character-action",
+    action: "travel",
+    targetId: port.id,
+  }).ok, true);
+  let arrival: SimEvent | undefined;
+  for (let step = 0; step < 20 && !arrival; step += 1) {
+    arrival = runTick(world).events.find((event) =>
+      event.type === "knowledge-updated" &&
+      event.actorId === commander.id &&
+      event.settlementId === port.id &&
+      event.data.reason === "arrival observation"
+    );
+  }
+  assert.ok(arrival, "arrival is a knowledge-updated writer");
+  assert.deepEqual((arrival.data.knowledge as SettlementKnowledge).ground, PLANTED_GROUND);
+
+  commander.troops.count = 30;
+  port.garrison = 10;
+  world.activeBattles = {};
+  assert.equal(submitCommand(world, {
+    playerId: "prototype-player",
+    type: "character-action",
+    action: "raid",
+  }).ok, true);
+  const fought = runTick(world).events.filter((event) =>
+    event.type === "knowledge-updated" &&
+    event.actorId === commander.id &&
+    event.settlementId === port.id &&
+    String(event.data.reason).includes("assessment")
+  );
+  assert.ok(fought.length > 0, "combat observation is a knowledge-updated writer");
+  for (const event of fought) {
+    assert.deepEqual((event.data.knowledge as SettlementKnowledge).ground, PLANTED_GROUND);
+  }
+  assert.deepEqual(commander.knowledge[port.id].ground, PLANTED_GROUND);
+
+  const omitted = { ...commander.knowledge[port.id] };
+  delete omitted.ground;
+  replaceKnowledge(world, commander, port.id, omitted);
+  assert.deepEqual(commander.knowledge[port.id].ground, PLANTED_GROUND, "a payload that forgets ground must not erase it");
+
+  replaceKnowledge(world, commander, port.id, {
+    ...commander.knowledge[port.id],
+    ground: { population: 1, fortification: 1, observedTick: PLANTED_GROUND.observedTick - 1, source: "direct" },
+  });
+  assert.deepEqual(commander.knowledge[port.id].ground, PLANTED_GROUND, "an older ground record must not replace a newer one");
+
+  const newer: SettlementGround = { population: 2222, fortification: 3.25, observedTick: world.tick, source: "direct" };
+  replaceKnowledge(world, commander, port.id, { ...commander.knowledge[port.id], ground: newer });
+  assert.deepEqual(commander.knowledge[port.id].ground, newer);
+
+  const surveyed = createPrototypeWorld(1847);
+  const surveyor = commanderOf(surveyed);
+  const surveyPort = foreignPort(surveyed, surveyor);
+  place(surveyor, surveyPort.id);
+  plantGround(surveyor, surveyPort.id);
+  assert.equal(submitCommand(surveyed, {
+    playerId: "prototype-player",
+    type: "character-action",
+    action: "survey",
+  }).ok, true);
+  const surveyEvent = runTick(surveyed).events.find((event) => event.data.reason === "survey");
+  assert.ok(surveyEvent, "survey is a knowledge-updated writer");
+  const surveyGround = (surveyEvent.data.knowledge as SettlementKnowledge).ground;
+  assert.equal(surveyGround?.population, surveyPort.population);
+  assert.notEqual(surveyGround?.population, PLANTED_GROUND.population);
+  assert.equal(surveyGround?.observedTick, surveyEvent.tick);
+
+  const reported = createPrototypeWorld(1847);
+  const issuer = commanderOf(reported);
+  const reportPort = foreignPort(reported, issuer);
+  const officer = explorer(reported, issuer);
+  place(issuer, "crown-harbor");
+  plantGround(issuer, reportPort.id, { ...PLANTED_GROUND, observedTick: -5 });
+  stationExplorer(reported, officer, reportPort.id, true);
+  const delivered = runTick(reported).events.find((event) => event.data.reason === "explore-report");
+  assert.ok(delivered, "explore-report is a knowledge-updated writer");
+  const deliveredGround = (delivered.data.knowledge as SettlementKnowledge).ground;
+  assert.equal(deliveredGround?.population, reportPort.population);
+  assert.ok((deliveredGround?.observedTick ?? -1) > -5);
+  assert.equal(issuer.knowledge[reportPort.id].ground?.population, reportPort.population);
+  assert.equal(officer.knowledge[reportPort.id].ground, undefined, "the officer's own map is not given the delivered ground");
 });

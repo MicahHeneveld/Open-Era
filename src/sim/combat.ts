@@ -184,6 +184,9 @@ export function combatForecast(
       revealedFactors.push("defensive ground remains poorly understood");
     }
   } else if (strategy >= 70) {
+    // Stored this way so an active battle's forecast does not change the
+    // golden hashes. The player projection rewrites the line, while the
+    // commander is standing here, to the true wall and the words "skill-scaled".
     revealedFactors.push(`defensive ground estimated near ${round(fortificationEstimate, 2)}×`);
     revealedFactors.push(`battle variance constrained by strategy ${strategy}`);
   } else if (strategy >= 40) {

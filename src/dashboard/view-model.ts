@@ -14,7 +14,7 @@ import {
   type ProvisionRunway,
 } from "../sim/engine.ts";
 import { marketPrice, round, settlementClaimAvailableTo } from "../sim/state.ts";
-import { RESOURCE_KEYS, type ActiveBattle, type Character, type SettlementKnowledge, type SimEvent, type WorldState } from "../sim/types.ts";
+import { RESOURCE_KEYS, type ActiveBattle, type Character, type CombatForecast, type SettlementKnowledge, type SimEvent, type WorldState } from "../sim/types.ts";
 import { projectCharacter, projectEvent, projectFactions } from "./visibility.ts";
 
 /**
@@ -107,6 +107,11 @@ function eventSummary(world: WorldState, event: SimEvent): string {
       return `${actor} will reply later`;
     case "conversation-reply-created":
       return `${actor} replied`;
+    case "knowledge-updated":
+      if (event.data.reason === "explore-report" && event.data.alreadyPresent === true) {
+        return `${actor} received a survey of ${settlement} from an officer already there`;
+      }
+      return `${actor}: ${event.type.replaceAll("-", " ")}`;
     default:
       return `${actor}: ${event.type.replaceAll("-", " ")}`;
   }
@@ -655,6 +660,63 @@ function projectPriceDrift(
   );
 }
 
+/**
+ * Age of a stored report, as the forecast already counts it.
+ *
+ * Seeded hearsay can carry a negative `observedTick`. That backdate is how the
+ * simulation treats a report from before the world, and `combatForecast` ages
+ * it from the raw tick. The player is not shown a tick that never happened.
+ * Flooring the tick and also zeroing the age would make a stale rumor look
+ * fresh, and the panel would disagree with the band.
+ */
+function reportedAge(world: WorldState, observedTick: number): { observedTick: number; ageTicks: number } {
+  return {
+    observedTick: Math.max(0, observedTick),
+    ageTicks: Math.max(0, world.tick - observedTick),
+  };
+}
+
+/**
+ * Where a remote garrison figure was seen.
+ *
+ * Own-faction ports and the island underfoot are present numbers. Away, the
+ * figure is the stored estimate, and it keeps the report's tick and age so a
+ * frozen garrison cannot be read as the island's current strength.
+ */
+function projectGarrisonIntelligence(
+  world: WorldState,
+  exact: boolean,
+  coLocated: boolean,
+  knowledge: SettlementKnowledge | undefined,
+): { source: string; observedTick: number; ageTicks: number } | null {
+  if (exact) return { source: "owned", observedTick: world.tick, ageTicks: 0 };
+  if (coLocated) return { source: "direct-observation", observedTick: world.tick, ageTicks: 0 };
+  if (!knowledge) return null;
+  return { source: knowledge.source, ...reportedAge(world, knowledge.observedTick) };
+}
+
+/**
+ * One fortification figure while the commander is standing on the island.
+ *
+ * The forecast scales the wall by strategy (`1 + (wall − 1) × (0.35 + skill × 0.65)`).
+ * Printing that product beside the true wall made 1.16 and 1.13× look like two
+ * measurements. The panel keeps the true wall. This factor names that same
+ * wall and says the defender band is skill-scaled. The world state's stored
+ * forecast is left alone. The player projection rewrites it only while the
+ * commander is on that island, including an active battle they are fighting,
+ * so a remote forecast cannot be handed the live wall.
+ */
+function presentFortification(forecast: CombatForecast, fortification: number): CombatForecast {
+  const label = `defensive ground is ${round(fortification, 2).toFixed(2)}×, skill-scaled`;
+  let changed = false;
+  const revealedFactors = forecast.revealedFactors.map((factor) => {
+    if (!factor.startsWith("defensive ground estimated near ")) return factor;
+    changed = true;
+    return label;
+  });
+  return changed ? { ...forecast, revealedFactors } : forecast;
+}
+
 function projectPriceQuote(
   world: WorldState,
   live: boolean,
@@ -691,8 +753,10 @@ function projectGroundIntelligence(
 }
 
 function projectCommandedBattle(world: WorldState, battle: ActiveBattle): Record<string, unknown> {
+  const fortification = world.settlements[battle.settlementId].fortification;
   return {
     ...battle,
+    startingForecast: presentFortification(battle.startingForecast, fortification),
     settlementName: world.settlements[battle.settlementId].name,
     retreatDestinationName: battle.retreatDestinationId
       ? world.settlements[battle.retreatDestinationId]?.name ?? "Open waters"
@@ -895,13 +959,16 @@ export function dashboardState(
         !battleVisible &&
         !commandedBattle &&
         (coLocated || knowledge !== undefined);
-      const forecast = forecastAvailable ? combatForecast(world, commander.id, settlement.id) : null;
+      const rawForecast = forecastAvailable ? combatForecast(world, commander.id, settlement.id) : null;
+      const forecast = rawForecast && coLocated ? presentFortification(rawForecast, settlement.fortification) : rawForecast;
       const voyage = travelEstimate(world, commander, settlement.id);
       // Standing in a settlement is direct perception of the ground, and it does
       // not last. A survey, or an officer's delivered report, is what remains
       // after the commander leaves; without one the panel says unknown.
       const recordedGround = coLocated ? undefined : knowledge?.ground;
       const groundIntelligence = projectGroundIntelligence(world, exact, coLocated, knowledge);
+      const garrisonIntelligence = projectGarrisonIntelligence(world, exact, coLocated, knowledge);
+      const reported = knowledge ? reportedAge(world, knowledge.observedTick) : null;
       // What the commander can trade, and on what terms, wherever they are
       // standing. Trading needs a market they are physically at, so this is the
       // only place the true stock and price may be quoted — and building it from
@@ -950,6 +1017,7 @@ export function dashboardState(
           passageCost: voyage.passageCost,
           passageCostPerTick: voyage.passageCostPerTick,
           groundIntelligence,
+          garrisonIntelligence,
           intelligence: (knowledge || coLocated) ? {
             exact: false,
             /** True when these figures are what the commander can see right now. */
@@ -959,8 +1027,8 @@ export function dashboardState(
             // the stored confidence independently here is how the panel and the
             // forecast came to show different numbers for one report.
             confidence: coLocated ? 1 : believedGarrison(world, commander, settlement.id).confidence,
-            observedTick: coLocated ? world.tick : knowledge!.observedTick,
-            ageTicks: coLocated ? 0 : world.tick - knowledge!.observedTick,
+            observedTick: coLocated ? world.tick : reported!.observedTick,
+            ageTicks: coLocated ? 0 : reported!.ageTicks,
           } : null,
         };
       }
@@ -984,6 +1052,7 @@ export function dashboardState(
         passageCost: voyage.passageCost,
         passageCostPerTick: voyage.passageCostPerTick,
         groundIntelligence,
+        garrisonIntelligence,
         intelligence: { exact: true, present: commander.locationId === settlement.id, source: "owned", confidence: 1, observedTick: world.tick, ageTicks: 0 },
       };
     }),

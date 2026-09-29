@@ -30,6 +30,7 @@ import {
   marketPrice,
   resourcePrice,
   partyPower,
+  retainGround,
   round,
   settlementClaimAvailableTo,
   SURRENDER_GARRISON_THRESHOLD,
@@ -50,6 +51,7 @@ import {
   type EventDraft,
   type ResourceKey,
   type Resources,
+  type SettlementKnowledge,
   type SimEvent,
   type StandingOrder,
   type TickResult,
@@ -1949,6 +1951,9 @@ function resolveDecision(
 
   switch (chosen.action) {
     case "travel": {
+      // The purse check lives on the player command, not here. An autonomous
+      // party still sails and pays what it has each sea tick. Refusing that
+      // path would change histories the golden hashes record.
       const destinationId = chosen.targetId!;
       const totalTicks = travelDuration(world, character, destinationId);
       emit(world, events, {
@@ -2107,21 +2112,22 @@ function resolveDecision(
       // stocks and prices without recording the ground; only this verb does.
       const observed = directObservation(world, character);
       if (!observed) break;
+      const surveyed: SettlementKnowledge = {
+        ...observed,
+        ground: {
+          population: settlement.population,
+          fortification: settlement.fortification,
+          observedTick: world.tick,
+          source: "direct",
+        },
+      };
       emit(world, events, {
         type: "knowledge-updated",
         actorId: character.id,
         settlementId,
         data: {
           settlementId,
-          knowledge: {
-            ...observed,
-            ground: {
-              population: settlement.population,
-              fortification: settlement.fortification,
-              observedTick: world.tick,
-              source: "direct",
-            },
-          },
+          knowledge: retainGround(character.knowledge[settlementId], surveyed),
           reason: "survey",
         },
       });
@@ -2147,31 +2153,37 @@ function deliverTargetedExploreReport(
   const targetId = order.targetId;
   if (!targetId || order.directive !== "explore" || officer.locationId !== targetId) return;
   const settlement = world.settlements[targetId];
+  const issuer = world.characters[order.issuerId];
   const observed = directObservation(world, officer);
-  if (!observed || observed.settlementId !== targetId || !world.characters[order.issuerId]) return;
+  if (!observed || observed.settlementId !== targetId || !issuer) return;
+  // Issued and completed on this tick: the officer was already standing there.
+  // Travel takes at least two ticks, so this is not a voyage that finished early.
+  const alreadyPresent = order.issuedTick === world.tick;
+  const reported: SettlementKnowledge = {
+    settlementId: targetId,
+    observedTick: world.tick,
+    confidence: observed.confidence,
+    factionId: observed.factionId,
+    garrisonEstimate: observed.garrisonEstimate,
+    stocksEstimate: { ...observed.stocksEstimate },
+    priceEstimate: { ...observed.priceEstimate },
+    source: "faction-report",
+    ground: {
+      population: settlement.population,
+      fortification: settlement.fortification,
+      observedTick: world.tick,
+      source: "faction-report",
+    },
+  };
   emit(world, events, {
     type: "knowledge-updated",
     actorId: order.issuerId,
     settlementId: targetId,
     data: {
       settlementId: targetId,
-      knowledge: {
-        settlementId: targetId,
-        observedTick: world.tick,
-        confidence: observed.confidence,
-        factionId: observed.factionId,
-        garrisonEstimate: observed.garrisonEstimate,
-        stocksEstimate: { ...observed.stocksEstimate },
-        priceEstimate: { ...observed.priceEstimate },
-        source: "faction-report",
-        ground: {
-          population: settlement.population,
-          fortification: settlement.fortification,
-          observedTick: world.tick,
-          source: "faction-report",
-        },
-      },
+      knowledge: retainGround(issuer.knowledge[targetId], reported),
       reason: "explore-report",
+      ...(alreadyPresent ? { alreadyPresent: true } : {}),
     },
   });
 }

@@ -1,5 +1,5 @@
 import { DeterministicRng } from "./rng.ts";
-import { clamp, marketPrice, round } from "./state.ts";
+import { clamp, marketPrice, retainGround, round } from "./state.ts";
 import {
   RESOURCE_KEYS,
   type Character,
@@ -121,10 +121,6 @@ export function directObservation(world: WorldState, character: Character): Sett
   if (!character.locationId) return null;
   const settlement = world.settlements[character.locationId];
   const previous = character.knowledge[settlement.id];
-  // Garrison, stocks and prices are what is here now. Ground is not: nothing
-  // in a passive refresh records walls or population, and writing them here
-  // would turn standing in a port into a survey. A survey that already happened
-  // has to survive, because the reducer replaces the whole entry.
   const knowledge: SettlementKnowledge = {
     settlementId: settlement.id,
     observedTick: world.tick,
@@ -137,8 +133,10 @@ export function directObservation(world: WorldState, character: Character): Sett
     ) as SettlementKnowledge["priceEstimate"],
     source: "direct",
   };
-  if (previous?.ground) knowledge.ground = { ...previous.ground };
-  return knowledge;
+  // Garrison, stocks and prices are what is here now. Ground is not copied from
+  // the settlement: standing in a port is not a survey. A survey already stored
+  // has to survive, because the reducer replaces the whole entry.
+  return retainGround(previous, knowledge);
 }
 
 export function needsObservation(world: WorldState, character: Character): boolean {
@@ -423,7 +421,15 @@ export function judgeOrderCompletion(
     const knowledge = targetId ? character.knowledge[targetId] : undefined;
     if (targetId && character.locationId === targetId && knowledge?.source === "direct" && knowledge.observedTick >= order.issuedTick) {
       evidence = 0.88;
-      summary = `${character.name} considers the survey of ${world.settlements[targetId].name} complete and requests confirmation.`;
+      const place = world.settlements[targetId].name;
+      // Same tick as the order, and already standing on the target: the report
+      // did not cost a voyage. A later completion keeps the ordinary line,
+      // including an officer who sailed there. Untargeted explores have no
+      // target to already be at.
+      const alreadyThere = order.targetId !== undefined && order.issuedTick === world.tick;
+      summary = alreadyThere
+        ? `${character.name} was already at ${place} and reports the survey from an officer already there. The survey is complete and awaits confirmation.`
+        : `${character.name} considers the survey of ${place} complete and requests confirmation.`;
     }
   }
 
