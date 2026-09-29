@@ -1,0 +1,213 @@
+import assert from "node:assert/strict";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import test from "node:test";
+import { createDashboardApp } from "../src/dashboard/server.ts";
+import { dashboardState, fullEventFeed } from "../src/dashboard/view-model.ts";
+import { projectCharacter, seaSightingsFor } from "../src/dashboard/visibility.ts";
+import { provisionRunway, travelDuration } from "../src/sim/engine.ts";
+import { createPrototypeWorld } from "../src/sim/scenario.ts";
+import { round } from "../src/sim/state.ts";
+import type { Character, PartySighting, SimEvent, WorldState } from "../src/sim/types.ts";
+
+function commanderOf(world: WorldState): Character {
+  return world.characters[world.players["prototype-player"].characterId];
+}
+
+function sail(
+  character: Character,
+  fromId: string,
+  toId: string,
+  totalTicks: number,
+  remainingTicks: number,
+): void {
+  character.locationId = null;
+  character.captivity = null;
+  character.travel = { fromId, toId, totalTicks, remainingTicks };
+}
+
+function event(partial: Partial<SimEvent> & Pick<SimEvent, "type">): SimEvent {
+  return {
+    sequence: partial.sequence ?? 1,
+    tick: partial.tick ?? 0,
+    type: partial.type,
+    actorId: partial.actorId,
+    targetId: partial.targetId,
+    settlementId: partial.settlementId,
+    data: partial.data ?? {},
+  };
+}
+
+test("a shared stretch says so, and does not use sharing as a verb", () => {
+  const world = createPrototypeWorld(1847);
+  const mara = commanderOf(world);
+  const sable = world.characters["character-04"];
+  sail(mara, "cinder-key", "glassport", 4, 2);
+  sail(sable, "cinder-key", "glassport", 4, 2);
+  sable.troops.count = 19;
+  const row = seaSightingsFor(world, mara)?.[sable.id];
+  assert.ok(row);
+  assert.equal(row.kind, "sharing");
+  assert.equal(
+    row.summary,
+    "Sable Morrow is in the same stretch of water, Cinder Key to Glassport. 19 troops, 0 ticks old.",
+  );
+});
+
+test("a port record is labelled Sighted troops in the state the player reads", () => {
+  const world = createPrototypeWorld(1847);
+  const mara = commanderOf(world);
+  const sable = world.characters["character-04"];
+  const sighting: PartySighting = {
+    characterId: sable.id,
+    locationId: "cinder-key",
+    travel: null,
+    troops: 21,
+    partyPower: 1,
+    observedTick: 0,
+    source: "direct",
+    confidence: 1,
+  };
+  mara.partySightings = { [sable.id]: sighting };
+  const card = projectCharacter(world, mara, sable);
+  const port = card.partySighting as { label: string; troops: number };
+  assert.equal(port.label, "Sighted troops");
+  assert.equal(port.troops, 21);
+  const own = projectCharacter(world, mara, mara);
+  const listed = (own.partySightings as Record<string, { label: string }>)[sable.id];
+  assert.equal(listed.label, "Sighted troops");
+  assert.equal(sighting && "label" in sighting, false);
+});
+
+test("capture, battle, and release briefing titles are not the event type", () => {
+  const world = createPrototypeWorld(1847);
+  const events = [
+    event({
+      sequence: 10,
+      type: "character-captured",
+      actorId: "character-11",
+      targetId: "free-tide",
+      settlementId: "glassport",
+      data: { cause: "failed-retreat" },
+    }),
+    event({
+      sequence: 11,
+      type: "battle-resolved",
+      actorId: "character-01",
+      targetId: "free-tide",
+      settlementId: "crown-harbor",
+      data: { outcome: "attacker-victory" },
+    }),
+    event({
+      sequence: 12,
+      type: "captivity-released",
+      actorId: "character-04",
+      settlementId: "cinder-key",
+      data: { terms: { moneyPaid: 13.4, debtValue: 103.21 } },
+    }),
+  ];
+  const view = dashboardState(world, events, fullEventFeed([])) as {
+    briefing: { items: Array<{ id: string; title: string }> };
+  };
+  const title = (id: string) => view.briefing.items.find((item) => item.id === id)?.title;
+  assert.equal(title("event:10"), "Prisoner taken");
+  assert.equal(title("event:11"), "Battle decided");
+  assert.equal(title("event:12"), "Prisoner released");
+});
+
+test("an empty berth is named, and a stocked market is not called unsold", () => {
+  const world = createPrototypeWorld(1847);
+  const commander = commanderOf(world);
+  commander.locationId = "crown-harbor";
+  commander.travel = null;
+  commander.cargo.provisions = 0;
+  commander.morale = 0;
+  for (const settlement of Object.values(world.settlements)) {
+    settlement.stocks.provisions = 0;
+  }
+  const glassport = world.settlements["glassport"];
+  glassport.factionId = commander.factionId;
+  glassport.stocks.provisions = 40;
+  const runway = provisionRunway(world, commander);
+  const ticks = travelDuration(world, commander, "glassport");
+  const view = dashboardState(world, [], fullEventFeed([])) as {
+    briefing: { items: Array<{ id: string; summary: string; settlementId: string | null }> };
+  };
+  const starving = view.briefing.items.find((item) => item.id === "provision:critical");
+  assert.ok(starving);
+  assert.equal(starving.settlementId, "glassport");
+  assert.equal(
+    starving.summary,
+    `The hold is empty and ${runway.shortage} provisions per tick cannot be found. That costs health ${runway.shortageHealthPerTick} per tick. Morale is already 0, so the shortage does not lower it. Morale gains nothing while the shortage lasts, so it will not recover on its own. Crown Harbor has no provisions to sell. Glassport is ${ticks} ticks away — out of reach, which is short by ${ticks - runway.runwayTicks} ticks.`,
+  );
+
+  commander.captivity = {
+    captorFactionId: "free-tide",
+    settlementId: "crown-harbor",
+    capturedTick: 1,
+    mandatoryReleaseTick: 80,
+    cause: "failed-retreat",
+    displayedRisk: "low",
+    scatteredTroops: { count: 0, experience: 0, discipline: 0 },
+    releaseDestinationId: null,
+  };
+  glassport.stocks.provisions = 0;
+  const verdant = world.settlements["verdant-cay"];
+  verdant.factionId = commander.factionId;
+  verdant.stocks.provisions = 269;
+  const held = dashboardState(world, [], fullEventFeed([])) as {
+    briefing: { items: Array<{ id: string; summary: string }> };
+  };
+  const heldLine = held.briefing.items.find((item) => item.id === "provision:critical");
+  assert.ok(heldLine);
+  const heldRunway = provisionRunway(world, commander);
+  assert.equal(
+    heldLine.summary,
+    `The hold is empty and ${heldRunway.shortage} provisions per tick cannot be found. That costs health ${heldRunway.shortageHealthPerTick} per tick. Morale is already 0, so the shortage does not lower it. Morale gains nothing while the shortage lasts, so it will not recover on its own. Crown Harbor has no provisions to sell. Verdant Cay sells provisions, and you cannot reach it from here.`,
+  );
+});
+
+test("the commander's loyalty note does not print the raw seed", () => {
+  const world = createPrototypeWorld(1847);
+  const commander = commanderOf(world);
+  const seed = commander.personality.loyalty;
+  const plain = projectCharacter(world, commander, commander);
+  assert.equal(
+    plain.loyaltyNote,
+    `The seat reads personality loyalty, with no stored adjustment. This card shows ${round(seed, 3)}. personality.loyalty is the seed and is not the figure the seat reads.`,
+  );
+  assert.equal(String(plain.loyaltyNote).includes(String(seed)), false);
+  commander.loyaltyAdjustment = -0.04;
+  const scarred = projectCharacter(world, commander, commander);
+  assert.equal(
+    scarred.loyaltyNote,
+    "The seat reads the unrounded sum of personality loyalty and the stored adjustment -0.04. This card shows 0.768. personality.loyalty is the seed and is not the figure the seat reads.",
+  );
+  assert.equal(String(scarred.loyaltyNote).includes("0.767927391717676"), false);
+  assert.equal(String(scarred.loyaltyNote).includes("0.807927391717676"), false);
+});
+
+test("an advance response rounds day the way the state does", async () => {
+  const directory = mkdtempSync(join(tmpdir(), "open-era-readability-"));
+  const app = createDashboardApp({ databasePath: join(directory, "dashboard.sqlite"), seed: 1847 });
+  try {
+    await new Promise<void>((resolve) => app.server.listen(0, "127.0.0.1", resolve));
+    const address = app.server.address();
+    if (!address || typeof address === "string") throw new Error("Dashboard did not bind a TCP port");
+    const base = `http://127.0.0.1:${address.port}`;
+    const advance = await fetch(`${base}/api/advance`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ ticks: 2 }),
+    });
+    const body = await advance.json() as { day: number; tick: number };
+    assert.equal(body.tick, 2);
+    assert.equal(body.day, 0.33);
+    const state = await (await fetch(`${base}/api/state`)).json() as { day: number };
+    assert.equal(state.day, 0.33);
+  } finally {
+    await app.close();
+    rmSync(directory, { recursive: true, force: true });
+  }
+});

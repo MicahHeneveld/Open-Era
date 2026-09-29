@@ -261,14 +261,13 @@ test("the commander's card says which loyalty figure the seat reads", () => {
   const rounded = round(seed, 3);
   assert.equal(
     plain.loyaltyNote,
-    `The seat reads ${seed}, personality loyalty with no stored adjustment. The loyalty figure on this card rounds that to ${rounded}.`,
+    `The seat reads personality loyalty, with no stored adjustment. This card shows ${rounded}. personality.loyalty is the seed and is not the figure the seat reads.`,
   );
   commander.loyaltyAdjustment = -0.04;
   const scarred = projectCharacter(world, commander, commander);
-  const sum = seed + -0.04;
   assert.equal(
     scarred.loyaltyNote,
-    `The seat reads ${sum}, personality loyalty ${seed} plus the stored adjustment -0.04. The loyalty figure on this card rounds that to ${round(sum, 3)}. personality.loyalty is the seed and is not the figure the seat reads.`,
+    `The seat reads the unrounded sum of personality loyalty and the stored adjustment -0.04. This card shows ${round(seed + -0.04, 3)}. personality.loyalty is the seed and is not the figure the seat reads.`,
   );
   const mate = world.characters["character-05"];
   assert.equal(projectCharacter(world, commander, mate).loyaltyNote, null);

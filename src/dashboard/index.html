@@ -808,7 +808,7 @@
           stat("Party power", item.partyPower) +
           stat("Troops", item.troops ? item.troops.count : null) +
           (item.troops == null && item.partySighting
-            ? '<div class="stat"><span>Sighted troops</span><strong>' + item.partySighting.troops + ' <span class="subtle">' + item.partySighting.ageTicks + " ticks old</span></strong></div>"
+            ? '<div class="stat"><span>' + esc(item.partySighting.label || "Sighted troops") + '</span><strong>' + item.partySighting.troops + ' <span class="subtle">' + item.partySighting.ageTicks + " ticks old</span></strong></div>"
             : "") +
           (item.troops == null && item.seaSighting
             ? '<div class="stat"><span>' + esc(item.seaSighting.kind) + '</span><strong>' + item.seaSighting.troops + ' <span class="subtle">' + item.seaSighting.ageTicks + " ticks old</span></strong></div>"

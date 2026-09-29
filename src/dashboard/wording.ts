@@ -194,13 +194,24 @@ export function seatSummaryFor(world: WorldState, faction: Faction): string | nu
  * `displayedLoyalty` is that sum rounded to 3 decimals, the `loyalty` field.
  */
 export function loyaltyNoteFor(character: Character, displayedLoyalty: number): string {
-  const seed = character.personality.loyalty;
   const adjustment = character.loyaltyAdjustment;
-  const sum = seed + (adjustment ?? 0);
   if (adjustment === undefined || adjustment === 0) {
-    return `The seat reads ${sum}, personality loyalty with no stored adjustment. The loyalty figure on this card rounds that to ${displayedLoyalty}.`;
+    return `The seat reads personality loyalty, with no stored adjustment. This card shows ${displayedLoyalty}. personality.loyalty is the seed and is not the figure the seat reads.`;
   }
-  return `The seat reads ${sum}, personality loyalty ${seed} plus the stored adjustment ${adjustment}. The loyalty figure on this card rounds that to ${displayedLoyalty}. personality.loyalty is the seed and is not the figure the seat reads.`;
+  return `The seat reads the unrounded sum of personality loyalty and the stored adjustment ${adjustment}. This card shows ${displayedLoyalty}. personality.loyalty is the seed and is not the figure the seat reads.`;
+}
+
+/**
+ * Briefing title for an event row.
+ *
+ * The raw type (`character captured`) reads as if the prisoner did the capturing.
+ * These three name the outcome. Every other type stays the words of the type.
+ */
+export function eventBriefingTitle(type: string): string {
+  if (type === "character-captured") return "Prisoner taken";
+  if (type === "battle-resolved") return "Battle decided";
+  if (type === "captivity-released") return "Prisoner released";
+  return type.replaceAll("-", " ");
 }
 
 export function skillsWithheldNote(name: string, tier: string, source: string): string {

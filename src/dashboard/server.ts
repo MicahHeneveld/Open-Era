@@ -19,6 +19,7 @@ import {
   type SendMessageRequest,
 } from "../sim/conversations.ts";
 import { runTick } from "../sim/engine.ts";
+import { round } from "../sim/state.ts";
 import { WorldStore, EVENT_FEED_PAGE_DEFAULT, EVENT_FEED_PAGE_LIMIT } from "../sim/persistence.ts";
 import { createPrototypeWorld } from "../sim/scenario.ts";
 import type { SimEvent, WorldState } from "../sim/types.ts";
@@ -170,7 +171,7 @@ export function createDashboardApp(options: DashboardOptions): DashboardApp {
         json(response, 200, {
           ok: true,
           tick: world.tick,
-          day: world.tick / world.ticksPerDay,
+          day: round(world.tick / world.ticksPerDay, 2),
           ticksAdvanced,
           combatUpdated,
           attentionUpdated,

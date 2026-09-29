@@ -23,6 +23,7 @@ import {
   captivityReleasedSentence,
   causeLabelFor,
   characterCapturedSentence,
+  eventBriefingTitle,
   higherScoreClause,
   passageUpkeepSentence,
 } from "./wording.ts";
@@ -252,6 +253,46 @@ function provisionPlan(
 }
 
 /**
+ * The port the commander is standing in, when its shelf has nothing to sell.
+ * Null at sea, and null when that shelf still has a provision. Standing there
+ * is what makes the live stock readable.
+ */
+function emptyBerthName(world: WorldState, commander: Character): string | null {
+  if (commander.travel || !commander.locationId) return null;
+  const here = world.settlements[commander.locationId];
+  if (!here || here.stocks.provisions >= 1) return null;
+  return here.name;
+}
+
+/**
+ * Where food is, in words that match the resupply block.
+ *
+ * A market with stock is not "a market that does not sell". A null voyage means
+ * the commander cannot sail there (held, or already at sea toward somewhere else).
+ * An empty berth is named even when the nearest stock is another port.
+ */
+function provisionSourceHint(
+  world: WorldState,
+  commander: Character,
+  resupply: ProvisionPlan | null,
+  runway: ProvisionRunway,
+): string {
+  const berth = emptyBerthName(world, commander);
+  const here = berth ? `${berth} has no provisions to sell. ` : "";
+  if (!resupply) {
+    return here ? `${here}No settlement you know of has provisions to sell.` : "No settlement you know of has provisions to sell.";
+  }
+  if (resupply.aboard) return `${resupply.name} is alongside and sells provisions.`;
+  if (resupply.travelTicks === null) {
+    return `${here}${resupply.name} sells provisions, and you cannot reach it from here.`;
+  }
+  const reach = resupply.reachable
+    ? "within reach, but there will be nothing to spare"
+    : `out of reach, which is short by ${resupply.travelTicks - runway.runwayTicks} ticks`;
+  return `${here}${resupply.name} is ${resupply.travelTicks} ticks${resupply.exact ? "" : " by report"} away — ${reach}.`;
+}
+
+/**
  * Background reports shown at once. Applies to informational items only: an
  * action-required decision is never withheld, because a decision the player
  * cannot see is a decision the player cannot make.
@@ -364,17 +405,7 @@ function checkInBriefing(world: WorldState, commanderId: string, events: SimEven
   // no warning, and one lost thirty-three ticks of morale to that silence.
   const runway = provisionRunway(world, commander);
   const resupply = provisionPlan(world, commander, runway);
-  const sourceHint = resupply
-    ? resupply.aboard
-      ? `${resupply.name} is alongside and sells provisions.`
-      : resupply.travelTicks === null
-        ? `No market you could still reach sells provisions.`
-        : `${resupply.name} is ${resupply.travelTicks} ticks${resupply.exact ? "" : " by report"} away — ${
-          resupply.reachable
-            ? "within reach, but there will be nothing to spare"
-            : `out of reach, which is short by ${resupply.travelTicks - runway.runwayTicks} ticks`
-        }.`
-    : "No settlement you know of has provisions to sell.";
+  const sourceHint = provisionSourceHint(world, commander, resupply, runway);
   if (runway.shortage > 0) {
     // At 0 the subtraction does not move the stored morale, so the line does not quote a cost that cannot land.
     const moraleCost = commander.morale <= 0
@@ -546,7 +577,7 @@ function checkInBriefing(world: WorldState, commanderId: string, events: SimEven
       sequence: event.sequence,
       severity: warning ? "warning" : "info",
       actionRequired: false,
-      title: event.type.replaceAll("-", " "),
+      title: eventBriefingTitle(event.type),
       summary: eventSummary(world, event, events),
       day: round(event.tick / world.ticksPerDay, 2),
       characterId: event.targetId && world.characters[event.targetId] ? event.targetId : event.actorId,

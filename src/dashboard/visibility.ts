@@ -145,10 +145,11 @@ export function visibleStandingOrders(commander: Character, character: Character
 function projectPartySighting(
   world: WorldState,
   sighting: PartySighting,
-): PartySighting & { ageTicks: number } {
+): PartySighting & { ageTicks: number; label: "Sighted troops" } {
   return {
     ...sighting,
     ageTicks: Math.max(0, world.tick - sighting.observedTick),
+    label: "Sighted troops",
   };
 }
 
@@ -161,7 +162,7 @@ function projectPartySighting(
 function projectPartySightings(
   world: WorldState,
   sightings: Character["partySightings"],
-): Record<string, PartySighting & { ageTicks: number }> | null {
+): Record<string, PartySighting & { ageTicks: number; label: "Sighted troops" }> | null {
   if (!sightings) return null;
   return Object.fromEntries(
     Object.entries(sightings).map(([characterId, sighting]) => [
@@ -337,7 +338,9 @@ function seaSummary(
   const from = world.settlements[travel.fromId]?.name ?? travel.fromId;
   const to = world.settlements[travel.toId]?.name ?? travel.toId;
   const dock = arriving ? ` Docks at ${to} on this tick.` : "";
-  return `${subject.name} is ${kind}, ${from} to ${to}.${dock} ${troops} troops, ${ageTicks} ticks old.`;
+  // `sharing` is not a motion. The other kinds already read as one.
+  const relation = kind === "sharing" ? "in the same stretch of water" : kind;
+  return `${subject.name} is ${relation}, ${from} to ${to}.${dock} ${troops} troops, ${ageTicks} ticks old.`;
 }
 
 export interface OutOfStretch {
