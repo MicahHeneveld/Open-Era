@@ -23,6 +23,8 @@ Player-created faction structure evolves as the organization grows rather than r
 
 Delegating information is distinct from delegating authority. An appointed reporting officer may filter and summarize routine updates, but the original issuer still confirms completion, changes objectives, and cancels orders unless a later office system explicitly grants broader powers.
 
+The person who issues a faction's standing orders holds the command seat. That name is not stored. While their captivity is set, the free faction mate with the highest leadership plus loyalty times 50 covers the seat, and a lower id wins a tie. Anyone already captive is skipped. The cover is chosen when the holder is captured, and again only if that cover is captured. It is removed when the holder is released or escapes. The cover does not issue, confirm, retarget, or set the tax. The reporting officer stays a separate job. Both names are public, including to a rival. A rival's treasury and power stay hidden. Choosing a commander, and a permanent change of seat, wait.
+
 Deputy behavior is personality- and loyalty-sensitive. The current decision record permits routine budgets, production, taxes, defensive responses, minor agreements, and potentially even high-impact acts such as law changes, war, secession, or disposal of major assets. That last category needs explicit authorization guardrails before production; loyalty alone is not a sufficient security boundary.
 
 ## Economy

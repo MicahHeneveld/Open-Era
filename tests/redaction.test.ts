@@ -12,7 +12,7 @@ import {
 } from "../src/dashboard/visibility.ts";
 import { runTick } from "../src/sim/engine.ts";
 import { createPrototypeWorld } from "../src/sim/scenario.ts";
-import { round, stateHash } from "../src/sim/state.ts";
+import { applyEvent, round, stateHash } from "../src/sim/state.ts";
 import type { Character, SimEvent, WorldState } from "../src/sim/types.ts";
 
 interface ProjectedIntelligence {
@@ -46,6 +46,8 @@ interface ProjectedFaction {
   id: string;
   name: string;
   color: string;
+  commanderId: string | null;
+  actingCommanderId: string | null;
   treasury: number | null;
   taxRate: number | null;
   power: number | null;
@@ -216,6 +218,57 @@ test("a landless mate at Verdant Cay is distant and a rival faction hides its pu
   assert.ok(rival, "a faction with no ports is still listed");
   assert.equal(rival.treasury, null);
   assert.equal(rival.power, null);
+});
+
+test("a rival row names the seat and the cover, and still hides treasury and power", () => {
+  const { world, commander } = fixture();
+  const atStart = projectFactions(world, commander) as unknown as ProjectedFaction[];
+  const own = atStart.find((faction) => faction.id === commander.factionId);
+  const rival = atStart.find((faction) => faction.id === "free-tide");
+  assert.ok(own);
+  assert.ok(rival);
+  assert.equal(commander.name, "Mara Vane");
+  assert.equal(own.commanderId, "character-01");
+  assert.equal(own.actingCommanderId, null);
+  assert.equal(rival.commanderId, "character-14");
+  assert.equal(rival.actingCommanderId, null);
+  assert.equal(rival.treasury, null);
+  assert.equal(rival.power, null);
+
+  const pax = world.characters["character-14"];
+  assert.equal(pax.name, "Pax Ash");
+  const settlementId = pax.locationId ?? "crown-harbor";
+  applyEvent(world, {
+    sequence: world.nextEventSequence,
+    tick: world.tick,
+    type: "character-captured",
+    actorId: pax.id,
+    settlementId,
+    data: {
+      battleId: "seat-test-character-14",
+      health: pax.health,
+      morale: pax.morale,
+      captivity: {
+        captorFactionId: world.settlements[settlementId].factionId,
+        settlementId,
+        capturedTick: world.tick,
+        mandatoryReleaseTick: world.tick + 84,
+        cause: "major-defeat",
+        displayedRisk: "high",
+        scatteredTroops: { ...pax.troops },
+        releaseDestinationId: null,
+      },
+    },
+  });
+
+  const covered = (projectFactions(world, commander) as unknown as ProjectedFaction[])
+    .find((faction) => faction.id === "free-tide");
+  assert.ok(covered);
+  assert.equal(world.characters["character-20"].name, "Dax Pike");
+  assert.equal(covered.commanderId, "character-14");
+  assert.equal(covered.actingCommanderId, "character-20");
+  assert.equal(covered.treasury, null);
+  assert.equal(covered.power, null);
 });
 
 test("a faction peer is known by record without exposing condition or motive", () => {

@@ -398,7 +398,7 @@ Answer by number, for example "4: yes" or "4: keep the default." The default is 
 
 **If you pick the other way:** Nobody else would cover the seat. Today the seat is not shown, and prison changes nothing about who issues orders.
 
-**Status:** Accepted, not built (M30)
+**Status:** Built (M30)
 
 **Source:** [Political layer](political-layer.md#questions-for-micah) question 1
 
@@ -408,7 +408,7 @@ Answer by number, for example "4: yes" or "4: keep the default." The default is 
 
 **If you pick the other way:** Trust would be used. Most ties are new and sit near 0.28, while loyalty does not move.
 
-**Status:** Accepted, not built (M30)
+**Status:** Built (M30)
 
 **Source:** [Political layer](political-layer.md#questions-for-micah) question 2
 
@@ -418,7 +418,7 @@ Answer by number, for example "4: yes" or "4: keep the default." The default is 
 
 **If you pick the other way:** You could name someone else, or keep the cover after the prisoner is free.
 
-**Status:** Accepted, not built (M30)
+**Status:** Built (M30)
 
 **Source:** [Political layer](political-layer.md#questions-for-micah) question 3
 
@@ -428,7 +428,7 @@ Answer by number, for example "4: yes" or "4: keep the default." The default is 
 
 **If you pick the other way:** A rival would not see who holds the seat.
 
-**Status:** Accepted, not built (M30)
+**Status:** Built (M30)
 
 **Source:** [Political layer](political-layer.md#questions-for-micah) question 4
 
@@ -438,7 +438,7 @@ Answer by number, for example "4: yes" or "4: keep the default." The default is 
 
 **If you pick the other way:** The next person would not step up, or the cover would be recomputed every tick. On seed 4096 that recompute would have replaced Bram Tern with Corin Hale for the last 19 ticks of one absence, because Corin walked out of prison first.
 
-**Status:** Accepted, not built (M30)
+**Status:** Built (M30)
 
 **Source:** [Political layer](political-layer.md#questions-for-micah) question 5
 
