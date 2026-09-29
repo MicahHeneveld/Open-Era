@@ -831,6 +831,28 @@ test("an outscore win captures the senior losing officer on the dock at the draw
   assert.equal(travelling.captivity, null);
 });
 
+test("the dock sort ranks seeded loyalty and ignores the loyalty scar", () => {
+  const { world, commander } = hittingOutscore();
+  quietExcept(world, new Set([commander.id, "character-16", "character-22"]));
+  const senior = placeOnDock(world, "character-22", 80, 0.8);
+  const junior = placeOnDock(world, "character-16", 70, 0.8);
+  senior.loyaltyAdjustment = -0.3;
+  const seededSenior = senior.skills.leadership + senior.personality.loyalty * 50;
+  const seededJunior = junior.skills.leadership + junior.personality.loyalty * 50;
+  const scarredSenior = senior.skills.leadership + (senior.personality.loyalty + (senior.loyaltyAdjustment ?? 0)) * 50;
+  assert.ok(seededSenior > seededJunior);
+  assert.ok(scarredSenior < seededJunior);
+
+  const result = raidThisTick(world);
+  const captures = result.events.filter((event) => event.type === "character-captured");
+  assert.equal(captures.length, 1);
+  assert.equal(captures[0].actorId, senior.id);
+  assert.equal(captures[0].data.cause, "outscore-loss");
+  assert.equal(junior.captivity, null);
+  assert.equal(senior.loyaltyAdjustment, -0.3);
+  assert.equal(senior.personality.loyalty, 0.8);
+});
+
 test("a tie on the dock breaks toward the lower id", () => {
   const { world, commander } = hittingOutscore();
   quietExcept(world, new Set([commander.id, "character-16", "character-22"]));

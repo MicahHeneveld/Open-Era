@@ -6,7 +6,7 @@ import test from "node:test";
 import { characterCadence, runTick, runTicks } from "../src/sim/engine.ts";
 import { WorldStore } from "../src/sim/persistence.ts";
 import { createPrototypeWorld } from "../src/sim/scenario.ts";
-import { applyEvent, canonicalJson, factionPower, stateHash } from "../src/sim/state.ts";
+import { applyEvent, canonicalJson, factionPower, round, stateHash } from "../src/sim/state.ts";
 import type { WorldState } from "../src/sim/types.ts";
 
 test("the same seed produces byte-for-byte deterministic events and state", () => {
@@ -286,6 +286,43 @@ test("a captive command holder is covered until release, and the cover does not 
   forceEscape(escaped, "character-14");
   assert.equal(Object.hasOwn(escaped.factions["free-tide"], "actingCommanderId"), false);
   assert.equal(escaped.characters["character-14"].captivity, null);
+});
+
+test("Jun Marrow's seeded score still covers Mara, and a -0.08 scar names Bram Quill", () => {
+  const named = (world: WorldState, name: string) => {
+    const found = Object.values(world.characters).find((character) => character.name === name);
+    assert.ok(found, name);
+    return found;
+  };
+  const seeded = createPrototypeWorld(1847);
+  const jun = named(seeded, "Jun Marrow");
+  const bram = named(seeded, "Bram Quill");
+  const mara = named(seeded, "Mara Vane");
+  const seededScore = (leadership: number, loyalty: number) => round(leadership + loyalty * 50, 3);
+  assert.equal(seededScore(jun.skills.leadership, jun.personality.loyalty), 97.508);
+  assert.equal(seededScore(bram.skills.leadership, bram.personality.loyalty), 94.184);
+  const rng = seeded.rngState;
+  const orders = issuedOrders(seeded, mara.id);
+  forceCapture(seeded, mara.id);
+  assert.equal(seeded.rngState, rng);
+  assert.equal(seeded.factions["world-government"].actingCommanderId, jun.id);
+  assert.deepEqual(issuedOrders(seeded, mara.id), orders);
+  assert.equal(Object.hasOwn(jun, "loyaltyAdjustment"), false);
+
+  const scarred = createPrototypeWorld(1847);
+  const scarredJun = named(scarred, "Jun Marrow");
+  const scarredMara = named(scarred, "Mara Vane");
+  scarredJun.loyaltyAdjustment = -0.08;
+  assert.equal(
+    seededScore(scarredJun.skills.leadership, scarredJun.personality.loyalty + scarredJun.loyaltyAdjustment),
+    93.508,
+  );
+  const scarredRng = scarred.rngState;
+  forceCapture(scarred, scarredMara.id);
+  assert.equal(scarred.rngState, scarredRng);
+  assert.equal(scarred.factions["world-government"].actingCommanderId, named(scarred, "Bram Quill").id);
+  assert.equal(scarredJun.personality.loyalty, jun.personality.loyalty);
+  assert.equal(scarredJun.loyaltyAdjustment, -0.08);
 });
 
 test("a character's periodic cadence stays distinct once ids outgrow two digits", () => {

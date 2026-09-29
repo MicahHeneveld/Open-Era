@@ -718,3 +718,29 @@ test("a contract's price is visible only to the two parties", () => {
   assert.equal(view.contracts.length, 1);
   assert.equal(view.contracts[0].price, price);
 });
+
+test("own-faction rows include the scarred loyalty and a rival row leaves it null", () => {
+  const { world, commander } = fixture();
+  const mate = peer(world, commander);
+  const stranger = rival(world, commander);
+  mate.loyaltyAdjustment = -0.04;
+  stranger.loyaltyAdjustment = -0.08;
+  commander.loyaltyAdjustment = -0.04;
+
+  const projectedMate = project(world, commander, mate);
+  const projectedSelf = project(world, commander, commander);
+  const projectedRival = project(world, commander, stranger);
+  assert.equal(projectedMate.loyalty, round(mate.personality.loyalty - 0.04, 3));
+  assert.equal(projectedMate.personality, null);
+  assert.equal(projectedSelf.loyalty, round(commander.personality.loyalty - 0.04, 3));
+  assert.equal((projectedSelf.personality as { loyalty: number }).loyalty, commander.personality.loyalty);
+  assert.notEqual(projectedSelf.loyalty, commander.personality.loyalty);
+  assert.equal(projectedRival.loyalty, null);
+  assert.equal(projectedRival.personality, null);
+
+  const factions = projectFactions(world, commander) as unknown as ProjectedFaction[];
+  const rivalFaction = factions.find((faction) => faction.id !== commander.factionId);
+  assert.ok(rivalFaction);
+  assert.equal(rivalFaction.treasury, null);
+  assert.equal(rivalFaction.power, null);
+});

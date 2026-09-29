@@ -10,8 +10,8 @@ import { createConversationThread, sendConversationMessage } from "../src/sim/co
 import { runTick } from "../src/sim/engine.ts";
 import { WorldStore } from "../src/sim/persistence.ts";
 import { createPrototypeWorld } from "../src/sim/scenario.ts";
-import { stateHash } from "../src/sim/state.ts";
-import type { WorldState } from "../src/sim/types.ts";
+import { applyEvent, round, stateHash } from "../src/sim/state.ts";
+import type { Character, WorldState } from "../src/sim/types.ts";
 
 function forceRetreatCapture(seed = 1847): WorldState {
   const world = createPrototypeWorld(seed);
@@ -136,6 +136,169 @@ test("the fourteen-day deadline forces release on bounded terms", () => {
   assert.equal(commander.money, 0);
   assert.equal(commander.debts.length, 1);
   assert.equal(commander.troopRecovery?.remaining, commander.troopRecovery?.total);
+});
+
+function releaseWithDebt(world: WorldState, character: Character, debtValue: number): void {
+  applyEvent(world, {
+    sequence: world.nextEventSequence,
+    tick: world.tick,
+    type: "captivity-released",
+    actorId: character.id,
+    settlementId: character.locationId ?? "crown-harbor",
+    data: {
+      characterMoney: character.money,
+      releaseLocationId: character.locationId,
+      troopRecovery: null,
+      travel: null,
+      terms: { systemMaximum: 600, demandedValue: Math.max(debtValue, 0), moneyPaid: 0, debtValue },
+    },
+  });
+}
+
+test("an unpaid release writes the loyalty scar, and a paid release does not", () => {
+  const world = createPrototypeWorld(1847);
+  const character = world.characters["character-04"];
+  assert.equal(character.factionId !== null, true);
+  character.personality.loyalty = 0.577;
+  const rng = world.rngState;
+  const loyalty = character.personality.loyalty;
+  releaseWithDebt(world, character, 103.21);
+  assert.equal(world.rngState, rng);
+  assert.equal(character.personality.loyalty, loyalty);
+  assert.equal(character.loyaltyAdjustment, -0.04);
+  assert.equal(round(character.personality.loyalty + character.loyaltyAdjustment, 3), 0.537);
+  assert.equal(Object.hasOwn(world.characters["character-04"], "loyaltyAdjustment"), true);
+
+  const paid = createPrototypeWorld(1847);
+  const payer = paid.characters["character-04"];
+  payer.personality.loyalty = 0.577;
+  const paidRng = paid.rngState;
+  releaseWithDebt(paid, payer, 0);
+  assert.equal(paid.rngState, paidRng);
+  assert.equal(payer.personality.loyalty, 0.577);
+  assert.equal(Object.hasOwn(payer, "loyaltyAdjustment"), false);
+
+  payer.loyaltyAdjustment = -0.04;
+  releaseWithDebt(paid, payer, 0);
+  assert.equal(payer.loyaltyAdjustment, -0.04);
+  assert.equal(payer.personality.loyalty, 0.577);
+});
+
+test("a second unpaid release stacks the scar, and both clamps hold", () => {
+  const world = createPrototypeWorld(1847);
+  const character = world.characters["character-08"];
+  character.personality.loyalty = 0.73;
+  releaseWithDebt(world, character, 10);
+  assert.equal(character.loyaltyAdjustment, -0.04);
+  assert.equal(round(character.personality.loyalty + character.loyaltyAdjustment, 3), 0.69);
+  releaseWithDebt(world, character, 10);
+  assert.equal(character.personality.loyalty, 0.73);
+  assert.equal(character.loyaltyAdjustment, -0.08);
+  assert.equal(round(character.personality.loyalty + character.loyaltyAdjustment, 3), 0.65);
+
+  const low = createPrototypeWorld(1847);
+  const floored = low.characters["character-08"];
+  floored.personality.loyalty = 0.06;
+  releaseWithDebt(low, floored, 12);
+  assert.equal(floored.personality.loyalty, 0.06);
+  assert.equal(round(floored.personality.loyalty + (floored.loyaltyAdjustment ?? 0), 3), 0.05);
+  assert.equal(floored.loyaltyAdjustment, -0.01);
+  releaseWithDebt(low, floored, 12);
+  assert.equal(round(floored.personality.loyalty + (floored.loyaltyAdjustment ?? 0), 3), 0.05);
+  assert.equal(floored.loyaltyAdjustment, -0.01);
+
+  const floorWorld = createPrototypeWorld(1847);
+  const atFloor = floorWorld.characters["character-08"];
+  atFloor.personality.loyalty = 0.05;
+  releaseWithDebt(floorWorld, atFloor, 12);
+  assert.equal(Object.hasOwn(atFloor, "loyaltyAdjustment"), false);
+
+  const high = createPrototypeWorld(1847);
+  const capped = high.characters["character-08"];
+  capped.personality.loyalty = 1.1;
+  releaseWithDebt(high, capped, 12);
+  assert.equal(capped.personality.loyalty, 1.1);
+  assert.equal(round(capped.personality.loyalty + (capped.loyaltyAdjustment ?? 0), 3), 0.98);
+  assert.equal(capped.loyaltyAdjustment, round(0.98 - 1.1, 3));
+
+  const uneven = createPrototypeWorld(1847);
+  const rounded = uneven.characters["character-08"];
+  rounded.personality.loyalty = 0.3336;
+  const rng = uneven.rngState;
+  releaseWithDebt(uneven, rounded, 4.5);
+  assert.equal(uneven.rngState, rng);
+  assert.equal(rounded.personality.loyalty, 0.3336);
+  const scarred = round(Math.max(0.05, Math.min(0.98, 0.3336 - 0.04)), 3);
+  assert.equal(scarred, 0.294);
+  assert.equal(round(rounded.personality.loyalty + (rounded.loyaltyAdjustment ?? 0), 3), scarred);
+  assert.equal(rounded.loyaltyAdjustment, round(scarred - 0.3336, 3));
+
+  const unaligned = createPrototypeWorld(1847);
+  const outsider = unaligned.characters["character-08"];
+  outsider.factionId = null;
+  outsider.personality.loyalty = 0.5;
+  releaseWithDebt(unaligned, outsider, 20);
+  assert.equal(Object.hasOwn(outsider, "loyaltyAdjustment"), false);
+  assert.equal(outsider.personality.loyalty, 0.5);
+});
+
+test("an escape stores no loyalty scar and does not clear one already stored", () => {
+  const world = createPrototypeWorld(1847);
+  const character = world.characters["character-04"];
+  character.loyaltyAdjustment = -0.04;
+  const loyalty = character.personality.loyalty;
+  const rng = world.rngState;
+  const sequence = world.nextEventSequence;
+  applyEvent(world, {
+    sequence: world.nextEventSequence,
+    tick: world.tick,
+    type: "captivity-escaped",
+    actorId: character.id,
+    settlementId: character.locationId ?? "crown-harbor",
+    data: {
+      health: character.health,
+      morale: character.morale,
+      attributes: character.attributes,
+      releaseLocationId: character.locationId,
+      troopRecovery: null,
+      travel: null,
+    },
+  });
+  assert.equal(character.loyaltyAdjustment, -0.04);
+  assert.equal(character.personality.loyalty, loyalty);
+  assert.equal(world.rngState, rng);
+  assert.equal(world.nextEventSequence, sequence + 1);
+});
+
+test("a mandatory unpaid release writes the scar and a fully paid release does not", () => {
+  const unpaid = forceRetreatCapture();
+  const commander = unpaid.characters[unpaid.players["prototype-player"].characterId];
+  const seeded = commander.personality.loyalty;
+  commander.money = 0;
+  commander.captivity!.capturedTick = unpaid.tick - 14 * unpaid.ticksPerDay;
+  commander.captivity!.mandatoryReleaseTick = unpaid.tick;
+  const result = runTick(unpaid);
+  const release = result.events.find((event) => event.type === "captivity-released");
+  assert.ok(release);
+  const debtValue = (release.data.terms as { debtValue: number }).debtValue;
+  assert.ok(debtValue > 0);
+  assert.equal(commander.personality.loyalty, seeded);
+  assert.equal(commander.loyaltyAdjustment, round(round(Math.max(0.05, Math.min(0.98, seeded - 0.04)), 3) - seeded, 3));
+  assert.equal(result.events.some((event) => event.type === "loyalty-scarred"), false);
+  assert.equal(Object.hasOwn(release.data, "loyaltyAdjustment"), false);
+
+  const paid = forceRetreatCapture();
+  const payer = paid.characters[paid.players["prototype-player"].characterId];
+  const paidSeed = payer.personality.loyalty;
+  payer.money = 1_000_000;
+  payer.captivity!.capturedTick = paid.tick - 14 * paid.ticksPerDay;
+  payer.captivity!.mandatoryReleaseTick = paid.tick;
+  const paidResult = runTick(paid);
+  const paidRelease = paidResult.events.find((event) => event.type === "captivity-released");
+  assert.ok(paidRelease);
+  assert.equal((paidRelease.data.terms as { debtValue: number }).debtValue, 0);
+  assert.equal(payer.personality.loyalty, paidSeed);
+  assert.equal(Object.hasOwn(payer, "loyaltyAdjustment"), false);
 });
 
 test("captivity is visible through the public dashboard and survives recovery", () => {

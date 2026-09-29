@@ -30,10 +30,10 @@ Git remains the complete history. This file exists for three things git does not
 
 ## Current state
 
-- **Baseline:** `origin/main` at `557ed84` (PR #57), merged. This branch is `feature/outscore-dock-capture`. No pull request.
-- **Last verified:** `npm run typecheck` clean, **223 tests**, `./scripts/evaluate-milestone.sh outscore-dock-capture` after that merge. Node v24.21.0. Golden hashes were not regenerated.
+- **Baseline:** `origin/main` at `3a9025f` (PR #60). This branch is `feature/loyalty-scar`. No pull request.
+- **Last verified:** `npm run typecheck` clean, **231 tests**, `./scripts/evaluate-milestone.sh loyalty-scar`. Node v24.21.0. Golden hashes were not regenerated. `origin/main` had not moved past `3a9025f`.
 - **Gate status:** Tick-72 hashes stay `cb04ba5d…` / `bd7d8cc4…` / `20975bf4…` (8301, 8513, 8031). Recovery 572.
-- **Headline:** an outscore win spends its one capture roll on the senior losing officer on the dock. Cause `outscore-loss`. Over 1200 quiet ticks, captures are 12 / 8 / 6 and covers written are 3 / 1 / 0. First difference is event tick 498 / 871 / 475.
+- **Headline:** an unpaid release stores a −0.04 loyalty scar on `loyaltyAdjustment`. Only the cover sort reads it. Over 1200 quiet ticks, writes are 11 / 4 / 2, no cover is renamed, and the lowest scar is Finn Frost at 0.282. The event log matches the dock rule. First state difference is event tick 118 / 495 / 123.
 - **Runtime:** Node 24.21.0, pinned by `.node-version`. ICU 78.3.
 
 ## Open items
@@ -61,6 +61,8 @@ Git remains the complete history. This file exists for three things git does not
 | No briefing or event text says who covers a captive commander's seat, or that the cover doesn't take the orders. The player sees only `actingCommanderId` `character-06` in the faction JSON and has to join ids | Readability | Unassigned | Open |
 | The captivity line "Escape is guaranteed but dangerous" contradicts the capture's displayedRisk `low` (captureChance 0.04) | Readability | Unassigned | Open |
 | `player.displayName` shows "Prototype Commander" while the party, feed, and briefing say Mara Vane | Readability | Unassigned | Open |
+| An outscore-loss capture sentence ("Rook Tern was captured at Glassport after outscore loss") and its feed row don't name the captor. The feed puts the prisoner as actorId and the captor faction as targetId, so "Rook Tern: character captured" reads as if the prisoner acted on Free Tide | Readability | Unassigned | Open |
+| "after outscore loss" has no subject, reads as if the prisoner lost the fight (next to "Pax Ash won at Glassport"), never explains "outscore", and doesn't say the prisoner was only on the dock | Readability | Unassigned | Open |
 | A character whose ambitions all reach progress 1 throws `<name> has no active goals` on the next plan review | Defect | Cursor | **Fixed** on `fix/no-active-goals`. Satisfaction stays. The opening roots (survival, archetype, and faction membership) are renewed at progress 0. Battle-born goals stay satisfied until the next victory or defeat. Reproduced through the CLI at tick 307 / 269 / 260 on seeds 1847 / 2718 / 4096, the same ticks as the bare harness |
 | Event feed leaked foreign character payloads; capturing ground widened it | Defect | Cursor | Fixed in `82c9bfc`; validated by an independent session with 0 foreign payloads visible |
 | Event feed is a rolling 100-event window with no pagination, so a player cannot audit its own history | Defect | Cursor | **Fixed** in [PR 4](https://github.com/taia-0/Open-Era/pull/4); a playtest then retrieved all 20,457 events with zero gaps and zero duplicates |
@@ -107,6 +109,14 @@ Git remains the complete history. This file exists for three things git does not
 ## Milestones
 
 Backfilled from the commit graph on 2026-09-25. **Attribution caveat:** commits do not record which agent authored them. Milestones M1–M11 are attributed to the ChatGPT partner from session context, not from the repository, and should not be read as verified provenance.
+
+### 2026-09-29 — M31: The loyalty scar
+- **Agent:** Open Era Engineer (Cursor cloud agent) | **Branch:** `feature/loyalty-scar` | **Commits:** `5f0ac1d`, `f565db5`, `db5b2e5` | **Type:** feature
+- **Changed** — On `captivity-released`, when the character has a faction and `terms.debtValue > 0`, store `loyaltyAdjustment` so the cover sort reads `round(clamp(v − 0.04, 0.05, 0.98), 3)`. `v` is the loyalty that sort already reads. The field is omitted at 0. `personality.loyalty` is not written. A paid release and an escape write nothing. No new event and no rng draw. Orders, plans, work, and the dock sort do not read it. Own-faction character rows project that reading as `loyalty`; a rival's is null.
+- **Why** — An unpaid ransom was accepted as a scar the command seat can see, stored apart from the seed so the rest of the campaign does not move.
+- **Verified** — `npm run typecheck` clean. **231 tests.** `./scripts/evaluate-milestone.sh loyalty-scar` after `origin/main` was still `3a9025f`. Tick-72 hashes unchanged (8301 / 8513 / 8031). Recovery replay 572. Against main `3a9025f` over 1200 ticks: scar writes 11 / 4 / 2, captures still 12 / 8 / 6, cover names unchanged (Jun Marrow, Dax Pike, Dax Pike, Ada Sorn), event logs identical, first state-hash difference at event ticks 118 / 495 / 123, lowest scar Finn Frost 0.282. Tick-1200 hashes match the remeasure note. Blind playtest [loyalty-scar-001](docs/playtests/loyalty-scar-001.md) on seed 1847 (`npm run dashboard -- --reset --seed 1847`, no commands): **PROMOTE**. Sable `loyalty` 0.577 → 0.537 at sequence 13680 (state tick 119). Jun `loyalty` 0.73 → 0.69 and `actingCommanderId` `character-05` at state tick 595 (sequence 74786). Lio stays 0.666 beside debt 0 (sequence 74787). Mara `loyalty` 0.808 → 0.768 at sequence 88540 (state tick 679) while `personality.loyalty` stays `0.807927391717676`. Pax `loyalty` stays null. The cover is null again after her release.
+- **Left open** — The outscore capture sentence still does not name the captor or say the prisoner was only on the dock. [loyalty-scar-001](docs/playtests/loyalty-scar-001.md) is a plan, not a played session. `docs/design/loyalty-scar-remeasure.md` still says Open.
+- **Links** — [blind playtest loyalty-scar-001](docs/playtests/loyalty-scar-001.md), [loyalty scar remeasure](docs/design/loyalty-scar-remeasure.md), [loyalty drift](docs/design/loyalty-drift.md)
 
 ### 2026-09-29 — M29.1: Spend the outscore roll on the dock
 - **Agent:** Open Era Engineer (Cursor cloud agent) | **Branch:** `feature/outscore-dock-capture` | **Playtest:** pending, [outscore-dock-capture-001](docs/playtests/outscore-dock-capture-001.md)
