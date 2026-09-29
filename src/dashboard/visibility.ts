@@ -1,6 +1,6 @@
 import { assessStandingOrder } from "../sim/agency.ts";
 import { commandHolderId, factionPower, partyPower, round } from "../sim/state.ts";
-import type { Character, PartySighting, SimEvent, StandingOrder, SupplyContract, WorldState } from "../sim/types.ts";
+import type { Character, PartySighting, SimEvent, StandingOrder, SupplyContract, TravelState, WorldState } from "../sim/types.ts";
 
 /**
  * Decides what a player may legitimately know about the rest of the world.
@@ -170,6 +170,175 @@ function projectPartySightings(
   );
 }
 
+export type SeaSightingKind = "passing" | "sharing" | "overtaking" | "arriving";
+
+/**
+ * One ship met at sea, derived at read time.
+ *
+ * Nothing here is stored. `ageTicks` is computed for the panel and is 0 on
+ * every row this rule emits, because `observedTick` is the snapshot tick.
+ */
+export interface SeaSighting {
+  characterId: string;
+  factionId: string | null;
+  fromId: string;
+  toId: string;
+  kind: SeaSightingKind;
+  arriving: boolean;
+  sailors: number;
+  troops: number;
+  partyPower: number;
+  observedTick: number;
+  source: "direct";
+  confidence: 1;
+  ageTicks: number;
+}
+
+interface WaterSpan {
+  loNum: number;
+  loDen: number;
+  loClosed: boolean;
+  hiNum: number;
+  hiDen: number;
+  hiClosed: boolean;
+}
+
+/** A ship still at sea: a voyage with at least one tick left. */
+function atSea(character: Character): character is Character & { travel: TravelState } {
+  const travel = character.travel;
+  return travel !== null
+    && travel.totalTicks >= 1
+    && travel.remainingTicks >= 1
+    && travel.remainingTicks <= travel.totalTicks;
+}
+
+function compareRational(aNum: number, aDen: number, bNum: number, bDen: number): number {
+  const left = aNum * bDen;
+  const right = bNum * aDen;
+  return left < right ? -1 : left > right ? 1 : 0;
+}
+
+function pointSpan(value: number): WaterSpan {
+  return {
+    loNum: value,
+    loDen: 1,
+    loClosed: true,
+    hiNum: value,
+    hiDen: 1,
+    hiClosed: true,
+  };
+}
+
+/**
+ * The stretch of the leg crossed this tick, in the ship's own direction.
+ *
+ * Zero sailed ticks is the departure point. Otherwise the span is open at the
+ * previous end and closed at the current end.
+ */
+function directedSpan(travel: TravelState): WaterSpan {
+  const sailed = travel.totalTicks - travel.remainingTicks;
+  if (sailed <= 0) return pointSpan(0);
+  return {
+    loNum: sailed - 1,
+    loDen: travel.totalTicks,
+    loClosed: false,
+    hiNum: sailed,
+    hiDen: travel.totalTicks,
+    hiClosed: true,
+  };
+}
+
+/**
+ * The same stretch on an axis that runs from the lexicographically smaller
+ * settlement id to the larger. A ship sailing toward the smaller id is flipped.
+ */
+function axisSpan(travel: TravelState): WaterSpan {
+  if (travel.fromId < travel.toId) return directedSpan(travel);
+  if (travel.remainingTicks >= travel.totalTicks) return pointSpan(1);
+  return {
+    loNum: travel.remainingTicks,
+    loDen: travel.totalTicks,
+    loClosed: true,
+    hiNum: travel.remainingTicks + 1,
+    hiDen: travel.totalTicks,
+    hiClosed: false,
+  };
+}
+
+function spanEntirelyBefore(left: WaterSpan, right: WaterSpan): boolean {
+  const compared = compareRational(left.hiNum, left.hiDen, right.loNum, right.loDen);
+  if (compared < 0) return true;
+  if (compared > 0) return false;
+  return !left.hiClosed || !right.loClosed;
+}
+
+function spansOverlap(left: WaterSpan, right: WaterSpan): boolean {
+  return !spanEntirelyBefore(left, right) && !spanEntirelyBefore(right, left);
+}
+
+function sameLeg(left: TravelState, right: TravelState): boolean {
+  return left.fromId === right.fromId && left.toId === right.toId;
+}
+
+function oppositeLane(left: TravelState, right: TravelState): boolean {
+  return left.fromId === right.toId && left.toId === right.fromId;
+}
+
+function meetingKind(observer: TravelState, subject: TravelState): { kind: SeaSightingKind; arriving: boolean } | null {
+  const bothLast = observer.remainingTicks === 1 && subject.remainingTicks === 1;
+  if (oppositeLane(observer, subject) && spansOverlap(axisSpan(observer), axisSpan(subject))) {
+    return { kind: "passing", arriving: false };
+  }
+  if (sameLeg(observer, subject) && spansOverlap(directedSpan(observer), directedSpan(subject))) {
+    return {
+      kind: observer.totalTicks === subject.totalTicks ? "sharing" : "overtaking",
+      arriving: bothLast,
+    };
+  }
+  if (bothLast && observer.toId === subject.toId) {
+    return { kind: "arriving", arriving: true };
+  }
+  return null;
+}
+
+function seaRow(world: WorldState, subject: Character, kind: SeaSightingKind, arriving: boolean): SeaSighting {
+  const travel = subject.travel!;
+  const observedTick = world.tick;
+  return {
+    characterId: subject.id,
+    factionId: subject.factionId,
+    fromId: travel.fromId,
+    toId: travel.toId,
+    kind,
+    arriving,
+    sailors: subject.sailors,
+    troops: subject.troops.count,
+    partyPower: partyPower(subject),
+    observedTick,
+    source: "direct",
+    confidence: 1,
+    ageTicks: Math.max(0, world.tick - observedTick),
+  };
+}
+
+/**
+ * The commander's sea list, or null when the commander is not at sea.
+ *
+ * Computed from the current voyages. It does not write the world, draw RNG,
+ * or keep a row after the ships separate.
+ */
+export function seaSightingsFor(world: WorldState, observer: Character): Record<string, SeaSighting> | null {
+  if (!atSea(observer)) return null;
+  const rows: Record<string, SeaSighting> = {};
+  for (const subject of Object.values(world.characters).sort((left, right) => left.id < right.id ? -1 : left.id > right.id ? 1 : 0)) {
+    if (subject.id === observer.id || !atSea(subject)) continue;
+    const meeting = meetingKind(observer.travel, subject.travel);
+    if (!meeting) continue;
+    rows[subject.id] = seaRow(world, subject, meeting.kind, meeting.arriving);
+  }
+  return rows;
+}
+
 function projectKnowledge(knowledge: Character["knowledge"]): Character["knowledge"] {
   return Object.fromEntries(
     Object.entries(knowledge).map(([settlementId, entry]) => [
@@ -254,6 +423,8 @@ export function projectCharacter(
 
   const standingOrders = visibleStandingOrders(commander, character);
   const storedSighting = isSelf ? undefined : commander.partySightings?.[character.id];
+  const seaSightings = isSelf ? seaSightingsFor(world, character) : null;
+  const seaSighting = isSelf ? null : seaSightingsFor(world, commander)?.[character.id] ?? null;
   const activeOrder =
     standingOrders
       .filter(
@@ -283,6 +454,11 @@ export function projectCharacter(
      * this party. It is never copied into `troops`.
      */
     partySighting: storedSighting ? projectPartySighting(world, storedSighting) : null,
+    /**
+     * A ship met on this snapshot. Beside troops, and never copied into them.
+     * Null when the commander is not alongside, including in port.
+     */
+    seaSighting,
     captivity: condition ? character.captivity : null,
     troopRecovery: condition ? character.troopRecovery : null,
     scars: condition ? character.scars : null,
@@ -309,6 +485,8 @@ export function projectCharacter(
     knowledge: isSelf ? projectKnowledge(character.knowledge) : null,
     /** The commander's own map. On anyone else it is null, the same as knowledge. */
     partySightings: isSelf ? projectPartySightings(world, character.partySightings) : null,
+    /** The commander's own sea list. On anyone else it is null. Null in port. */
+    seaSightings,
     victories: character.victories,
     defeats: character.defeats,
     intelligence,

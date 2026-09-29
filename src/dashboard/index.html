@@ -810,6 +810,9 @@
           (item.troops == null && item.partySighting
             ? '<div class="stat"><span>Sighted troops</span><strong>' + item.partySighting.troops + ' <span class="subtle">' + item.partySighting.ageTicks + " ticks old</span></strong></div>"
             : "") +
+          (item.troops == null && item.seaSighting
+            ? '<div class="stat"><span>Sighted troops</span><strong>' + item.seaSighting.troops + ' <span class="subtle">' + item.seaSighting.ageTicks + " ticks old</span></strong></div>"
+            : "") +
           stat("Strategy", item.skills ? item.skills.strategy : null) +
           stat("Leadership", item.skills ? item.skills.leadership : null) +
         "</div>" +

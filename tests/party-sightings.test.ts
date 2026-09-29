@@ -331,3 +331,23 @@ test("a remote forecast reads stored sightings and ignores later troops", () => 
   };
   assert.equal(state.settlements.find((entry) => entry.id === port.id)?.partyCount, null);
 });
+
+test("a sea row does not create a partySightings entry", () => {
+  const world = createPrototypeWorld(1847);
+  const commander = commanderOf(world);
+  const subject = Object.values(world.characters).find((character) => character.id !== commander.id);
+  assert.ok(subject);
+  commander.locationId = null;
+  commander.captivity = null;
+  commander.travel = { fromId: "crown-harbor", toId: "glassport", totalTicks: 4, remainingTicks: 4 };
+  subject.locationId = null;
+  subject.captivity = null;
+  subject.travel = { fromId: "crown-harbor", toId: "glassport", totalTicks: 4, remainingTicks: 4 };
+  assert.equal(commander.partySightings, undefined);
+
+  const projected = projectCharacter(world, commander, subject);
+  assert.equal((projected.seaSighting as { kind: string }).kind, "sharing");
+  assert.equal(commander.partySightings, undefined);
+  assert.equal(subject.partySightings, undefined);
+  assert.equal("partySightings" in projected && projected.partySightings === null, true);
+});
