@@ -82,6 +82,91 @@ test("battle experiences reshape goals and may change hierarchical relationships
   assert.ok(relationships.length > 0);
 });
 
+test("after a claim at garrison 13, regrowth reaches 15 and a hostile raid is offered", () => {
+  const world = createPrototypeWorld(1847);
+  const claimant = world.characters["character-03"];
+  const raider = world.characters["character-14"];
+  const settlement = world.settlements["cinder-key"];
+  assert.notEqual(raider.factionId, claimant.factionId);
+  assert.ok(raider.factionId);
+  claimant.locationId = settlement.id;
+  claimant.travel = null;
+  settlement.garrison = 13;
+  settlement.stability = 18;
+  settlement.surrender = {
+    offeredToId: claimant.id,
+    offeredTick: world.tick,
+    previousFactionId: "free-tide",
+  };
+
+  const claimed = runTick(world);
+  assert.ok(claimed.events.some((event) =>
+    event.type === "settlement-claimed" && event.settlementId === settlement.id && event.actorId === claimant.id
+  ));
+  assert.equal(settlement.garrison, 13);
+
+  raider.personality = {
+    ...raider.personality,
+    aggression: 0.99,
+    ambition: 0.99,
+    caution: 0,
+    curiosity: 0,
+    commerce: 0,
+  };
+  raider.troops.count = 120;
+  raider.plan = null;
+
+  const claims = claimed.events.filter((event) =>
+    event.type === "settlement-claimed" && event.settlementId === settlement.id
+  );
+  let raidOffered = false;
+  let crossedAt: number | null = null;
+  const upkeepGarrison = new Map<number, number>();
+
+  while (world.tick <= 62) {
+    for (const character of Object.values(world.characters)) {
+      if (character.id === raider.id) continue;
+      character.lastBattleTick = world.tick;
+      if (character.id !== claimant.id && character.locationId === settlement.id) {
+        character.locationId = "crown-harbor";
+        character.travel = null;
+      }
+    }
+    raider.locationId = settlement.id;
+    raider.travel = null;
+    raider.captivity = null;
+    raider.plan = null;
+    raider.lastBattleTick = -100;
+    settlement.stocks.provisions = 100_000;
+    const result = runTick(world);
+    for (const event of result.events) {
+      if (event.type === "settlement-claimed" && event.settlementId === settlement.id) claims.push(event);
+      if (
+        (event.type === "settlement-upkeep" || event.type === "settlement-shortage") &&
+        event.settlementId === settlement.id
+      ) {
+        upkeepGarrison.set(event.tick, event.data.garrison as number);
+      }
+      const candidates = event.data.candidates as Array<{ action?: string; targetId?: string }> | undefined;
+      if (
+        event.type === "decision-made" &&
+        event.actorId === raider.id &&
+        candidates?.some((candidate) => candidate.action === "raid" && candidate.targetId === settlement.id)
+      ) {
+        raidOffered = true;
+        crossedAt = event.tick;
+      }
+    }
+  }
+
+  assert.equal(upkeepGarrison.get(31), 14);
+  assert.equal(upkeepGarrison.get(62), 15);
+  assert.equal(raidOffered, true);
+  assert.equal(crossedAt, 62);
+  assert.equal(claims.length, 1);
+  assert.ok(claims.length < world.tick, "claims must not arrive on every tick");
+});
+
 test("an autonomous character claims a hostile settlement that offers surrender", () => {
   const world = createPrototypeWorld(1847);
   const claimant = world.characters["character-03"];

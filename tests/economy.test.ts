@@ -372,3 +372,81 @@ test("a sensible round trip competes with working the same ticks", () => {
       `against working for ${workNet} (${workPerTick.toFixed(2)}/tick)`,
   );
 });
+
+function settlementLedger(events: { type: string; settlementId?: string; data: Record<string, unknown> }[], settlementId: string) {
+  return events.find((event) =>
+    (event.type === "settlement-upkeep" || event.type === "settlement-shortage") &&
+    event.settlementId === settlementId
+  );
+}
+
+test("a fed settlement under the ceiling gains one garrison on its interval tick and not the tick before", () => {
+  const world = createPrototypeWorld(1847);
+  const settlement = world.settlements["verdant-cay"];
+  // Population 7200: interval max(6, round(200000 / 7200)) = 28, ceiling round(7200 / 70) = 103.
+  assert.equal(Math.max(6, Math.round(200_000 / settlement.population)), 28);
+  assert.equal(Math.round(settlement.population / 70), 103);
+  assert.ok(settlement.garrison < 103);
+  const opening = settlement.garrison;
+
+  world.tick = 27;
+  const before = runTick(world);
+  const beforeLedger = settlementLedger(before.events, settlement.id);
+  assert.equal(beforeLedger?.type, "settlement-upkeep");
+  assert.equal(beforeLedger?.data.shortage, 0);
+  assert.equal(beforeLedger?.data.garrison, opening);
+
+  const onInterval = runTick(world);
+  const intervalLedger = settlementLedger(onInterval.events, settlement.id);
+  assert.equal(world.tick, 29, "the interval tick is the one just applied");
+  assert.equal(intervalLedger?.type, "settlement-upkeep");
+  assert.equal(intervalLedger?.data.shortage, 0);
+  assert.equal(intervalLedger?.data.garrison, opening + 1);
+  assert.equal(settlement.garrison, opening + 1);
+});
+
+test("a large population still waits at least six ticks between garrison gains", () => {
+  const world = createPrototypeWorld(1847);
+  const settlement = world.settlements["verdant-cay"];
+  settlement.population = 40_000;
+  settlement.garrison = 10;
+  settlement.stocks.provisions = 100_000;
+  assert.equal(Math.round(200_000 / settlement.population), 5);
+  assert.equal(Math.max(6, Math.round(200_000 / settlement.population)), 6);
+
+  world.tick = 5;
+  const before = runTick(world);
+  assert.equal(settlementLedger(before.events, settlement.id)?.data.garrison, 10);
+
+  const onInterval = runTick(world);
+  const ledger = settlementLedger(onInterval.events, settlement.id);
+  assert.equal(ledger?.type, "settlement-upkeep");
+  assert.equal(ledger?.data.garrison, 11);
+});
+
+test("a shortage gains no garrison, and a settlement at its population ceiling gains none", () => {
+  const short = createPrototypeWorld(1847);
+  const hungry = short.settlements["verdant-cay"];
+  const opening = hungry.garrison;
+  hungry.production = { provisions: 0, arms: 0, medicine: 0, shipMaterials: 0 };
+  hungry.stocks.provisions = 0;
+  short.tick = 28;
+  const starved = runTick(short);
+  const starvedLedger = settlementLedger(starved.events, hungry.id);
+  assert.equal(starvedLedger?.type, "settlement-shortage");
+  assert.ok(Number(starvedLedger?.data.shortage) > 0);
+  assert.equal(starvedLedger?.data.garrison, opening - Number(starvedLedger?.data.garrisonLoss));
+  assert.ok(Number(starvedLedger?.data.garrison) <= opening);
+
+  const full = createPrototypeWorld(1847);
+  const capped = full.settlements["verdant-cay"];
+  const ceiling = Math.round(capped.population / 70);
+  capped.garrison = ceiling;
+  capped.stocks.provisions = 100_000;
+  full.tick = 28;
+  const held = runTick(full);
+  const heldLedger = settlementLedger(held.events, capped.id);
+  assert.equal(heldLedger?.type, "settlement-upkeep");
+  assert.equal(heldLedger?.data.shortage, 0);
+  assert.equal(heldLedger?.data.garrison, ceiling);
+});
