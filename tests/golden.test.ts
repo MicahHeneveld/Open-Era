@@ -1,9 +1,11 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
-import { dirname, resolve } from "node:path";
+import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { dirname, join, resolve } from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
-import { runTicks } from "../src/sim/engine.ts";
+import { runTick, runTicks } from "../src/sim/engine.ts";
+import { WorldStore } from "../src/sim/persistence.ts";
 import { createPrototypeWorld } from "../src/sim/scenario.ts";
 import { stateHash } from "../src/sim/state.ts";
 import {
@@ -53,6 +55,33 @@ test("pinned seeds reproduce their committed state hash and event count", () => 
       recorded.eventCount,
       `seed ${seed} event count drifted from the committed fixture`,
     );
+  }
+
+  // The expected split-recovery replay count lives on the fixture
+  // (`recovery.replayedEvents`). A re-baseline must update that field;
+  // this check compares the live replay to it and does not copy the number.
+  const directory = mkdtempSync(join(tmpdir(), "open-era-golden-recovery-"));
+  const databasePath = join(directory, "recovery.sqlite");
+  try {
+    const store = new WorldStore(databasePath);
+    const world = createPrototypeWorld(golden.recovery.seed);
+    store.initialize(world);
+    for (let index = 0; index < golden.recovery.splitAtTick; index += 1) {
+      const result = runTick(world);
+      store.appendTick(result.events, world);
+    }
+    store.close();
+
+    const reopened = new WorldStore(databasePath);
+    const recovered = reopened.recover();
+    assert.equal(
+      recovered.replayedEvents,
+      golden.recovery.replayedEvents,
+      "split recovery replay count drifted from the committed fixture",
+    );
+    reopened.close();
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
   }
 });
 
