@@ -201,16 +201,45 @@ export function commandHolderId(world: WorldState, factionId: string): string | 
   return holderId;
 }
 
+/** Loyalty the cover sort reads: the seed, plus the unpaid-release scar. */
+function coverLoyalty(character: Character): number {
+  return character.personality.loyalty + (character.loyaltyAdjustment ?? 0);
+}
+
 function commandScore(character: Character): number {
-  return character.skills.leadership + character.personality.loyalty * 50;
+  return character.skills.leadership + coverLoyalty(character) * 50;
+}
+
+/** One unpaid release. The result is clamped, then the adjustment is the gap from the seed. */
+const LOYALTY_SCAR_STEP = 0.04;
+
+/**
+ * Store the scar on an unpaid release, after the cover that is ending has cleared.
+ *
+ * `v` is the loyalty the cover sort already reads. The stored reading is
+ * `round(clamp(v - 0.04, 0.05, 0.98), 3)`. `loyaltyAdjustment` is that reading
+ * minus `personality.loyalty`, rounded to 3 decimals, and the field is omitted
+ * at 0. A second unpaid release subtracts the step from the scarred reading.
+ * No draw, and `personality.loyalty` is not written.
+ */
+function applyUnpaidReleaseScar(character: Character, event: SimEvent): void {
+  if (!character.factionId) return;
+  const terms = event.data.terms;
+  if (!terms || typeof terms !== "object") return;
+  const debtValue = (terms as { debtValue?: unknown }).debtValue;
+  if (typeof debtValue !== "number" || !(debtValue > 0)) return;
+  const scarred = round(clamp(coverLoyalty(character) - LOYALTY_SCAR_STEP, 0.05, 0.98), 3);
+  const adjustment = round(scarred - character.personality.loyalty, 3);
+  if (adjustment === 0) delete character.loyaltyAdjustment;
+  else character.loyaltyAdjustment = adjustment;
 }
 
 /**
  * The free faction mate who covers a captive holder.
  *
- * Highest leadership plus loyalty times 50. The holder is skipped, and so is
- * anyone already captive. A tie breaks toward the lower id, the same comparison
- * `createPrototypeWorld` uses for the reporting officer. No draw.
+ * Highest leadership plus the scarred loyalty times 50. The holder is skipped,
+ * and so is anyone already captive. A tie breaks toward the lower id, the same
+ * comparison `createPrototypeWorld` uses for the reporting officer. No draw.
  */
 function selectActingCommanderId(
   world: WorldState,
@@ -629,6 +658,7 @@ export function applyEvent(world: WorldState, event: SimEvent): void {
         : null;
       actor.locationId = event.data.releaseLocationId as string | null;
       clearActingCommander(world, actor);
+      applyUnpaidReleaseScar(actor, event);
       break;
     case "scattered-troops-returned":
       if (!actor) throw new Error("Troop return event has no actor");

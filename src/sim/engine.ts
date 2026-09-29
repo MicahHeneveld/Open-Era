@@ -1076,6 +1076,7 @@ function resolveImmediateBattle(
 }
 
 function dockCommandScore(character: Character): number {
+  // The dock ranks the seed. loyaltyAdjustment is read only by the cover sort.
   return character.skills.leadership + character.personality.loyalty * 50;
 }
 

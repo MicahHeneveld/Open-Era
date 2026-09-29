@@ -290,6 +290,14 @@ export function projectCharacter(
     attributes: capability ? character.attributes : null,
     skills: capability ? character.skills : null,
     personality: isSelf ? character.personality : null,
+    /**
+     * Loyalty the cover sort reads: the seed plus any unpaid-release scar.
+     * Own faction only, including a mate whose personality stays hidden.
+     * A rival is null. `personality.loyalty` on the commander's own row stays the seed.
+     */
+    loyalty: character.factionId !== null && character.factionId === commander.factionId
+      ? round(character.personality.loyalty + (character.loyaltyAdjustment ?? 0), 3)
+      : null,
     partyPower: condition ? partyPower(character) : null,
     activeGoal: isSelf
       ? character.goals.find((goal) => goal.id === character.activeGoalId) ?? null

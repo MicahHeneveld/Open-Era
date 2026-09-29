@@ -534,6 +534,14 @@ export interface Character {
   attributes: CharacterAttributes;
   skills: CharacterSkills;
   personality: Personality;
+  /**
+   * Unpaid-release loyalty scar, omitted while it is 0.
+   *
+   * The cover sort adds this to `personality.loyalty` before multiplying by 50.
+   * Orders, plans, work, the dock sort, and `personality.loyalty` itself do not
+   * read it. A paid release and an escape do not write it. No event carries it.
+   */
+  loyaltyAdjustment?: number;
   controller: CharacterController;
   goals: CharacterGoal[];
   activeGoalId: string | null;
