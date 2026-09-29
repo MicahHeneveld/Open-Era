@@ -99,6 +99,8 @@ Mina Vale (`character-15`):
 - No title contains `×`.
 - `Scattered troops came back, 2 times.` is not on this check-in. The info budget is full, so that title is one of the omitted background lines. Its absence is expected. A shown title that still says `Scattered troops returned` is not.
 
+**Correction (2026-09-29).** Those tick-168 bullets were measured by passing the whole log into the check-in. `GET /api/state` uses the newest 5,000 events. At tick 168 the log has 20,101 events, and that window starts at sequence 15102, tick 127. Every standing-order warning is older than the window, so `An order was not followed, 2 times.` is absent. The returns at sequences 19221 and 19987 are inside it. The correct check-in is `attentionCount` 4, `omittedInfoCount` 0, and the titles, in order: `The party is starving`, `Intelligence is stale`, `Intelligence is stale`, `A captain was released`, `Scattered troops came back, 2 times.` An advance of 72 and then 96 is the same world as one run to tick 168.
+
 Page to these two feed rows. Both are withheld and `data` is null.
 
 | Sequence | Tick | Summary |

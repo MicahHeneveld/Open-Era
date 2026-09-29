@@ -93,22 +93,30 @@ test("seed 2718 Mina Vale at tick 72 rounds the held troop figures", () => {
 
 test("briefing titles on a held captain and on returned troops are sentences", () => {
   const scattered = runTicks(createPrototypeWorld(2718), 168);
-  const full = dashboardState(scattered.state, scattered.events, fullEventFeed(scattered.events)) as {
+  // GET /api/state builds the check-in from the newest 5,000 events, the same
+  // window as store.recentEvents(5_000). The full log still holds older order
+  // warnings, and those are not what the dashboard shows.
+  const windowed = scattered.events.slice(-5_000);
+  assert.equal(windowed.length, 5_000);
+  const full = dashboardState(scattered.state, windowed, fullEventFeed(windowed)) as {
     briefing: { items: Array<{ title: string; summary: string }>; attentionCount: number; omittedInfoCount: number };
   };
-  const followed = full.briefing.items.find((item) => item.title === "An order was not followed, 2 times.");
-  assert.ok(followed);
-  assert.equal(String(followed.summary).includes(".."), false);
-  assert.equal(full.briefing.attentionCount, 12);
-  assert.equal(full.briefing.omittedInfoCount, 8);
-  const returns = scattered.events.filter((event) => event.type === "scattered-troops-returned");
-  assert.deepEqual(returns.map((event) => event.tick), [161, 167]);
-  const troopView = dashboardState(scattered.state, returns, fullEventFeed(returns)) as {
-    briefing: { items: Array<{ title: string }> };
-  };
-  const returned = troopView.briefing.items.find((item) => item.title.startsWith("Scattered troops came back"));
+  assert.deepEqual(full.briefing.items.map((item) => item.title), [
+    "The party is starving",
+    "Intelligence is stale",
+    "Intelligence is stale",
+    "A captain was released",
+    "Scattered troops came back, 2 times.",
+  ]);
+  assert.equal(full.briefing.attentionCount, 4);
+  assert.equal(full.briefing.omittedInfoCount, 0);
+  const returned = full.briefing.items.find((item) => item.title.startsWith("Scattered troops came back"));
   assert.ok(returned);
   assert.equal(returned.title, "Scattered troops came back, 2 times.");
+  assert.equal(returned.summary.includes(".."), false);
+  assert.equal(full.briefing.items.some((item) => item.title.startsWith("An order was not followed")), false);
+  const returns = scattered.events.filter((event) => event.type === "scattered-troops-returned");
+  assert.deepEqual(returns.map((event) => event.tick), [161, 167]);
 
   const held = runTicks(createPrototypeWorld(2718), 1035);
   assert.equal(held.state.characters["character-01"].captivity?.settlementId, "crown-harbor");
