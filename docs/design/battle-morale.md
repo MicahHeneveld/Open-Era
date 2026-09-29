@@ -281,3 +281,132 @@ The floor stack is M28's playtest plus one extra read, only if both rules are on
 3. **M28 lets a faction with no port attack a town of 8 soldiers, and it lands first. With this victory rule, Crown Harbor on seed 1847 changes hands seven times within five ticks. Is that acceptable?** Default: yes. The short retake is the floor working once the attack can actually win. The floor alone already has one fast loss on each seed. Rejecting the seven means keeping a won fight as a loss, or adding a hold the portless note already measured and did not take.
 4. **Should resting, or standing at a port, refill the hold from the shelf?** Default: no, not in this change. The shelf is under one unit because captains bought it out. The port's own fields are covering its ration. An automatic purchase, tried here as one ration for autonomous parties, raised the false defeats from 8 to 17 on seed 1847 and left Free Tide with no port at tick 1200 on the other two seeds. The open note about resupplying at anchor stays open. An idle player who never orders food still starves.
 5. **The capture die that today's loss would have rolled is still rolled and ignored. Should it be?** Default: yes. Later luck stays aligned until the victory itself changes the world. No new event is added. Skipping the die would move every later roll on that seed.
+
+## Re-measured when the rule landed
+
+This section is the rule on `main` at `ef81bf3`, which already has M28. It is not one of the patched runs above. Node v24.21.0, ICU 78.3. `createPrototypeWorld` plus `runTick`, no player commands, 1200 ticks. `npm run golden:update` was not run.
+
+The tick-72 golden test still matches `tests/fixtures/golden-hashes.json`:
+
+| Seed | State hash | Events |
+| ---: | --- | ---: |
+| 1847 | `cb04ba5d392d8b1c868cc97e54cb21b21ec171edd546bb70d0d7aba86cc69c11` | 8301 |
+| 2718 | `bd7d8cc44d5fa21022ecb8f8086e13dfbb9475eb025b5ae53f87e2991f90035c` | 8513 |
+| 4096 | `20975bf480e5aa11eeafe1ce39c36cf5ba0fa8e2d5de2bb5887a35d7b3aecc9f` | 8031 |
+
+Recovery replayed 572 events. The first baseline upset is event tick 498 / 517 / 475, all after tick 72.
+
+An upset is a major `battle-resolved` whose outcome is `defender-victory` and whose attacker score is higher. That is the note's count. On this build, over 1200 ticks, that count is 21 / 16 / 13, not 8 / 5 / 8. Every row is phase 1, morale at most 12, troops at least 8, health above 15, and garrison not 0. With the rule on, the same census is 0 / 0 / 0. The 8 / 5 / 8 figure is the census from the runs above, taken while the raid gate stayed at 15. M28 lets a landless faction raid at 8, and those raids are what multiply the morale-ended majors inside this horizon.
+
+The new outcome on every row is `attacker-victory`. Once the rule is on, only the first cluster still happens with the same scores. Later rows are fights the new world does not reach.
+
+### 1847 — 21
+
+| Tick | Settlement | Attacker | Defender | Old outcome | New outcome | Scores | Morale | Garrison left |
+| ---: | --- | --- | --- | --- | --- | --- | ---: | ---: |
+| 498 | Glassport | Corin Hale (Free Tide Compact) | World Government | defender-victory | attacker-victory | 351.601 / 35.609 | 3 | 10 |
+| 498 | Glassport | Dax Pike (Free Tide Compact) | World Government | defender-victory | attacker-victory | 335.311 / 30.613 | 3 | 8 |
+| 498 | Glassport | Mara Calder (Free Tide Compact) | World Government | defender-victory | attacker-victory | 203.414 / 31.632 | 5.276 | 6 |
+| 594 | Crown Harbor | Pax Ash (Free Tide Compact) | World Government | defender-victory | attacker-victory | 485.298 / 48.248 | 3.788 | 12 |
+| 665 | Glassport | Corin Hale (Free Tide Compact) | World Government | defender-victory | attacker-victory | 359.841 / 32.536 | 3 | 12 |
+| 704 | Crown Harbor | Niko Wren (World Government) | Free Tide Compact | defender-victory | attacker-victory | 253.155 / 63.253 | 3 | 12 |
+| 722 | Glassport | Mara Calder (Free Tide Compact) | World Government | defender-victory | attacker-victory | 314.981 / 42.062 | 5.19 | 12 |
+| 737 | Crown Harbor | Iris Stone (World Government) | Free Tide Compact | defender-victory | attacker-victory | 304.082 / 43.92 | 3 | 12 |
+| 869 | Crown Harbor | Finn Frost (Free Tide Compact) | World Government | defender-victory | attacker-victory | 422.18 / 68.459 | 3 | 12 |
+| 950 | Glassport | Jun Marrow (World Government) | Free Tide Compact | defender-victory | attacker-victory | 221.985 / 33.252 | 6.142 | 12 |
+| 1001 | Crown Harbor | Orin Rill (World Government) | Free Tide Compact | defender-victory | attacker-victory | 374.081 / 51.046 | 3 | 12 |
+| 1007 | Glassport | Iris Stone (World Government) | Free Tide Compact | defender-victory | attacker-victory | 317.76 / 46.937 | 4.696 | 12 |
+| 1064 | Glassport | Rook Tern (World Government) | Free Tide Compact | defender-victory | attacker-victory | 472.902 / 32.655 | 3 | 12 |
+| 1085 | Cinder Key | Pax Ash (Free Tide Compact) | World Government | defender-victory | attacker-victory | 660.739 / 34.303 | 3 | 12 |
+| 1122 | Crown Harbor | Bram Tern (Free Tide Compact) | World Government | defender-victory | attacker-victory | 387.422 / 59.925 | 3 | 12 |
+| 1129 | Cinder Key | Mina Vale (Free Tide Compact) | World Government | defender-victory | attacker-victory | 350.452 / 27.146 | 3 | 10 |
+| 1129 | Cinder Key | Corin Hale (Free Tide Compact) | World Government | defender-victory | attacker-victory | 570.495 / 24.558 | 3 | 8 |
+| 1129 | Cinder Key | Esme Dusk (Free Tide Compact) | World Government | defender-victory | attacker-victory | 329.083 / 26.28 | 3 | 6 |
+| 1159 | Glassport | Finn Frost (Free Tide Compact) | World Government | defender-victory | attacker-victory | 426.88 / 28.152 | 3 | 6 |
+| 1178 | Cinder Key | Esme Dusk (Free Tide Compact) | World Government | defender-victory | attacker-victory | 389.307 / 22.555 | 3.04 | 6 |
+| 1197 | Glassport | Bram Tern (Free Tide Compact) | World Government | defender-victory | attacker-victory | 524.566 / 36.219 | 3 | 6 |
+
+The three Glassport rows at tick 498 are the same fight in the with-rule run, same scores, `defender-victory` to `attacker-victory`. Pax's Crown Harbor row at 594 does not recur. The with-rule battle at that tick is a different roll, 487.975 / 63.62, still an attacker victory at morale 3.49, garrison 12.
+
+### 2718 — 16
+
+| Tick | Settlement | Attacker | Defender | Old outcome | New outcome | Scores | Morale | Garrison left |
+| ---: | --- | --- | --- | --- | --- | --- | ---: | ---: |
+| 517 | Cinder Key | Pax Ash (Free Tide Compact) | World Government | defender-victory | attacker-victory | 410.305 / 29.846 | 8.085 | 9 |
+| 539 | Crown Harbor | Pax Ash (Free Tide Compact) | World Government | defender-victory | attacker-victory | 420.967 / 200.822 | 7.78 | 100 |
+| 694 | Crown Harbor | Vale Drake (World Government) | Free Tide Compact | defender-victory | attacker-victory | 665.6 / 50.741 | 3 | 7 |
+| 856 | Cinder Key | Pax Ash (Free Tide Compact) | World Government | defender-victory | attacker-victory | 586.141 / 23.61 | 3 | 6 |
+| 856 | Crown Harbor | Mara Calder (Free Tide Compact) | World Government | defender-victory | attacker-victory | 213.205 / 45.346 | 9.467 | 9 |
+| 982 | Glassport | Pax Ash (Free Tide Compact) | World Government | defender-victory | attacker-victory | 511.816 / 29.358 | 3.04 | 9 |
+| 982 | Cinder Key | Mina Vale (Free Tide Compact) | World Government | defender-victory | attacker-victory | 258.826 / 25.319 | 10.991 | 8 |
+| 982 | Cinder Key | Corin Hale (Free Tide Compact) | World Government | defender-victory | attacker-victory | 439.132 / 24.298 | 3 | 6 |
+| 982 | Glassport | Dax Pike (Free Tide Compact) | World Government | defender-victory | attacker-victory | 361.667 / 28.776 | 3.04 | 7 |
+| 988 | Glassport | Zara Gale (Free Tide Compact) | World Government | defender-victory | attacker-victory | 132.253 / 35.728 | 3.661 | 6 |
+| 1001 | Crown Harbor | Finn Frost (Free Tide Compact) | World Government | defender-victory | attacker-victory | 443.166 / 44.718 | 6.49 | 6 |
+| 1023 | Crown Harbor | Corin Hale (Free Tide Compact) | World Government | defender-victory | attacker-victory | 472.832 / 43.303 | 4.89 | 6 |
+| 1023 | Cinder Key | Esme Dusk (Free Tide Compact) | World Government | defender-victory | attacker-victory | 328.487 / 19.306 | 3.744 | 6 |
+| 1026 | Glassport | Pax Ash (Free Tide Compact) | World Government | defender-victory | attacker-victory | 463.469 / 35.919 | 5.89 | 6 |
+| 1177 | Crown Harbor | Vale Drake (World Government) | Free Tide Compact | defender-victory | attacker-victory | 496.59 / 45.272 | 10.675 | 12 |
+| 1197 | Glassport | Pax Ash (Free Tide Compact) | World Government | defender-victory | attacker-victory | 706.34 / 31.681 | 10.701 | 12 |
+
+Only Pax at Cinder Key, tick 517, is the same fight after the rule.
+
+### 4096 — 13
+
+| Tick | Settlement | Attacker | Defender | Old outcome | New outcome | Scores | Morale | Garrison left |
+| ---: | --- | --- | --- | --- | --- | --- | ---: | ---: |
+| 475 | Glassport | Pax Ash (Free Tide Compact) | World Government | defender-victory | attacker-victory | 511.279 / 26.305 | 3 | 6 |
+| 513 | Glassport | Corin Hale (Free Tide Compact) | World Government | defender-victory | attacker-victory | 341.006 / 29.304 | 3 | 6 |
+| 595 | Crown Harbor | Esme Dusk (Free Tide Compact) | World Government | defender-victory | attacker-victory | 337.824 / 294.135 | 11.63 | 143 |
+| 775 | Cinder Key | Corin Hale (Free Tide Compact) | World Government | defender-victory | attacker-victory | 353.136 / 31.757 | 3 | 12 |
+| 782 | Cinder Key | Esme Dusk (Free Tide Compact) | World Government | defender-victory | attacker-victory | 313.531 / 24.685 | 3.84 | 9 |
+| 858 | Crown Harbor | Finn Frost (Free Tide Compact) | World Government | defender-victory | attacker-victory | 386.113 / 154.899 | 5.95 | 85 |
+| 950 | Glassport | Pax Ash (Free Tide Compact) | World Government | defender-victory | attacker-victory | 464.65 / 32.212 | 3.216 | 12 |
+| 1068 | Cinder Key | Vale Drake (World Government) | Free Tide Compact | defender-victory | attacker-victory | 235.348 / 30.127 | 3 | 9 |
+| 1068 | Cinder Key | Orin Rill (World Government) | Free Tide Compact | defender-victory | attacker-victory | 393.714 / 20.212 | 3 | 7 |
+| 1179 | Glassport | Niko Wren (World Government) | Free Tide Compact | defender-victory | attacker-victory | 296.858 / 29.139 | 3 | 9 |
+| 1179 | Glassport | Sable Morrow (World Government) | Free Tide Compact | defender-victory | attacker-victory | 354.026 / 26.739 | 3 | 7 |
+| 1179 | Cinder Key | Orin Rill (World Government) | Free Tide Compact | defender-victory | attacker-victory | 382.693 / 30.49 | 11.56 | 9 |
+| 1179 | Cinder Key | Kessa Calder (World Government) | Free Tide Compact | defender-victory | attacker-victory | 524.935 / 25.229 | 3 | 7 |
+
+Only Pax at Glassport, tick 475, is the same fight after the rule. Esme's tick 298 Glassport battle from the older playtest is not this tree.
+
+### Crown Harbor ownership, seed 1847, 1200 ticks
+
+A change is a `settlement-claimed` on `crown-harbor`. Before the rule, 8. After the rule, 20. The claims at 330, 334, 364, and 498 are the same in both runs. The rule's first same-fight flips are at Glassport on tick 498, and Niko Wren's Crown Harbor claim on that tick does not move.
+
+| Tick | Who | From | To |
+| ---: | --- | --- | --- |
+| 330 | Pax Ash | World Government | Free Tide Compact |
+| 334 | Iris Stone | Free Tide Compact | World Government |
+| 364 | Pax Ash | World Government | Free Tide Compact |
+| 498 | Niko Wren | Free Tide Compact | World Government |
+| 628 | Zara Gale | World Government | Free Tide Compact |
+| 773 | Vale Drake | Free Tide Compact | World Government |
+| 905 | Bram Tern | World Government | Free Tide Compact |
+| 1044 | Lio Crow | Free Tide Compact | World Government |
+
+After the rule:
+
+| Tick | Who | From | To |
+| ---: | --- | --- | --- |
+| 330 | Pax Ash | World Government | Free Tide Compact |
+| 334 | Iris Stone | Free Tide Compact | World Government |
+| 364 | Pax Ash | World Government | Free Tide Compact |
+| 498 | Niko Wren | Free Tide Compact | World Government |
+| 595 | Pax Ash | World Government | Free Tide Compact |
+| 597 | Iris Stone | Free Tide Compact | World Government |
+| 609 | Zara Gale | World Government | Free Tide Compact |
+| 727 | Niko Wren | Free Tide Compact | World Government |
+| 728 | Finn Frost | World Government | Free Tide Compact |
+| 815 | Niko Wren | Free Tide Compact | World Government |
+| 848 | Pax Ash | World Government | Free Tide Compact |
+| 881 | Niko Wren | Free Tide Compact | World Government |
+| 882 | Finn Frost | World Government | Free Tide Compact |
+| 892 | Sable Morrow | Free Tide Compact | World Government |
+| 991 | Pax Ash | World Government | Free Tide Compact |
+| 993 | Sable Morrow | Free Tide Compact | World Government |
+| 1002 | Finn Frost | World Government | Free Tide Compact |
+| 1101 | Sable Morrow | Free Tide Compact | World Government |
+| 1102 | Finn Frost | World Government | Free Tide Compact |
+| 1189 | Sable Morrow | Free Tide Compact | World Government |
