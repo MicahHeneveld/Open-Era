@@ -1,6 +1,6 @@
 # Battle morale
 
-**Status: Open.** Proposal for the owner to accept, change, or reject. Current code is `main` at `5d391512cc25551ba806dcfc279db713cec82c05` (PR #33 merged). The runs below were patched in locally and taken back out. This note is not decided until it moves into [world simulation](world-simulation.md). It follows [portless recovery](portless-recovery.md): M28, the landless raid floor of 8, is accepted and not built, and it lands before this rule.
+**Status: Built (M29).** The outscore rule in the recommendation is in the code and in [world simulation](world-simulation.md). The runs below were patched in locally on `main` at `5d391512cc25551ba806dcfc279db713cec82c05` (PR #33 merged) and taken back out. M28, the landless raid floor of 8, landed before this rule.
 
 Runs are `createPrototypeWorld` plus `runTick`, no player commands, seeds 1847 / 2718 / 4096, 1200 ticks, Node v24.21.0, ICU 78.3. Tick numbers on events are the `tick` field. A figure at tick 400 or tick 1200 is the world after that many `runTick` calls (`world.tick === 400` or `1200`), the same convention as the 72-tick fixture and as the tick-400 powers in the portless note. A zero stretch runs from the claim that removes the last Free Tide port until the claim that returns one. The length is the difference of those ticks. `npm test` on this tree passes, 176 tests. The 72-tick hashes match `tests/fixtures/golden-hashes.json`:
 
