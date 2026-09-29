@@ -27,6 +27,7 @@ Absence is not a defect. An untracked absence is a documentation gap, not a miss
 | Leader-set tax rate | [world-simulation.md:51](design/world-simulation.md) | Untracked | `taxRate` is a static scenario constant read during production. No command sets it. |
 | Occupation, negotiated transfer, population response after conquest | [world-simulation.md:69](design/world-simulation.md) | Tracked deferred | Stated inline as remaining deferred. |
 | Sliding surrender on a battered faction port | [raid-floor.md](design/raid-floor.md) | **Closed in M19** | After an attacker victory, an immediate battle and a completed major battle offer surrender when the garrison is still at most 15 and stability is at or below `min(80, 30 + 10 × max(0, 15 − garrison))`. The autonomous raid gate stays at garrison 15, a player can still order a raid below that, and peacetime upkeep is unchanged. One claim per port on the three gate seeds, and the garrison left by the blow is what stops the next raid. |
+| Peacetime garrison regrowth | [garrison-recovery.md](design/garrison-recovery.md) | **Closed in M20** | A settlement with no battle gains one garrison when provisions are met and garrison is under `round(population / 70)`, on each positive world tick that is a multiple of `max(6, round(200000 / population))`. The soldier is written on the existing upkeep event. Neutral ports count. The raid gate and the M19 surrender line are unchanged. On the three gate seeds a claimed port is raidable again, and tick-72 counts are 8338 / 8411 / 8298. |
 
 ### Characters
 

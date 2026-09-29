@@ -204,6 +204,28 @@ export function priceDriftPerTick(
   return round(after - before, 2);
 }
 
+/**
+ * Soldiers a fed settlement gains on this world tick.
+ *
+ * One soldier every `max(6, round(200000 / population))` ticks, and only while
+ * provisions are met (`shortage === 0`) and garrison is under
+ * `round(population / 70)`. Both rounds are to the nearest integer. The
+ * interval is the world clock, not time since a battle: tick 0 is the opening
+ * figure, and a later tick gains when `tick % interval === 0`. A shortage, the
+ * ceiling, or a battle that skips this settlement drops that soldier. It is
+ * not owed later. Neutral ports count. The rule reads this settlement's
+ * population, its own provision shortage, and its garrison. It does not read a
+ * faction treasury, a survey, or anyone's knowledge.
+ */
+function garrisonRegrowth(population: number, garrison: number, tick: number, shortage: number): number {
+  if (shortage !== 0 || tick <= 0) return 0;
+  const ceiling = round(population / 70, 0);
+  if (garrison >= ceiling) return 0;
+  const interval = Math.max(6, round(200_000 / population, 0));
+  if (!Number.isFinite(interval) || interval <= 0 || tick % interval !== 0) return 0;
+  return 1;
+}
+
 function produceSettlements(world: WorldState, events: SimEvent[]): void {
   for (const settlement of Object.values(world.settlements).sort((a, b) => a.id.localeCompare(b.id))) {
     if (Object.values(world.activeBattles).some((battle) => battle.settlementId === settlement.id)) continue;
@@ -221,6 +243,7 @@ function produceSettlements(world: WorldState, events: SimEvent[]): void {
     const { stocks: afterConsumption, demand, consumed, shortage } = consumedStocks(settlement, stocks);
     const stability = clamp(settlement.stability - shortage * 0.35 + (shortage === 0 ? 0.03 : 0), 0, 100);
     const garrisonLoss = shortage > 0 ? Math.min(settlement.garrison, Math.floor(shortage * 0.18)) : 0;
+    const garrisonGain = garrisonRegrowth(settlement.population, settlement.garrison, world.tick, shortage);
     emit(world, events, {
       type: shortage > 0 ? "settlement-shortage" : "settlement-upkeep",
       settlementId: settlement.id,
@@ -230,7 +253,7 @@ function produceSettlements(world: WorldState, events: SimEvent[]): void {
         shortage,
         stocks: afterConsumption,
         stability: round(stability),
-        garrison: settlement.garrison - garrisonLoss,
+        garrison: settlement.garrison - garrisonLoss + garrisonGain,
         garrisonLoss,
       },
     });
