@@ -462,7 +462,7 @@ test("Mina Vale's release at event tick 155 keeps the paid line beside her priso
   assert.ok(release);
   assert.equal(release.type, "captivity-released");
   assert.equal(release.tick, 155);
-  const sentence = "Mina Vale was released from Crown Harbor: 58.13 paid and 0 recorded as debt";
+  const sentence = "Mina Vale was released from Crown Harbor: 58.13 paid and 0 recorded as debt. Mina Vale paid 58.13 ransom: 29.07 to the World Government treasury and 29.06 to Mara Vane";
   const [maraRow] = projectEventFeed(world, mara.id, [release]);
   assert.equal(maraRow?.payloadWithheld, true);
   assert.equal(maraRow?.data, null);
@@ -477,7 +477,7 @@ test("Mina Vale's release at event tick 155 keeps the paid line beside her priso
   assert.equal(sentence.includes("Loyalty fell"), false);
   assert.equal(
     captivityReleasedChronicle(world, release),
-    "**Mina Vale** was released from **Crown Harbor** under mandatory terms: 58.13 paid and 0 recorded as debt.",
+    "**Mina Vale** was released from **Crown Harbor** under mandatory terms: 58.13 paid and 0 recorded as debt. **Mina Vale** paid 58.13 ransom: 29.07 to the **World Government** treasury and 29.06 to **Mara Vane**.",
   );
   assert.equal(stateHash(world), before);
 });
@@ -501,7 +501,7 @@ test("Sable Morrow's release at state tick 119 says loyalty fell beside her pris
   assert.ok(release);
   assert.equal(release.type, "captivity-released");
   assert.equal(release.tick, 118);
-  const sentence = "Sable Morrow was released from Cinder Key: 13.4 paid and 103.21 recorded as debt. Loyalty fell";
+  const sentence = "Sable Morrow was released from Cinder Key: 13.4 paid and 103.21 recorded as debt. Loyalty fell. Sable Morrow paid 13.4 ransom: 6.7 to the Free Tide Compact treasury and 6.7 to Pax Ash";
   const [maraRow] = projectEventFeed(world, mara.id, [release]);
   assert.equal(maraRow?.payloadWithheld, true);
   assert.equal(maraRow?.data, null);
@@ -515,7 +515,7 @@ test("Sable Morrow's release at state tick 119 says loyalty fell beside her pris
   assert.equal(view.briefing.items.find((item) => item.id === "event:13680")?.summary, sentence);
   assert.equal(
     captivityReleasedChronicle(world, release),
-    "**Sable Morrow** was released from **Cinder Key** under mandatory terms: 13.4 paid and 103.21 recorded as debt. Loyalty fell.",
+    "**Sable Morrow** was released from **Cinder Key** under mandatory terms: 13.4 paid and 103.21 recorded as debt. Loyalty fell. **Sable Morrow** paid 13.4 ransom: 6.7 to the **Free Tide Compact** treasury and 6.7 to **Pax Ash**.",
   );
   assert.equal(stateHash(world), before);
 });

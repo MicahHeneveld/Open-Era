@@ -190,6 +190,87 @@ export function partyPower(character: Character): number {
 }
 
 /**
+ * Split a ransom that was actually paid.
+ *
+ * Money is stored at two decimal places. The split is done in whole cents so
+ * the shares sum exactly to `paid`. There is no RNG.
+ *
+ * When the captor has a faction, the odd cent goes to that faction's treasury.
+ * The leader's share is `floor(cents / 2)` and the treasury's share is the
+ * rest. 58.13 is 29.07 to the treasury and 29.06 to the leader.
+ *
+ * When the captor has no faction, the leader receives every cent and the
+ * treasury share is 0.
+ */
+export function splitRansom(paid: number, hasFaction: boolean): { treasuryShare: number; leaderShare: number } {
+  const cents = Math.round(paid * 100);
+  if (!hasFaction) return { treasuryShare: 0, leaderShare: round(cents / 100, 2) };
+  const leaderCents = Math.floor(cents / 2);
+  const treasuryCents = cents - leaderCents;
+  return {
+    treasuryShare: round(treasuryCents / 100, 2),
+    leaderShare: round(leaderCents / 100, 2),
+  };
+}
+
+function partyLeaderScore(character: Character): number {
+  return character.skills.leadership + character.personality.loyalty * 50;
+}
+
+function highestPartyLeader(
+  world: WorldState,
+  include: (character: Character) => boolean,
+): Character | null {
+  const ranked = Object.values(world.characters)
+    .filter(include)
+    .sort((left, right) =>
+      partyLeaderScore(right) - partyLeaderScore(left) ||
+      left.id.localeCompare(right.id),
+    );
+  return ranked[0] ?? null;
+}
+
+/**
+ * The captor's party leader, the person who receives that side of a ransom.
+ *
+ * A faction's leader is the command holder, the one person who issues that
+ * faction's standing orders. The prisoner is skipped, so the purse that just
+ * paid does not pay itself. If that seat is unnamed, or the holder is the
+ * prisoner, the faction member with the highest leadership plus
+ * `personality.loyalty * 50` is the leader. A lower id wins a tie. The scar
+ * is not read. No draw.
+ *
+ * With no captor faction, the prison's owner is the leader when that owner
+ * has no faction and is not the prisoner. Otherwise the same ranking is
+ * applied to unaffiliated characters.
+ */
+export function captorPartyLeader(world: WorldState, prisoner: Character): Character | null {
+  const captivity = prisoner.captivity;
+  if (!captivity) return null;
+  const faction = captivity.captorFactionId ? world.factions[captivity.captorFactionId] : undefined;
+  if (faction) {
+    const holderId = commandHolderId(world, faction.id);
+    if (holderId && holderId !== prisoner.id) {
+      const holder = world.characters[holderId];
+      if (holder) return holder;
+    }
+    return highestPartyLeader(
+      world,
+      (candidate) => candidate.factionId === faction.id && candidate.id !== prisoner.id,
+    );
+  }
+  const ownerId = world.settlements[captivity.settlementId]?.ownerId ?? null;
+  if (ownerId && ownerId !== prisoner.id) {
+    const owner = world.characters[ownerId];
+    if (owner && owner.factionId === null) return owner;
+  }
+  return highestPartyLeader(
+    world,
+    (candidate) => candidate.factionId === null && candidate.id !== prisoner.id,
+  );
+}
+
+/**
  * The one person who issues this faction's standing orders.
  *
  * The seat is that issuer. It is not stored on the faction. Two issuers, or
@@ -272,6 +353,45 @@ function writeReleaseSighting(world: WorldState, character: Character): void {
     confidence: 1,
   };
   character.releaseSighting = record;
+}
+
+/**
+ * Credit the ransom carried on a release.
+ *
+ * The event stores the absolute treasury and the absolute leader purse, the
+ * same way a market trade stores `characterMoney`. A share of 0 does not write.
+ * A release with no `ransom` field, including older rows, leaves both purses
+ * where `characterMoney` already put the prisoner.
+ */
+function applyRansomCredit(world: WorldState, event: SimEvent): void {
+  const ransom = event.data.ransom;
+  if (!ransom || typeof ransom !== "object") return;
+  const credit = ransom as {
+    treasuryShare?: number;
+    leaderShare?: number;
+    treasuryFactionId?: string | null;
+    factionTreasury?: number | null;
+    leaderId?: string | null;
+    leaderMoney?: number | null;
+  };
+  if (
+    typeof credit.treasuryShare === "number" && credit.treasuryShare > 0 &&
+    typeof credit.treasuryFactionId === "string" &&
+    typeof credit.factionTreasury === "number"
+  ) {
+    const faction = world.factions[credit.treasuryFactionId];
+    if (!faction) throw new Error("Captivity release paid a missing captor treasury");
+    faction.treasury = credit.factionTreasury;
+  }
+  if (
+    typeof credit.leaderShare === "number" && credit.leaderShare > 0 &&
+    typeof credit.leaderId === "string" &&
+    typeof credit.leaderMoney === "number"
+  ) {
+    const leader = world.characters[credit.leaderId];
+    if (!leader) throw new Error("Captivity release paid a missing party leader");
+    leader.money = credit.leaderMoney;
+  }
 }
 
 function applyUnpaidReleaseScar(character: Character, event: SimEvent): void {
@@ -703,6 +823,7 @@ export function applyEvent(world: WorldState, event: SimEvent): void {
       if (!actor) throw new Error("Captivity release event has no actor");
       writeReleaseSighting(world, actor);
       actor.money = event.data.characterMoney as number;
+      applyRansomCredit(world, event);
       if (event.data.debt) actor.debts.push(event.data.debt as Character["debts"][number]);
       actor.captivity = null;
       actor.troopRecovery = event.data.troopRecovery as Character["troopRecovery"];
