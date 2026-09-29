@@ -30,10 +30,10 @@ Git remains the complete history. This file exists for three things git does not
 
 ## Current state
 
-- **Baseline:** `origin/main` at `ee9eb6e` (PR #62). This branch is `feature/sea-sightings`. No pull request.
-- **Last verified:** `npm run typecheck` clean, **242 tests**, `./scripts/evaluate-milestone.sh sea-sightings`. Node v24.21.0. Golden hashes were not regenerated.
+- **Baseline:** `origin/main` at `149d942` (PR #65). This branch is `feature/capture-wording`.
+- **Last verified:** `npm run typecheck` clean, **254 tests**, `./scripts/evaluate-milestone.sh capture-wording`. Node v24.21.0. Golden hashes were not regenerated.
 - **Gate status:** Tick-72 hashes stay `cb04ba5d…` / `bd7d8cc4…` / `20975bf4…` (8301, 8513, 8031). Recovery 572.
-- **Headline:** A sea sighting is computed when the state is read and is not stored. Over 1200 quiet ticks the census matches the addendum, and the tick-1200 hashes match that note.
+- **Headline:** Capture, seat, and sea sentences are derived when the state is read. The stored cause stays `outscore-loss`, and the tick-1200 hashes match the wording note.
 - **Runtime:** Node 24.21.0, pinned by `.node-version`. ICU 78.3.
 
 ## Open items
@@ -46,7 +46,7 @@ Git remains the complete history. This file exists for three things git does not
 | The visible port upkeep and the player's knowledge line give a garrison estimate (15) that disagrees with the dock panel (14, then 12) | Readability | Unassigned | Open |
 | The buy receipt's hold, shelf and price differ from the next screen because of the rest of the tick's upkeep and trading (for example hold 48 on the receipt, then 47.424, and price 1.54 then 1.78), and nothing says so | Readability | Unassigned | Open |
 | Doubled period in grouped briefing lines ("Crown Harbor.. The first was on day 1.") | Readability | Unassigned | Open |
-| The starvation item at an empty Crown Harbor (tick 135, seed 1847) points only at Glassport, doesn't say this port is empty, and quotes a morale cost of 1.382 per tick when morale is already 0 | Readability | Unassigned | Open |
+| The starvation item at an empty Crown Harbor (tick 135, seed 1847) points only at Glassport and doesn't say this port is empty. The morale-cost half, quoting 1.382 per tick when morale is already 0, is fixed in M34 | Readability | Unassigned | Open |
 | Recruit's queued and executed lines ("Command queued for Mara Vane", "Mara Vane: action executed") omit quantity and cost (8 for 96) | Readability | Unassigned | Open |
 | After a port is captured, the player's panel falls back to a stale tick-0 rumor (for example "free-tide, garrison 131" at Cinder Key on 2718) instead of the last exact reading | Readability | Unassigned | Open |
 | The owned-port panel shows a surrender block (offeredToId/offeredTick) beside surrenderOffered false, which reads as contradictory | Readability | Unassigned | Open |
@@ -58,17 +58,18 @@ Git remains the complete history. This file exists for three things git does not
 | The "Command queued for Mara Vane" summary does not name the carrier, the price, or the destination | Readability | Unassigned | Open |
 | Relationship-changed lines have null data and no stated reason | Readability | Unassigned | Open |
 | The names Toma Reef and Toma Hale collide in the feed | Readability | Unassigned | Open |
-| No briefing or event text says who covers a captive commander's seat, or that the cover doesn't take the orders. The player sees only `actingCommanderId` in the faction JSON and has to join ids. Seen again in M31: at t595 the seat is only `character-05` | Readability | Unassigned | Open |
-| The captivity line "Escape is guaranteed but dangerous" contradicts the capture's displayedRisk `low` (captureChance 0.04). Seen again in M31 beside displayedRisk `severe` and capture chance 0.55 | Readability | Unassigned | Open |
-| `player.displayName` shows "Prototype Commander" while the party, feed, and briefing say Mara Vane. Seen again in M31 | Readability | Unassigned | Open |
-| No line says loyalty fell. Mara's card shows `loyalty` 0.768 beside `personality.loyalty` 0.8079…, and nothing says which figure the seat uses | Readability | Unassigned | Open |
-| A release feed row is only "Name: captivity released". The paid amount and the debt appear only in the briefing | Readability | Unassigned | Open |
-| The battle feed row does not say who won. The briefing does | Readability | Unassigned | Open |
-| At morale 0 the starvation line still quotes a morale cost | Readability | Unassigned | Open |
-| `attentionCount` does not match the briefing line count (4 vs 6 at t119, 7 vs 10 at t595) | Readability | Unassigned | Open |
-| Pax's leadership goes from 75 to null with no sentence explaining it | Readability | Unassigned | Open |
-| An outscore-loss capture sentence ("Rook Tern was captured at Glassport after outscore loss") and its feed row don't name the captor. The feed puts the prisoner as actorId and the captor faction as targetId, so "Rook Tern: character captured" reads as if the prisoner acted on Free Tide | Readability | Unassigned | Open |
-| "after outscore loss" has no subject, reads as if the prisoner lost the fight (next to "Pax Ash won at Glassport"), never explains "outscore", and doesn't say the prisoner was only on the dock | Readability | Unassigned | Open |
+| No briefing or event text says who covers a captive commander's seat, or that the cover doesn't take the orders. The player sees only `actingCommanderId` in the faction JSON and has to join ids. Seen again in M31: at t595 the seat is only `character-05` | Readability | Cursor | **Fixed in M34.** `seatSummary` names the cover and says the orders stay the holder's |
+| The captivity line "Escape is guaranteed but dangerous" contradicts the capture's displayedRisk `low` (captureChance 0.04). Seen again in M31 beside displayedRisk `severe` and capture chance 0.55 | Readability | Cursor | **Fixed in M34.** The card says escape always works and wounds you, and names `displayedRisk` |
+| `player.displayName` shows "Prototype Commander" while the party, feed, and briefing say Mara Vane. Seen again in M31 | Readability | Cursor | **Fixed in M34.** The view derives the character's name. The stored string stays Prototype Commander |
+| No line says loyalty fell. Mara's card shows `loyalty` 0.768 beside `personality.loyalty` 0.8079…, and nothing says which figure the seat uses | Readability | Cursor | **Fixed in M34.** An unpaid release says loyalty fell. Her card's `loyaltyNote` names the unrounded sum the seat reads |
+| A release feed row is only "Name: captivity released". The paid amount and the debt appear only in the briefing | Readability | Cursor | **Fixed in M34.** A withheld release keeps the briefing sentence. `data` stays null |
+| The battle feed row does not say who won. The briefing does | Readability | Cursor | **Fixed in M34.** A withheld battle keeps the briefing sentence, including "on a higher score" when the payload rules a standing win out |
+| At morale 0 the starvation line still quotes a morale cost | Readability | Cursor | **Fixed in M34.** The line says morale is already 0 and keeps the health cost |
+| `attentionCount` does not match the briefing line count (4 vs 6 at t119, 7 vs 10 at t595) | Readability | Cursor | **Fixed in M34.** `attentionCount` stays the decision count. `shownCount` and `attentionLabel` name the background lines drawn with it |
+| Pax's leadership goes from 75 to null with no sentence explaining it | Readability | Cursor | **Fixed in M34.** `skillsNote` says the reading is distant, and does not print the withheld number |
+| An outscore-loss capture sentence ("Rook Tern was captured at Glassport after outscore loss") and its feed row don't name the captor. The feed puts the prisoner as actorId and the captor faction as targetId, so "Rook Tern: character captured" reads as if the prisoner acted on Free Tide | Readability | Cursor | **Fixed in M34.** The sentence names Free Tide and Rook. The ids are unchanged |
+| "after outscore loss" has no subject, reads as if the prisoner lost the fight (next to "Pax Ash won at Glassport"), never explains "outscore", and doesn't say the prisoner was only on the dock | Readability | Cursor | **Fixed in M34.** The sentence says the other side won on a higher score, on the dock. The stored cause stays `outscore-loss` |
+| A port record and a sea row on the same card both said Sighted troops | Readability | Cursor | **Fixed in M34.** The sea span uses the row's kind. The port record stays Sighted troops |
 | A character whose ambitions all reach progress 1 throws `<name> has no active goals` on the next plan review | Defect | Cursor | **Fixed** on `fix/no-active-goals`. Satisfaction stays. The opening roots (survival, archetype, and faction membership) are renewed at progress 0. Battle-born goals stay satisfied until the next victory or defeat. Reproduced through the CLI at tick 307 / 269 / 260 on seeds 1847 / 2718 / 4096, the same ticks as the bare harness |
 | Event feed leaked foreign character payloads; capturing ground widened it | Defect | Cursor | Fixed in `82c9bfc`; validated by an independent session with 0 foreign payloads visible |
 | Event feed is a rolling 100-event window with no pagination, so a player cannot audit its own history | Defect | Cursor | **Fixed** in [PR 4](https://github.com/taia-0/Open-Era/pull/4); a playtest then retrieved all 20,457 events with zero gaps and zero duplicates |
@@ -115,6 +116,14 @@ Git remains the complete history. This file exists for three things git does not
 ## Milestones
 
 Backfilled from the commit graph on 2026-09-25. **Attribution caveat:** commits do not record which agent authored them. Milestones M1–M11 are attributed to the ChatGPT partner from session context, not from the repository, and should not be read as verified provenance.
+
+### 2026-09-29 — M34: Capture wording
+- **Agent:** Open Era Engineer (Cursor cloud agent) | **Branch:** `feature/capture-wording` | **Commits:** `65b55a1`, and the commit that adds this entry | **Type:** feature
+- **Changed** — Sentences are built when the state is read. A capture names the captor faction. An `outscore-loss` says the prisoner was taken on the dock after the other side won on a higher score, and the card adds `causeLabel` beside the stored cause. A battle the payload rules out of a standing win says `on a higher score`. `seatSummary` names the cover. The escape card says escape always works and names `displayedRisk`. A release with debt says loyalty fell, and the holder's release says she holds the seat again. Her own card's `loyaltyNote` names the unrounded sum the seat reads. `player.displayName` is the character's name. `skillsNote` explains a withheld leadership. A sea row carries `summary`, the briefing lists it, and `outOfStretch` names a ship on the same leg with no troop count. A docked card says the hold was learned. Passage is read off the upkeep row. The sea inspector label is the row's kind. `attentionCount` stays the decision count. `shownCount` and `attentionLabel` name the background lines. `src/sim` is unchanged except the chronicle lines in `reports.ts`.
+- **Why** — Questions 91–94 were accepted as M34. The playtests could not tell who took the prisoner, what outscore meant, who covered the seat, or which ship was outside her stretch.
+- **Verified** — `npm run typecheck` clean. **254 tests.** `./scripts/evaluate-milestone.sh capture-wording` passed. Tick-72 hashes stayed `cb04ba5d392d8b1c868cc97e54cb21b21ec171edd546bb70d0d7aba86cc69c11` (1847, 8301), `bd7d8cc44d5fa21022ecb8f8086e13dfbb9475eb025b5ae53f87e2991f90035c` (2718, 8513), `20975bf480e5aa11eeafe1ce39c36cf5ba0fa8e2d5de2bb5887a35d7b3aecc9f` (4096, 8031). Split recovery replayed 572 events. No `golden:update`. Over 1200 ticks with no commands, state hashes and event counts match the wording note: `95bd71dc…` / `55d48cbb…` / `f5355c1a…` (164313, 165434, 164691). Seed 4096 at state tick 476 is still `132d7ca2…` with 59717 events. Sequence 59637 reads `Free Tide Compact took Rook Tern on the dock at Glassport after Pax Ash won there on a higher score`, `payloadWithheld` true, `data` null, `cause` `outscore-loss`. The Glassport voyage on seed 1847 matches the note's Ada, Zara, and passage sentences. The render test draws `sharing` once and `Sighted troops` once. The plan [capture-wording-001](docs/playtests/capture-wording-001.md) has not been run by a blind operator.
+- **Left open** — [capture-wording-001](docs/playtests/capture-wording-001.md) has not been run by a blind operator. The event ids still put the prisoner as `actorId` and the captor faction as `targetId`. A read that is handed only the capture, with no `battle-resolved` beside it, says "the attacker" instead of Pax. Idle Mara still starves in place. The empty-port starvation line still points only at Glassport.
+- **Links** — [capture wording plan](docs/playtests/capture-wording-001.md), [capture wording](docs/design/capture-wording.md), questions 91–94 in [owner questions](docs/design/owner-questions.md)
 
 ### 2026-09-29 — M32: Sea sightings
 - **Agent:** Open Era Engineer (Cursor cloud agent) | **Branch:** `feature/sea-sightings` | **Commits:** `f797dcd`, `493136e`, and the commit that adds this entry | **Type:** feature
