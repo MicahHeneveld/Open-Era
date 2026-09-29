@@ -132,3 +132,127 @@ The owned panel at state tick 595 is the one place the surrender block is visibl
 `ABANDON` if sequence 77530 is absent from the state-tick-595 page whose oldest sequence is 77407, or if a later sequence is absent from the page the step names and absent from the fallback page that claims to hold it.
 
 The tick-72 hash is not this session. Do not try to read it from the dashboard.
+
+## Session / Findings
+
+Blind session on `feature/outscore-rule` at `92f44e19519369425fd7c1fce38ac643164d37c1`. Node v24.21.0. `npm ci`, then `npm run dashboard -- --reset --seed 1847` on `http://127.0.0.1:4317`. No commands were sent. Every call below was HTTP 200. `beforeSequence` was not used: each sequence named by a checkpoint was on that checkpoint's first `limit=200` page.
+
+### Setup
+
+`GET /api/health` returned `{"ok":true,"tick":0,"events":0}`.
+
+| Advance | Expected | Actual |
+| --- | --- | --- |
+| `{"ticks":144}` | `tick` 144, `ticksAdvanced` 144, `day` 24 | `{"ok":true,"tick":144,"ticksAdvanced":144,"day":24}` |
+| `{"ticks":144}` | `tick` 288, `ticksAdvanced` 144, `day` 48 | `{"ok":true,"tick":288,"ticksAdvanced":144,"day":48}` |
+| `{"ticks":144}` | `tick` 432, `ticksAdvanced` 144, `day` 72 | `{"ok":true,"tick":432,"ticksAdvanced":144,"day":72}` |
+| `{"ticks":144}` | `tick` 576, `ticksAdvanced` 144, `day` 96 | `{"ok":true,"tick":576,"ticksAdvanced":144,"day":96}` |
+| `{"ticks":18}` | `tick` 594, `ticksAdvanced` 18, `day` 99 | `{"ok":true,"tick":594,"ticksAdvanced":18,"day":99}` |
+| `{"ticks":1}` | `tick` 595, `ticksAdvanced` 1, `day` `99.16666666666667` | `{"ok":true,"tick":595,"ticksAdvanced":1,"day":99.16666666666667}` |
+| `{"ticks":1}` | `tick` 596, `ticksAdvanced` 1, `day` `99.33333333333333` | `{"ok":true,"tick":596,"ticksAdvanced":1,"day":99.33333333333333}` |
+| `{"ticks":1}` | `tick` 597, `ticksAdvanced` 1, `day` `99.5` | `{"ok":true,"tick":597,"ticksAdvanced":1,"day":99.5}` |
+| `{"ticks":1}` | `tick` 598, `ticksAdvanced` 1, `day` `99.66666666666667` | `{"ok":true,"tick":598,"ticksAdvanced":1,"day":99.66666666666667}` |
+
+On every state read: `party.name` `"Mara Vane"`, `party.locationId` `"crown-harbor"`, `player.characterId` `"character-01"`, `player.id` `"prototype-player"`.
+
+### Checkpoint readings
+
+**State tick 594.** Expected and actual matched.
+
+- `tick` 594, `day` 99.
+- `eventPage`: `count` 200, `total` 77451, `oldestSequence` 77252, `newestSequence` 77451, `cursor` 77252, `hasMore` true.
+- Crown Harbor: `factionId` `"world-government"`, `ownerId` `"character-03"`, `garrison` 14, `stability` 57.85, `surrender` null, `surrenderOffered` false, `battleInProgress` false. `intelligence.exact` true, `intelligence.present` true, `intelligence.source` `"owned"`, `intelligence.confidence` 1, `intelligence.observedTick` 594, `intelligence.ageTicks` 0. `garrisonIntelligence.source` `"owned"`, `garrisonIntelligence.observedTick` 594, `garrisonIntelligence.ageTicks` 0.
+- No `battle-resolved` and no `settlement-claimed` on this page, for `crown-harbor` or otherwise.
+
+**State tick 595.** Expected and actual matched on the panel and on sequence 77530.
+
+- `tick` 595, `day` 99.17.
+- `eventPage`: `count` 200, `total` 77606, `oldestSequence` 77407, `newestSequence` 77606, `cursor` 77407, `hasMore` true.
+- Sequence 77530 is on this page. It is the only `battle-resolved` on the page, and the only one with `settlementId` `"crown-harbor"` and event `tick` 594. Verbatim:
+
+```json
+{"sequence":77530,"tick":594,"day":99,"type":"battle-resolved","actorId":"character-14","targetId":"world-government","settlementId":"crown-harbor","summary":"Pax Ash: battle resolved","data":null,"payloadWithheld":true}
+```
+
+- Crown Harbor: `factionId` `"world-government"`, `ownerId` `"character-03"`, `garrison` 12, `stability` 53.88, `battleInProgress` false, `surrenderOffered` false. Surrender block, verbatim: `{"offeredToId":"character-14","offeredTick":594,"previousFactionId":"world-government"}`. `intelligence.exact` true, `intelligence.present` true, `intelligence.source` `"owned"`, `intelligence.confidence` 1, `intelligence.observedTick` 595, `intelligence.ageTicks` 0. `garrisonIntelligence.source` `"owned"`, `garrisonIntelligence.observedTick` 595, `garrisonIntelligence.ageTicks` 0. The plan did not name `garrisonIntelligence` on this read; that is what the API returned.
+- No `character-captured` on this page. Nothing for `character-14` at event tick 594 of that type. Every `decision-made` on the page had `payloadWithheld` true and `data` null, including sequence 77526, summary `"Pax Ash: decision made"`.
+
+**State tick 596.** Expected and actual matched.
+
+- `tick` 596, `day` 99.33.
+- `eventPage`: `count` 200, `total` 77754, `oldestSequence` 77555, `newestSequence` 77754, `cursor` 77555, `hasMore` true.
+- Sequence 77530 is not on this page. Sequence 77678 is. It is the only `settlement-claimed` on the page. Verbatim:
+
+```json
+{"sequence":77678,"tick":595,"day":99.17,"type":"settlement-claimed","actorId":"character-14","targetId":"world-government","settlementId":"crown-harbor","summary":"Pax Ash: settlement claimed","data":null,"payloadWithheld":true}
+```
+
+- Crown Harbor: `factionId` `"free-tide"`, `ownerId` `"character-14"`, `garrison` 12, `stability` 55, `surrender` null, `surrenderOffered` false, `battleInProgress` false. `intelligence.exact` false, `intelligence.present` true, `intelligence.source` `"direct-observation"`, `intelligence.confidence` 1, `intelligence.observedTick` 596, `intelligence.ageTicks` 0. `garrisonIntelligence.source` `"direct-observation"`, `garrisonIntelligence.observedTick` 596, `garrisonIntelligence.ageTicks` 0.
+
+**State tick 597.** Expected and actual matched.
+
+- `tick` 597, `day` 99.5. The advance `day` was also `99.5`.
+- `eventPage`: `count` 200, `total` 77914, `oldestSequence` 77715, `newestSequence` 77914, `cursor` 77715, `hasMore` true.
+- Sequences 77530 and 77678 are not on this page. Sequences 77776 and 77799 are. They are the only two `battle-resolved` events on the page, both `settlementId` `"crown-harbor"` and event `tick` 596. Verbatim:
+
+```json
+{"sequence":77776,"tick":596,"day":99.33,"type":"battle-resolved","actorId":"character-03","targetId":"free-tide","settlementId":"crown-harbor","summary":"Niko Wren: battle resolved","data":null,"payloadWithheld":true}
+```
+
+```json
+{"sequence":77799,"tick":596,"day":99.33,"type":"battle-resolved","actorId":"character-06","targetId":"free-tide","settlementId":"crown-harbor","summary":"Iris Stone: battle resolved","data":null,"payloadWithheld":true}
+```
+
+- Crown Harbor: `factionId` `"free-tide"`, `ownerId` `"character-14"`, `garrison` 7, `stability` 47.03, `surrender` null, `surrenderOffered` false, `battleInProgress` false. `intelligence.exact` false, `intelligence.present` true, `intelligence.source` `"direct-observation"`, `intelligence.confidence` 1, `intelligence.observedTick` 597, `intelligence.ageTicks` 0. `garrisonIntelligence.source` `"direct-observation"`, `garrisonIntelligence.observedTick` 597, `garrisonIntelligence.ageTicks` 0. The plan did not name `garrisonIntelligence` on this read; that is what the API returned.
+
+**State tick 598.** Expected and actual matched.
+
+- `tick` 598, `day` 99.67.
+- `eventPage`: `count` 200, `total` 78051, `oldestSequence` 77852, `newestSequence` 78051, `cursor` 77852, `hasMore` true.
+- Sequences 77530, 77678, 77776, and 77799 are not on this page. Sequence 77938 is. It is the only `settlement-claimed` on the page. Verbatim:
+
+```json
+{"sequence":77938,"tick":597,"day":99.5,"type":"settlement-claimed","actorId":"character-06","targetId":"free-tide","settlementId":"crown-harbor","summary":"Iris Stone: settlement claimed","data":null,"payloadWithheld":true}
+```
+
+- Crown Harbor: `factionId` `"world-government"`, `ownerId` `"character-06"`, `garrison` 7, `stability` 55, `surrender` null, `surrenderOffered` false, `battleInProgress` false. `intelligence.exact` true, `intelligence.present` true, `intelligence.source` `"owned"`, `intelligence.confidence` 1, `intelligence.observedTick` 598, `intelligence.ageTicks` 0. `garrisonIntelligence.source` `"owned"`, `garrisonIntelligence.observedTick` 598, `garrisonIntelligence.ageTicks` 0.
+
+The five event payloads stayed withheld: `payloadWithheld` true and `data` null. Searches of these five state bodies found no `attackerScore`, no `defenderScore`, and no `"outcome"` key. `combat` on every one of these reads was `{"commandedBattle":null,"observedBattles":[],"active":null}`.
+
+### Mismatches
+
+The promotion readings matched. Two things the plan said about the same JSON did not.
+
+The plan says the outcome string is not in the JSON on any of these reads. It is not on the event. It is on `briefing.items` in the same response:
+
+| State tick | `briefing.items` sequence | `title` | `summary` |
+| --- | --- | --- | --- |
+| 595 | 77530 | `battle resolved` | `Pax Ash won at Crown Harbor` |
+| 596 | 77678 | `settlement claimed` | `Pax Ash accepted Crown Harbor's surrender and established a claim` |
+| 597 | 77776 | `battle resolved` | `Niko Wren won at Crown Harbor` |
+| 597 | 77799 | `battle resolved` | `Iris Stone won at Crown Harbor` |
+| 598 | 77938 | `settlement claimed` | `Iris Stone accepted Crown Harbor's surrender and established a claim` |
+
+Those briefing lines stay on later pages. At state tick 598 the briefing still includes `Pax Ash won at Crown Harbor`, both day-99.33 win lines, and both surrender-claim lines.
+
+The event log also shows a Crown Harbor garrison the battle line does not. Sequence 77455, event tick 594, `settlementId` `"crown-harbor"`, summary `"World: settlement upkeep"`, `payloadWithheld` false, `data.garrison` 15, `data.stability` 57.88, `data.garrisonLoss` 0. Sequence 77461, summary `"Mara Vane: knowledge updated"`, `payloadWithheld` false, `data.reason` `"direct local observation"`, `data.knowledge.garrisonEstimate` 15, `data.knowledge.factionId` `"world-government"`, `data.knowledge.observedTick` 594. The state-tick-594 panel, before those events existed, said garrison 14 and stability 57.85. The state-tick-595 panel said garrison 12 and stability 53.88. The battle event does not carry a garrison. The visible upkeep says the loss was not upkeep (`garrisonLoss` 0) and the number it carries is 15, not the 14 the dock showed one tick earlier.
+
+### What a player can tell
+
+A player at the dock can tell that the port changed hands, and the briefing tells them who won. They cannot tell why.
+
+The log lines are only `"Pax Ash: battle resolved"`, `"Pax Ash: settlement claimed"`, `"Niko Wren: battle resolved"`, `"Iris Stone: battle resolved"`, and `"Iris Stone: settlement claimed"`. The phase lines beside them are the same kind of empty sentence: `"Pax Ash: battle phase resolved"`, `"Niko Wren: battle phase resolved"`, `"Iris Stone: battle phase resolved"`. No score, no morale, no outcome field, no garrison written by the fight. `battleInProgress` was false on every read, and `observedBattles` was empty, so the combat block never showed the fight.
+
+The briefing does say who won, in those exact words: `"Pax Ash won at Crown Harbor"`, then later `"Niko Wren won at Crown Harbor"` and `"Iris Stone won at Crown Harbor"`. Both of those day-99.33 lines are on the state-tick-597 briefing while the panel still says `factionId` `"free-tide"`, `ownerId` `"character-14"`, `garrison` 7, `surrender` null, `surrenderOffered` false. Two wins, one port, and the holder has not changed. Nothing on the page says how the garrison went from 12 to 7, or which of the two wins did it.
+
+The surrender flag and the surrender sentences disagree with each other. At state tick 595 the block names Pax and `surrenderOffered` is false, which the plan said to record and not to treat as a failed run. The next tick the briefing says `"Pax Ash accepted Crown Harbor's surrender and established a claim"` while that flag had been false and the port was still World Government. At state tick 597, with Free Tide holding the port, `surrender` is null. At state tick 598 the briefing says `"Iris Stone accepted Crown Harbor's surrender and established a claim"`. The player never saw a surrender block aimed at Iris. Sequence 77916, event tick 597, summary `"World: settlement upkeep"`, `payloadWithheld` false, still has `data.garrison` 7, `data.stability` 47.06, `data.garrisonLoss` 0. The panel after the claim is garrison 7 and stability 55. The claim line does not say why stability moved.
+
+`decision-made` rows next to the fights, including `"Pax Ash: decision made"` and `"Iris Stone: decision made"`, are withheld. There is no `character-captured` row for Pax.
+
+### Verdict
+
+`PROMOTE`.
+
+State tick 595 was exact World Government, owner `character-03`, garrison 12, stability 53.88, surrender offered to `character-14` at tick 594, `surrenderOffered` false, and sequence 77530 was Pax Ash's `battle-resolved` at Crown Harbor on event tick 594. State tick 596 was `free-tide`, owner `character-14`, garrison 12, with sequence 77678. State tick 597 was garrison 7 with sequences 77776 and 77799. State tick 598 was `world-government`, owner `character-06`, garrison 7, stability 55, with sequence 77938. `party.locationId` was `crown-harbor` on every one of those reads. The battle and claim payloads stayed withheld.
+
+`REVISE` does not apply: garrison at state tick 595 was 12, the surrender block was present, stability on that read was 53.88, state tick 596 was Free Tide owned by `character-14`, and state tick 598 was World Government owned by `character-06` with garrison 7. `ABANDON` does not apply: sequence 77530 was on the state-tick-595 page whose oldest sequence is 77407, and each later sequence was on the page the step named. The `beforeSequence` fallbacks were not required.
