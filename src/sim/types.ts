@@ -266,6 +266,40 @@ export interface PartySighting {
   confidence: 1;
 }
 
+/**
+ * One anchored party, as a prisoner saw them on the morning they were released.
+ *
+ * The count and the power are the ones on that tick. A fellow prisoner is
+ * included at count 0 and power 0. Captivity itself is not copied.
+ */
+export interface ReleaseParty {
+  characterId: string;
+  troops: number;
+  partyPower: number;
+  observedTick: number;
+  source: "direct";
+  confidence: 1;
+}
+
+/**
+ * The prison a released captain carries home.
+ *
+ * Written once, inside the release, after that morning's upkeep. Absent until
+ * the first release, so a world with no release hashes as it does now. A later
+ * release replaces it when the new tick is greater or equal. Nothing deletes it.
+ * It is not an event and it is not copied into `knowledge`.
+ */
+export interface ReleaseSighting {
+  settlementId: string;
+  factionId: string | null;
+  captorFactionId: string | null;
+  garrison: number;
+  parties: ReleaseParty[];
+  observedTick: number;
+  source: "direct";
+  confidence: 1;
+}
+
 export type OrderDirective = "protect" | "pressure" | "trade-supplies" | "explore";
 
 export type StandingOrderStatus =
@@ -556,6 +590,14 @@ export interface Character {
    * deletes an entry. Omitted so a world with no sightings hashes as before.
    */
   partySightings?: Record<string, PartySighting>;
+  /**
+   * The prison this captain was released from.
+   *
+   * Absent until the first release. A later release replaces it when the new
+   * `observedTick` is greater or equal. Nothing deletes it. Omitted so a world
+   * with no release hashes as before. The captor's reading is not stored here.
+   */
+  releaseSighting?: ReleaseSighting;
   standingOrders: StandingOrder[];
   lastPlanReviewTick: number;
   currentGoal: string;

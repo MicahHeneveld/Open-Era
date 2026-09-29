@@ -351,3 +351,32 @@ test("a sea row does not create a partySightings entry", () => {
   assert.equal(subject.partySightings, undefined);
   assert.equal("partySightings" in projected && projected.partySightings === null, true);
 });
+
+test("a captor row does not create a partySightings entry", () => {
+  const world = createPrototypeWorld(1847);
+  const commander = commanderOf(world);
+  const subject = Object.values(world.characters).find((character) =>
+    character.id !== commander.id && character.factionId !== commander.factionId,
+  );
+  assert.ok(subject);
+  subject.locationId = commander.locationId;
+  subject.travel = null;
+  subject.troops = { ...subject.troops, count: 0 };
+  subject.captivity = {
+    captorFactionId: commander.factionId,
+    settlementId: commander.locationId!,
+    capturedTick: 4,
+    mandatoryReleaseTick: 88,
+    cause: "failed-retreat",
+    displayedRisk: "low",
+    scatteredTroops: { count: 12, experience: subject.troops.experience, discipline: subject.troops.discipline },
+    releaseDestinationId: null,
+  };
+  assert.equal(commander.partySightings, undefined);
+
+  const projected = projectCharacter(world, commander, subject);
+  assert.equal((projected.captiveIntel as { troops: number }).troops, 12);
+  assert.equal(commander.partySightings, undefined);
+  assert.equal(subject.partySightings, undefined);
+  assert.equal(projected.partySightings, null);
+});

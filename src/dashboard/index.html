@@ -814,8 +814,26 @@
             ? '<div class="stat"><span>Sighted troops</span><strong>' + item.seaSighting.troops + ' <span class="subtle">' + item.seaSighting.ageTicks + " ticks old</span></strong></div>"
             : "") +
           stat("Strategy", item.skills ? item.skills.strategy : null) +
-          stat("Leadership", item.skills ? item.skills.leadership : null) +
+          stat("Leadership", item.skills ? item.skills.leadership : item.captiveIntel ? item.captiveIntel.leadership : null) +
+          (item.captiveIntel
+            ? '<div class="stat"><span>Captured troops</span><strong>' + item.captiveIntel.troops + ' <span class="subtle">' + item.captiveIntel.ageTicks + " ticks old</span></strong></div>"
+            : "") +
         "</div>" +
+        (item.captiveIntel
+          ? "<h3>Captive reading</h3><div class=\"subtle\">Taken at tick " + item.captiveIntel.observedTick + ", party power " + item.captiveIntel.partyPower + ".</div>" +
+            (item.captiveIntel.ports.length
+              ? item.captiveIntel.ports.map(function (port) {
+                  var place = settlement(port.settlementId);
+                  return '<div class="subtle">' + esc(place ? place.name : port.settlementId) + " garrison " + port.garrisonEstimate + ", " + fmt(port.displayConfidence * 100) + "% confidence, " + port.ageTicks + " ticks old" + (port.stale ? ", stale" : "") + "</div>";
+                }).join("")
+              : '<div class="subtle">No port report from this prisoner.</div>')
+          : "") +
+        (item.releaseSighting
+          ? (function () {
+              var prison = settlement(item.releaseSighting.settlementId);
+              return "<h3>Prison remembered</h3><div class=\"subtle\">" + esc(prison ? prison.name : item.releaseSighting.settlementId) + ", garrison " + item.releaseSighting.garrison + ", " + item.releaseSighting.ageTicks + " ticks old" + (item.releaseSighting.stale ? ", stale" : "") + ".</div>";
+            })()
+          : "") +
         "<h3>Condition</h3>" +
         (item.health == null || item.morale == null
           ? '<div class="empty">Condition is not observable from here.</div>'

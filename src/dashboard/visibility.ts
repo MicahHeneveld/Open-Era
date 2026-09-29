@@ -1,6 +1,6 @@
-import { assessStandingOrder } from "../sim/agency.ts";
-import { commandHolderId, factionPower, partyPower, round } from "../sim/state.ts";
-import type { Character, PartySighting, SimEvent, StandingOrder, SupplyContract, TravelState, WorldState } from "../sim/types.ts";
+import { assessStandingOrder, garrisonConfidenceLabel } from "../sim/agency.ts";
+import { commandHolderId, factionPower, partyPower, partyPowerFromTroops, round } from "../sim/state.ts";
+import type { Character, PartySighting, ReleaseSighting, SimEvent, StandingOrder, SupplyContract, TravelState, WorldState } from "../sim/types.ts";
 
 /**
  * Decides what a player may legitimately know about the rest of the world.
@@ -339,6 +339,132 @@ export function seaSightingsFor(world: WorldState, observer: Character): Record<
   return rows;
 }
 
+export interface CaptivePortBelief {
+  settlementId: string;
+  garrisonEstimate: number;
+  observedTick: number;
+  ageTicks: number;
+  confidence: number;
+  displayConfidence: number;
+  source: "direct" | "faction-report";
+  stale: boolean;
+}
+
+/**
+ * What the captor's faction reads off one prisoner.
+ *
+ * Derived when the state is projected. It is not stored, and it is not copied
+ * into `troops` or `partyPower`. The person fields keep confidence 1. A port
+ * belief keeps the prisoner's confidence and date, and shows the garrison label.
+ */
+export interface CaptiveIntel {
+  characterId: string;
+  factionId: string | null;
+  archetype: string;
+  settlementId: string;
+  leadership: number;
+  troops: number;
+  partyPower: number;
+  observedTick: number;
+  ageTicks: number;
+  source: "direct";
+  confidence: 1;
+  ports: CaptivePortBelief[];
+}
+
+export interface ProjectedReleaseSighting extends ReleaseSighting {
+  ageTicks: number;
+  displayConfidence: number;
+  stale: boolean;
+}
+
+function reportAge(world: WorldState, observedTick: number): number {
+  return Math.max(0, world.tick - observedTick);
+}
+
+function reportIsStale(world: WorldState, ageTicks: number): boolean {
+  return ageTicks >= world.ticksPerDay * 3;
+}
+
+/**
+ * Port beliefs the prisoner already carries about their own faction.
+ *
+ * A rumor is left out, including one that names their faction. An unaffiliated
+ * prisoner has none. The live garrison is not read. A negative tick is floored
+ * for display and still aged from the raw tick.
+ */
+function captivePorts(world: WorldState, prisoner: Character): CaptivePortBelief[] {
+  if (!prisoner.factionId) return [];
+  return Object.values(prisoner.knowledge)
+    .filter((entry) =>
+      (entry.source === "direct" || entry.source === "faction-report") &&
+      entry.factionId === prisoner.factionId,
+    )
+    .sort((left, right) => left.settlementId.localeCompare(right.settlementId))
+    .map((entry) => {
+      const ageTicks = reportAge(world, entry.observedTick);
+      const source = entry.source === "faction-report" ? "faction-report" as const : "direct" as const;
+      return {
+        settlementId: entry.settlementId,
+        garrisonEstimate: entry.garrisonEstimate,
+        observedTick: Math.max(0, entry.observedTick),
+        ageTicks,
+        confidence: entry.confidence,
+        displayConfidence: garrisonConfidenceLabel(entry.confidence, ageTicks),
+        source,
+        stale: reportIsStale(world, ageTicks),
+      };
+    });
+}
+
+/**
+ * The captor's row for one prisoner, or null when this reader does not hold them.
+ *
+ * The reader does not have to be in the port. Losing the port does not end the
+ * reading. A faction that merely holds the port, and is not the captor, gets
+ * nothing. The prisoner is not a row on their own screen. Unaffiliated captives
+ * are not a faction's row. This does not write the world.
+ */
+export function captiveIntelFor(
+  world: WorldState,
+  commander: Character,
+  character: Character,
+): CaptiveIntel | null {
+  const captivity = character.captivity;
+  if (!captivity || character.id === commander.id) return null;
+  if (!captivity.captorFactionId || commander.factionId !== captivity.captorFactionId) return null;
+  const observedTick = captivity.capturedTick;
+  return {
+    characterId: character.id,
+    factionId: character.factionId,
+    archetype: character.archetype,
+    settlementId: captivity.settlementId,
+    leadership: character.skills.leadership,
+    troops: captivity.scatteredTroops.count,
+    partyPower: partyPowerFromTroops(character, captivity.scatteredTroops),
+    observedTick,
+    ageTicks: reportAge(world, observedTick),
+    source: "direct",
+    confidence: 1,
+    ports: captivePorts(world, character),
+  };
+}
+
+function projectReleaseSighting(
+  world: WorldState,
+  character: Character,
+): ProjectedReleaseSighting | null {
+  const record = character.releaseSighting;
+  if (!record) return null;
+  const ageTicks = reportAge(world, record.observedTick);
+  return {
+    ...record,
+    ageTicks,
+    displayConfidence: garrisonConfidenceLabel(record.confidence, ageTicks),
+    stale: reportIsStale(world, ageTicks),
+  };
+}
+
 function projectKnowledge(knowledge: Character["knowledge"]): Character["knowledge"] {
   return Object.fromEntries(
     Object.entries(knowledge).map(([settlementId, entry]) => [
@@ -425,6 +551,8 @@ export function projectCharacter(
   const storedSighting = isSelf ? undefined : commander.partySightings?.[character.id];
   const seaSightings = isSelf ? seaSightingsFor(world, character) : null;
   const seaSighting = isSelf ? null : seaSightingsFor(world, commander)?.[character.id] ?? null;
+  const captiveIntel = captiveIntelFor(world, commander, character);
+  const releaseSighting = isSelf ? projectReleaseSighting(world, character) : null;
   const activeOrder =
     standingOrders
       .filter(
@@ -460,6 +588,12 @@ export function projectCharacter(
      */
     seaSighting,
     captivity: condition ? character.captivity : null,
+    /**
+     * The strength the captor took, beside the live count. Live troops stay 0
+     * while the prisoner is held. This row is not copied into them. Null when
+     * the reader is not the captor, and null on the prisoner's own screen.
+     */
+    captiveIntel,
     troopRecovery: condition ? character.troopRecovery : null,
     scars: condition ? character.scars : null,
     debts: isSelf ? character.debts : null,
@@ -483,6 +617,11 @@ export function projectCharacter(
     standingOrders,
     activeOrderAssessment: activeOrder ? assessStandingOrder(character, activeOrder) : null,
     knowledge: isSelf ? projectKnowledge(character.knowledge) : null,
+    /**
+     * The prison this captain remembers. On anyone else it is null, the same
+     * as knowledge. It is not copied into the knowledge map.
+     */
+    releaseSighting,
     /** The commander's own map. On anyone else it is null, the same as knowledge. */
     partySightings: isSelf ? projectPartySightings(world, character.partySightings) : null,
     /** The commander's own sea list. On anyone else it is null. Null in port. */

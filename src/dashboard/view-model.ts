@@ -16,7 +16,7 @@ import {
 } from "../sim/engine.ts";
 import { marketPrice, round, settlementClaimAvailableTo } from "../sim/state.ts";
 import { RESOURCE_KEYS, type ActiveBattle, type Character, type CombatForecast, type SettlementKnowledge, type SimEvent, type WorldState } from "../sim/types.ts";
-import { projectCharacter, projectEvent, projectFactions, projectSupplyContracts } from "./visibility.ts";
+import { captiveIntelFor, projectCharacter, projectEvent, projectFactions, projectSupplyContracts } from "./visibility.ts";
 
 /**
  * Whether a battle at this settlement is one the commander could actually know
@@ -450,6 +450,45 @@ function checkInBriefing(world: WorldState, commanderId: string, events: SimEven
     });
   }
 
+  // A port belief on a prisoner, and the prison a released captain remembers,
+  // are settlement reports. The person fields on the captor row are not, and
+  // they do not fire this warning. Age is counted from the raw tick.
+  const release = commander.releaseSighting;
+  if (release) {
+    const age = Math.max(0, world.tick - release.observedTick);
+    if (age >= world.ticksPerDay * 3) {
+      const name = world.settlements[release.settlementId]?.name ?? release.settlementId;
+      addItem({
+        id: `intel:release:${release.settlementId}:${release.observedTick}`,
+        severity: "warning",
+        actionRequired: false,
+        title: "Intelligence is stale",
+        summary: `${name}'s release report is ${age} ticks old.`,
+        day: round(world.tick / world.ticksPerDay, 2),
+        settlementId: release.settlementId,
+        acknowledgeable: true,
+      });
+    }
+  }
+  for (const prisoner of Object.values(world.characters).sort((left, right) => left.id.localeCompare(right.id))) {
+    const row = captiveIntelFor(world, commander, prisoner);
+    if (!row) continue;
+    for (const port of row.ports) {
+      if (!port.stale) continue;
+      const name = world.settlements[port.settlementId]?.name ?? port.settlementId;
+      addItem({
+        id: `intel:captive:${prisoner.id}:${port.settlementId}:${port.observedTick}`,
+        severity: "warning",
+        actionRequired: false,
+        title: "Intelligence is stale",
+        summary: `${prisoner.name}'s report of ${name} is ${port.ageTicks} ticks old.`,
+        day: round(world.tick / world.ticksPerDay, 2),
+        settlementId: port.settlementId,
+        acknowledgeable: true,
+      });
+    }
+  }
+
   const includedTypes = new Set([    "player-command-failed",
     "standing-order-accepted",
     "standing-order-refused",
@@ -710,18 +749,19 @@ function projectPriceDrift(
 }
 
 /**
- * Age of a stored report, as the forecast already counts it.
+ * Age of a stored report, counted from the tick the player is shown.
  *
- * Seeded hearsay can carry a negative `observedTick`. That backdate is how the
- * simulation treats a report from before the world, and `combatForecast` ages
- * it from the raw tick. The player is not shown a tick that never happened.
- * Flooring the tick and also zeroing the age would make a stale rumor look
- * fresh, and the panel would disagree with the band.
+ * Seeded hearsay can carry a negative `observedTick`. That backdate stays in
+ * the simulation, and `combatForecast` still ages its band from the raw tick.
+ * The player is not shown a tick that never happened. The age beside the
+ * floored tick is the world tick minus that tick, so a rumor cannot read as
+ * older than the world.
  */
 function reportedAge(world: WorldState, observedTick: number): { observedTick: number; ageTicks: number } {
+  const shownTick = Math.max(0, observedTick);
   return {
-    observedTick: Math.max(0, observedTick),
-    ageTicks: Math.max(0, world.tick - observedTick),
+    observedTick: shownTick,
+    ageTicks: Math.max(0, world.tick - shownTick),
   };
 }
 
