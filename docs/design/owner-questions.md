@@ -940,7 +940,7 @@ Answer by number, for example "4: yes" or "4: keep the default." The default is 
 
 ## Capture wording
 
-Accepted, not built (M34, after M33).
+Built (M34). The defaults below are what the projection says.
 
 ### 91. What should the player's display name show?
 

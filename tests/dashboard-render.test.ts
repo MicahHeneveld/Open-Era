@@ -38,8 +38,10 @@ function stubElement() {
 type Renderer = {
   setWorld: (world: Record<string, unknown>) => void;
   settlementInspector: (settlement: Record<string, unknown>) => string;
+  characterInspector: (character: Record<string, unknown>) => string;
   renderHeader: () => void;
   headerHtml: () => string;
+  briefTitle: () => string;
 };
 
 function rendererFor(state: Record<string, unknown>): Renderer {
@@ -59,13 +61,19 @@ function rendererFor(state: Record<string, unknown>): Renderer {
     "window",
     "fetch",
     "console",
-    `${inlineScript()}\n; return { settlementInspector, renderHeader, setWorld: function (next) { world = next; } };`,
+    `${inlineScript()}\n; return { settlementInspector, characterInspector, renderHeader, renderFooter, setWorld: function (next) { world = next; } };`,
   );
-  const renderer = factory(document, windowStub, fetchStub, console) as Omit<Renderer, "headerHtml">;
+  const renderer = factory(document, windowStub, fetchStub, console) as Omit<Renderer, "headerHtml" | "briefTitle"> & {
+    renderFooter: () => void;
+  };
   renderer.setWorld(state);
   return {
     ...renderer,
     headerHtml: () => elements.get("header-stats")?.innerHTML ?? "",
+    briefTitle: () => {
+      renderer.renderFooter();
+      return elements.get("brief-title")?.textContent ?? "";
+    },
   };
 }
 
@@ -156,6 +164,40 @@ test("an owned market is never marked approximate", () => {  const state = proje
     assert.match(section, /own use/, `${settlement.id} must show the live board's own-use drift`);
     assert.match(section, /if no one trades/, `${settlement.id} must say the drift is not the next quote`);
   }
+});
+
+test("a sea count uses the row's kind and the check-in title names background lines", () => {
+  const state = projectedState();
+  const briefing = state.briefing as { attentionLabel: string };
+  const renderer = rendererFor(state);
+  assert.equal(renderer.briefTitle(), briefing.attentionLabel);
+
+  const characters = state.characters as Array<Record<string, any>>;
+  const [template] = characters;
+  const card = {
+    ...template,
+    id: "sea-card",
+    name: "Sable Morrow",
+    troops: null,
+    skills: null,
+    partySighting: { troops: 21, ageTicks: 2 },
+    seaSighting: { kind: "sharing", troops: 19, ageTicks: 0 },
+    standingOrders: [],
+    activeOrderAssessment: null,
+    relationship: null,
+    activeGoal: null,
+    plan: null,
+    controller: { kind: "autonomous" },
+    locationId: null,
+    travel: { remainingTicks: 1 },
+    factionId: null,
+  };
+  const html = renderer.characterInspector(card);
+  assert.match(html, /Sighted troops/);
+  assert.match(html, /21/);
+  assert.match(html, />sharing</);
+  assert.match(html, /19/);
+  assert.equal((html.match(/Sighted troops/g) ?? []).length, 1);
 });
 
 test("the header runway reads the party's runwayTicks", () => {

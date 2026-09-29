@@ -1,6 +1,7 @@
 import { assessStandingOrder, garrisonConfidenceLabel } from "../sim/agency.ts";
 import { commandHolderId, factionPower, partyPower, partyPowerFromTroops, round } from "../sim/state.ts";
 import type { Character, PartySighting, ReleaseSighting, SimEvent, StandingOrder, SupplyContract, TravelState, WorldState } from "../sim/types.ts";
+import { causeLabelFor, learnedInPortNote, loyaltyNoteFor, seatSummaryFor, skillsWithheldNote, summaryStaysWhenWithheld } from "./wording.ts";
 
 /**
  * Decides what a player may legitimately know about the rest of the world.
@@ -192,6 +193,8 @@ export interface SeaSighting {
   source: "direct";
   confidence: 1;
   ageTicks: number;
+  /** The sentence the briefing lists. The troop count stays on this row. */
+  summary: string;
 }
 
 interface WaterSpan {
@@ -318,7 +321,57 @@ function seaRow(world: WorldState, subject: Character, kind: SeaSightingKind, ar
     source: "direct",
     confidence: 1,
     ageTicks: Math.max(0, world.tick - observedTick),
+    summary: seaSummary(world, subject, kind, arriving, subject.troops.count, Math.max(0, world.tick - observedTick)),
   };
+}
+
+function seaSummary(
+  world: WorldState,
+  subject: Character,
+  kind: SeaSightingKind,
+  arriving: boolean,
+  troops: number,
+  ageTicks: number,
+): string {
+  const travel = subject.travel!;
+  const from = world.settlements[travel.fromId]?.name ?? travel.fromId;
+  const to = world.settlements[travel.toId]?.name ?? travel.toId;
+  const dock = arriving ? ` Docks at ${to} on this tick.` : "";
+  return `${subject.name} is ${kind}, ${from} to ${to}.${dock} ${troops} troops, ${ageTicks} ticks old.`;
+}
+
+export interface OutOfStretch {
+  characterId: string;
+  fromId: string;
+  toId: string;
+  remainingTicks: number;
+  totalTicks: number;
+  summary: string;
+}
+
+/**
+ * Ships on the commander's leg whose stretch of water does not meet hers.
+ * Null in port. No troop count: at sea that figure is withheld.
+ */
+export function outOfStretchFor(world: WorldState, observer: Character): OutOfStretch[] | null {
+  if (!atSea(observer)) return null;
+  const rows: OutOfStretch[] = [];
+  for (const subject of Object.values(world.characters).sort((left, right) => left.id < right.id ? -1 : left.id > right.id ? 1 : 0)) {
+    if (subject.id === observer.id || !atSea(subject)) continue;
+    if (!sameLeg(observer.travel, subject.travel)) continue;
+    if (meetingKind(observer.travel, subject.travel)) continue;
+    const from = world.settlements[subject.travel.fromId]?.name ?? subject.travel.fromId;
+    const to = world.settlements[subject.travel.toId]?.name ?? subject.travel.toId;
+    rows.push({
+      characterId: subject.id,
+      fromId: subject.travel.fromId,
+      toId: subject.travel.toId,
+      remainingTicks: subject.travel.remainingTicks,
+      totalTicks: subject.travel.totalTicks,
+      summary: `${subject.name} is on ${from} to ${to}, ${subject.travel.remainingTicks} of ${subject.travel.totalTicks} ticks left, and is not in the same stretch of water.`,
+    });
+  }
+  return rows;
 }
 
 /**
@@ -551,6 +604,14 @@ export function projectCharacter(
   const storedSighting = isSelf ? undefined : commander.partySightings?.[character.id];
   const seaSightings = isSelf ? seaSightingsFor(world, character) : null;
   const seaSighting = isSelf ? null : seaSightingsFor(world, commander)?.[character.id] ?? null;
+  const dockedTogether = !isSelf &&
+    commander.travel === null &&
+    character.travel === null &&
+    commander.locationId !== null &&
+    commander.locationId === character.locationId;
+  const loyalty = character.factionId !== null && character.factionId === commander.factionId
+    ? round(character.personality.loyalty + (character.loyaltyAdjustment ?? 0), 3)
+    : null;
   const captiveIntel = captiveIntelFor(world, commander, character);
   const releaseSighting = isSelf ? projectReleaseSighting(world, character) : null;
   const activeOrder =
@@ -572,6 +633,14 @@ export function projectCharacter(
     travel: character.travel,
     money: condition ? round(character.money, 2) : null,
     cargo: condition ? character.cargo : null,
+    /**
+     * Why the hold and the purse are on this card. Only when both ships are
+     * in the same port. A sea card does not get it, and neither does a remote
+     * reading through an owned port, where that sentence would be false.
+     */
+    conditionNote: dockedTogether && commander.locationId
+      ? learnedInPortNote(world.settlements[commander.locationId]?.name ?? commander.locationId)
+      : null,
     health: condition ? round(character.health, 1) : null,
     morale: condition ? round(character.morale, 1) : null,
     sailors: condition ? character.sailors : null,
@@ -587,7 +656,9 @@ export function projectCharacter(
      * Null when the commander is not alongside, including in port.
      */
     seaSighting,
-    captivity: condition ? character.captivity : null,
+    captivity: condition && character.captivity
+      ? { ...character.captivity, causeLabel: causeLabelFor(character.captivity.cause) }
+      : null,
     /**
      * The strength the captor took, beside the live count. Live troops stay 0
      * while the prisoner is held. This row is not copied into them. Null when
@@ -599,15 +670,22 @@ export function projectCharacter(
     debts: isSelf ? character.debts : null,
     attributes: capability ? character.attributes : null,
     skills: capability ? character.skills : null,
+    /**
+     * Present when skills are withheld, so a null leadership is not a missing person.
+     * A captor row already publishes leadership, so that sentence would be false there.
+     */
+    skillsNote: capability || captiveIntel
+      ? null
+      : skillsWithheldNote(character.name, intelligence.tier, intelligence.source),
     personality: isSelf ? character.personality : null,
     /**
      * Loyalty the cover sort reads: the seed plus any unpaid-release scar.
      * Own faction only, including a mate whose personality stays hidden.
      * A rival is null. `personality.loyalty` on the commander's own row stays the seed.
      */
-    loyalty: character.factionId !== null && character.factionId === commander.factionId
-      ? round(character.personality.loyalty + (character.loyaltyAdjustment ?? 0), 3)
-      : null,
+    loyalty,
+    /** Which figure the seat reads. The commander's own card only. */
+    loyaltyNote: isSelf ? loyaltyNoteFor(character, round(character.personality.loyalty + (character.loyaltyAdjustment ?? 0), 3)) : null,
     partyPower: condition ? partyPower(character) : null,
     activeGoal: isSelf
       ? character.goals.find((goal) => goal.id === character.activeGoalId) ?? null
@@ -626,6 +704,8 @@ export function projectCharacter(
     partySightings: isSelf ? projectPartySightings(world, character.partySightings) : null,
     /** The commander's own sea list. On anyone else it is null. Null in port. */
     seaSightings,
+    /** Same leg, outside her stretch. Null in port and on anyone else. */
+    outOfStretch: isSelf ? outOfStretchFor(world, character) : null,
     victories: character.victories,
     defeats: character.defeats,
     intelligence,
@@ -644,6 +724,7 @@ export function projectFactions(world: WorldState, commander: Character): Record
         color: faction.color,
         commanderId: commandHolderId(world, faction.id),
         actingCommanderId: faction.actingCommanderId ?? null,
+        seatSummary: seatSummaryFor(world, faction),
         treasury: owned ? faction.treasury : null,
         // A faction's tax is public in a way its treasury is not: every sale in
         // its ports pays it, and a merchant has to know the rate before sailing.
@@ -751,7 +832,7 @@ export function projectEvent(
     actorId: event.actorId,
     targetId: event.targetId,
     settlementId: event.settlementId,
-    summary: visible ? richSummary : `${actor}: ${event.type.replaceAll("-", " ")}`,
+    summary: visible || summaryStaysWhenWithheld(event.type) ? richSummary : `${actor}: ${event.type.replaceAll("-", " ")}`,
     data: visible ? event.data : null,
     payloadWithheld: !visible,
   };
