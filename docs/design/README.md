@@ -25,6 +25,7 @@ These documents capture the decisions made during the initial design conversatio
 - [Order confirmation](order-confirmation.md) — Open / proposal: a completion report closes when its issuer signs it, or after a day when nobody can
 - [Captivity debts](captivity-debts.md) — Open / proposal: the unpaid ransom comes out of the prisoner's purse, up to one day's wages, on each world day
 - [Ransom split](ransom-split.md) — Built: the coins paid on release split between the captor's treasury and party leader. The odd cent goes to the treasury. Question 24 is settled
+- [Treasury spending](treasury-spending.md) — Open / proposal: a faction ransom goes entirely to the treasury, and the command holder spends it while other members spend a daily allowance
 - [Political layer](political-layer.md) — Built in M30: the person who already issues a faction's orders is named in command, and a captive commander's seat is covered until release
 - [Loyalty drift](loyalty-drift.md) — Open / proposal: loyalty falls by 0.04 when a release leaves the ransom unpaid, and nothing else reads that change except who covers the seat
 - [Loyalty scar remeasure](loyalty-scar-remeasure.md) — Open / remeasure: with the dock rule patched on and M30's cover sort live, a −0.04 unpaid-release scar does not rename a cover or move the 72-tick fixture
