@@ -390,6 +390,58 @@ Answer by number, for example "4: yes" or "4: keep the default." The default is 
 
 **Source:** [Battle morale](battle-morale.md#questions-for-micah) question 5
 
+## Political layer
+
+### 38. While the person in command is in prison, does someone else cover the seat?
+
+**Default:** Yes. The commander takes it back when they are released. Prison lasts 14 days on these runs, every time. Nobody dies, so the seat is not given away for good. Today the seat is not shown, and prison changes nothing about who issues orders.
+
+**If you pick the other way:** Nobody else would cover the seat. Today the seat is not shown, and prison changes nothing about who issues orders.
+
+**Status:** Accepted, not built (M30)
+
+**Source:** [Political layer](political-layer.md#questions-for-micah) question 1
+
+### 39. Who covers it?
+
+**Default:** The faction member with the highest leadership plus loyalty, skipping anyone who is also in prison. The lower id wins a tie. That is the ranking the setup already uses to pick a reporting officer. Trust is not used, because most ties are new and sit near 0.28, while loyalty does not move. On these runs the cover is Dax Pike, nobody, and Corin Hale or Bram Tern.
+
+**If you pick the other way:** Trust would be used. Most ties are new and sit near 0.28, while loyalty does not move.
+
+**Status:** Accepted, not built (M30)
+
+**Source:** [Political layer](political-layer.md#questions-for-micah) question 2
+
+### 40. Can you name someone else, or keep the cover after the prisoner is free?
+
+**Default:** No. This slice only covers the absence. Choosing a commander, and a permanent change of seat, wait until a later slice. The reporting officer stays a separate job.
+
+**If you pick the other way:** You could name someone else, or keep the cover after the prisoner is free.
+
+**Status:** Accepted, not built (M30)
+
+**Source:** [Political layer](political-layer.md#questions-for-micah) question 3
+
+### 41. Who is allowed to see who holds the seat?
+
+**Default:** Everyone, including a rival. You can already see who belongs to a faction. You still cannot see a rival's treasury.
+
+**If you pick the other way:** A rival would not see who holds the seat.
+
+**Status:** Accepted, not built (M30)
+
+**Source:** [Political layer](political-layer.md#questions-for-micah) question 4
+
+### 42. If the person covering the seat is captured too, does the next person step up?
+
+**Default:** Yes, by the same ranking. It did not happen in these 1200 ticks. On seed 4096 the alternative, recomputing every tick, would have replaced Bram Tern with Corin Hale for the last 19 ticks of one absence, because Corin walked out of prison first. The default keeps Bram for the whole 14 days.
+
+**If you pick the other way:** The next person would not step up, or the cover would be recomputed every tick. On seed 4096 that recompute would have replaced Bram Tern with Corin Hale for the last 19 ticks of one absence, because Corin walked out of prison first.
+
+**Status:** Accepted, not built (M30)
+
+**Source:** [Political layer](political-layer.md#questions-for-micah) question 5
+
 ## Already settled
 
-The [progress log](../../progress.md) (reconnaissance brief, 2026-09-29) answered reconnaissance questions 1–8. Reconnaissance question 1 is no: a survey or an officer's look stores population, walls, and who was anchored. Reconnaissance question 2 keeps confidence and the original date on that handoff. Reconnaissance questions 3–8 stay put: public sea courses, a live garrison from your other ports, no captives or informants. [Party sightings](party-sightings.md#left-open) repeats those. A foreign price is that dated report, not a live quote ([World simulation](world-simulation.md#player-trade)). An idle player with money still starves if they give no orders ([Port provisions](port-provisions.md#the-idle-commander)). Unpaid ransom is questions 22–29 ([Captivity debts](captivity-debts.md#questions-for-micah)). A landless raid once a town has 8 soldiers, and no troops left behind on the claim, is questions 30–32 ([Portless recovery](portless-recovery.md#questions-for-micah)). A higher score is the attacker's victory when morale is 12 or under, a close fight included and the short retake accepted, rest does not refill the hold, and the capture die is still rolled, is questions 33–37 ([Battle morale](battle-morale.md#questions-for-micah)). Battered-port surrender, fed garrisons, and refusing an unpaid voyage are built. The first hour is a test, not a choice. The one-click food buy is a known bug queued for engineering: the button will show the cost, apply the share-of-stock cap, and its refusal text will be fixed ([World simulation](world-simulation.md#player-trade); [progress log](../../progress.md#open-items)).
+The [progress log](../../progress.md) (reconnaissance brief, 2026-09-29) answered reconnaissance questions 1–8. Reconnaissance question 1 is no: a survey or an officer's look stores population, walls, and who was anchored. Reconnaissance question 2 keeps confidence and the original date on that handoff. Reconnaissance questions 3–8 stay put: public sea courses, a live garrison from your other ports, no captives or informants. [Party sightings](party-sightings.md#left-open) repeats those. A foreign price is that dated report, not a live quote ([World simulation](world-simulation.md#player-trade)). An idle player with money still starves if they give no orders ([Port provisions](port-provisions.md#the-idle-commander)). Unpaid ransom is questions 22–29 ([Captivity debts](captivity-debts.md#questions-for-micah)). A landless raid once a town has 8 soldiers, and no troops left behind on the claim, is questions 30–32 ([Portless recovery](portless-recovery.md#questions-for-micah)). A higher score is the attacker's victory when morale is 12 or under, a close fight included and the short retake accepted, rest does not refill the hold, and the capture die is still rolled, is questions 33–37 ([Battle morale](battle-morale.md#questions-for-micah)). Someone else covers the seat while the commander is in prison and hands it back on release, the cover is the highest leadership plus loyalty with the lower id winning a tie and trust is not used, you cannot name someone else or keep the cover after release, everyone including a rival sees who holds the seat, and if that cover is captured the next person steps up for the whole 14 days, is questions 38–42 ([Political layer](political-layer.md#questions-for-micah)). Battered-port surrender, fed garrisons, and refusing an unpaid voyage are built. The first hour is a test, not a choice. The one-click food buy is a known bug queued for engineering: the button will show the cost, apply the share-of-stock cap, and its refusal text will be fixed ([World simulation](world-simulation.md#player-trade); [progress log](../../progress.md#open-items)).
