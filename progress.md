@@ -58,9 +58,15 @@ Git remains the complete history. This file exists for three things git does not
 | The "Command queued for Mara Vane" summary does not name the carrier, the price, or the destination | Readability | Unassigned | Open |
 | Relationship-changed lines have null data and no stated reason | Readability | Unassigned | Open |
 | The names Toma Reef and Toma Hale collide in the feed | Readability | Unassigned | Open |
-| No briefing or event text says who covers a captive commander's seat, or that the cover doesn't take the orders. The player sees only `actingCommanderId` `character-06` in the faction JSON and has to join ids | Readability | Unassigned | Open |
-| The captivity line "Escape is guaranteed but dangerous" contradicts the capture's displayedRisk `low` (captureChance 0.04) | Readability | Unassigned | Open |
-| `player.displayName` shows "Prototype Commander" while the party, feed, and briefing say Mara Vane | Readability | Unassigned | Open |
+| No briefing or event text says who covers a captive commander's seat, or that the cover doesn't take the orders. The player sees only `actingCommanderId` in the faction JSON and has to join ids. Seen again in M31: at t595 the seat is only `character-05` | Readability | Unassigned | Open |
+| The captivity line "Escape is guaranteed but dangerous" contradicts the capture's displayedRisk `low` (captureChance 0.04). Seen again in M31 beside displayedRisk `severe` and capture chance 0.55 | Readability | Unassigned | Open |
+| `player.displayName` shows "Prototype Commander" while the party, feed, and briefing say Mara Vane. Seen again in M31 | Readability | Unassigned | Open |
+| No line says loyalty fell. Mara's card shows `loyalty` 0.768 beside `personality.loyalty` 0.8079…, and nothing says which figure the seat uses | Readability | Unassigned | Open |
+| A release feed row is only "Name: captivity released". The paid amount and the debt appear only in the briefing | Readability | Unassigned | Open |
+| The battle feed row does not say who won. The briefing does | Readability | Unassigned | Open |
+| At morale 0 the starvation line still quotes a morale cost | Readability | Unassigned | Open |
+| `attentionCount` does not match the briefing line count (4 vs 6 at t119, 7 vs 10 at t595) | Readability | Unassigned | Open |
+| Pax's leadership goes from 75 to null with no sentence explaining it | Readability | Unassigned | Open |
 | An outscore-loss capture sentence ("Rook Tern was captured at Glassport after outscore loss") and its feed row don't name the captor. The feed puts the prisoner as actorId and the captor faction as targetId, so "Rook Tern: character captured" reads as if the prisoner acted on Free Tide | Readability | Unassigned | Open |
 | "after outscore loss" has no subject, reads as if the prisoner lost the fight (next to "Pax Ash won at Glassport"), never explains "outscore", and doesn't say the prisoner was only on the dock | Readability | Unassigned | Open |
 | A character whose ambitions all reach progress 1 throws `<name> has no active goals` on the next plan review | Defect | Cursor | **Fixed** on `fix/no-active-goals`. Satisfaction stays. The opening roots (survival, archetype, and faction membership) are renewed at progress 0. Battle-born goals stay satisfied until the next victory or defeat. Reproduced through the CLI at tick 307 / 269 / 260 on seeds 1847 / 2718 / 4096, the same ticks as the bare harness |
