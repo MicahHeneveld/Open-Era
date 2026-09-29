@@ -40,6 +40,10 @@ Git remains the complete history. This file exists for three things git does not
 
 | Item | Type | Owner | Status |
 | --- | --- | --- | --- |
+| HIGHEST PRIORITY: add a player-visible reason line on battle-resolved when the player witnessed the battle, such as "outscore" or "nerve broke" | Readability | Unassigned | Open |
+| With several attackers, the briefing says more than one captain "won at Crown Harbor" in the same tick while the panel still shows the other side | Readability | Unassigned | Open |
+| A claim says the captain "accepted Crown Harbor's surrender", but the surrender block is written and consumed within one tick, so the player never saw an offer | Readability | Unassigned | Open |
+| The visible port upkeep and the player's knowledge line give a garrison estimate (15) that disagrees with the dock panel (14, then 12) | Readability | Unassigned | Open |
 | After a port is captured, the player's panel falls back to a stale tick-0 rumor (for example "free-tide, garrison 131" at Cinder Key on 2718) instead of the last exact reading | Readability | Unassigned | Open |
 | The owned-port panel shows a surrender block (offeredToId/offeredTick) beside surrenderOffered false, which reads as contradictory | Readability | Unassigned | Open |
 | A silent close is still event type `standing-order-completed` | Readability | Unassigned | Open |
@@ -214,6 +218,14 @@ Backfilled from the commit graph on 2026-09-25. **Attribution caveat:** commits 
 - A player can name a good and a quantity and see the price before paying, on any of the four resources, with every limit quoted before it is hit. A voyage pays for itself (+113.27 on 108 starting money in playtest). Whether it out-earns working the same ticks is a separate, deferred milestone.
 
 ## Entries
+
+### 2026-09-29 — Queue four battle-feed readability items
+- **Agent:** Cursor | **Branch:** `feature/buy-provisions-player-fixes` | **Type:** Docs
+- **Changed** — Open items gains four readability rows copied from the unmerged captivity-debt branch: a witnessed battle-resolved reason (highest priority), several captains each "won at Crown Harbor", a surrender claim with no offer the player saw, and a garrison estimate of 15 against the dock panel's 14 then 12.
+- **Why** — Those rows are not on `main`. The M26, M27, and M28 readability rows already are.
+- **Verified** — Compared with `origin/main` and `origin/feature/captivity-debt-installments`. That branch was not checked out.
+- **Left open** — The four items. None are built.
+- **Links** — None.
 
 ### 2026-09-29 — Player buy-provisions quotes its cost and stops at the depth cap
 - **Agent:** Cursor | **Branch:** `feature/buy-provisions-player-fixes` | **Commits:** `12a7c66`. `8f5b97e` merges `origin/main` at `2eef285` (the captive-intelligence note). | **Type:** Behavior
