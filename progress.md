@@ -60,12 +60,17 @@ Git remains the complete history. This file exists for three things git does not
 | The names Toma Reef and Toma Hale collide in the feed | Readability | Unassigned | Open |
 | No briefing or event text says who covers a captive commander's seat, or that the cover doesn't take the orders. The player sees only `actingCommanderId` in the faction JSON and has to join ids. Seen again in M31: at t595 the seat is only `character-05` | Readability | Unassigned | Open |
 | The captivity line "Escape is guaranteed but dangerous" contradicts the capture's displayedRisk `low` (captureChance 0.04). Seen again in M31 beside displayedRisk `severe` and capture chance 0.55 | Readability | Unassigned | Open |
-| `player.displayName` shows "Prototype Commander" while the party, feed, and briefing say Mara Vane. Seen again in M31 | Readability | Unassigned | Open |
+| `player.displayName` shows "Prototype Commander" while the party, feed, and briefing say Mara Vane. Seen again in M31 and in M32 | Readability | Unassigned | Open |
 | No line says loyalty fell. Mara's card shows `loyalty` 0.768 beside `personality.loyalty` 0.8079…, and nothing says which figure the seat uses | Readability | Unassigned | Open |
 | A release feed row is only "Name: captivity released". The paid amount and the debt appear only in the briefing | Readability | Unassigned | Open |
 | The battle feed row does not say who won. The briefing does | Readability | Unassigned | Open |
 | At morale 0 the starvation line still quotes a morale cost | Readability | Unassigned | Open |
-| `attentionCount` does not match the briefing line count (4 vs 6 at t119, 7 vs 10 at t595) | Readability | Unassigned | Open |
+| `attentionCount` does not match the briefing line count (4 vs 6 at t119, 7 vs 10 at t595). Seen again in M32: 6 vs 7 at ticks 2 and 3, 7 vs 8 at tick 4 | Readability | Unassigned | Open |
+| A sea meeting is invisible in the feed and the briefing. Nothing says Mara met Ada, or that Ada has 35 troops. That count lives only on the character read. Ada's feed line is only "Ada Sorn: travel started" and does not name Glassport | Readability | Unassigned | Open |
+| `overtaking` beside `arriving: true` has no sentence. The kind does not change when arriving becomes true, so a player is not told the other ship will dock this tick, or what overtaking means next to passing | Readability | Unassigned | Open |
+| Ships on the same leg but outside the shared stretch are simply missing. Nothing says they are on the route | Readability | Unassigned | Open |
+| After both ships dock, the other hold and purse appear in full (Ada: provisions 36.384, arms 2, medicine 1, ship materials 6, money 141) with no line saying they were learned. The sea row never showed them | Readability | Unassigned | Open |
+| Mara's purse falls during a voyage (102, then 99, then 96) and `travel-progressed` does not show the money, so the feed does not say why it fell | Readability | Unassigned | Open |
 | Pax's leadership goes from 75 to null with no sentence explaining it | Readability | Unassigned | Open |
 | An outscore-loss capture sentence ("Rook Tern was captured at Glassport after outscore loss") and its feed row don't name the captor. The feed puts the prisoner as actorId and the captor faction as targetId, so "Rook Tern: character captured" reads as if the prisoner acted on Free Tide | Readability | Unassigned | Open |
 | "after outscore loss" has no subject, reads as if the prisoner lost the fight (next to "Pax Ash won at Glassport"), never explains "outscore", and doesn't say the prisoner was only on the dock | Readability | Unassigned | Open |
