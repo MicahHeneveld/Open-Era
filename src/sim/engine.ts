@@ -22,6 +22,7 @@ import {
   planActionBoost,
   reviewPlan,
 } from "./agency.ts";
+import { assessSupplyContract, contractRelationship } from "./contracts.ts";
 import {
   applyEvent,
   CLAIM_STABILITY_FLOOR,
@@ -51,11 +52,13 @@ import {
   type DecisionCandidate,
   type EventDraft,
   type PartySighting,
+  type PlayerCommand,
   type ResourceKey,
   type Resources,
   type SettlementKnowledge,
   type SimEvent,
   type StandingOrder,
+  type SupplyContract,
   type TickResult,
   type TravelState,
   type TroopRecoveryState,
@@ -1673,6 +1676,358 @@ function emitOrderAmendment(
   });
 }
 
+function contractParties(world: WorldState, contract: SupplyContract): { buyer: Character; carrier: Character } | null {
+  const buyer = world.characters[contract.buyerId];
+  const carrier = world.characters[contract.carrierId];
+  if (!buyer || !carrier) return null;
+  return { buyer, carrier };
+}
+
+function carrierBlocked(world: WorldState, carrier: Character): boolean {
+  return carrier.controller.kind !== "autonomous" ||
+    Boolean(carrier.captivity) ||
+    Boolean(carrier.travel) ||
+    Object.values(world.activeBattles).some((battle) => battle.attackerId === carrier.id);
+}
+
+/**
+ * Write one contract event. The escrow amount on the contract is the hold
+ * after this event. Money on the two purses is absolute, the way a market
+ * trade records `characterMoney`.
+ */
+function emitContract(
+  world: WorldState,
+  events: SimEvent[],
+  type: string,
+  contract: SupplyContract,
+  buyerMoney: number,
+  carrierMoney: number,
+  actorId: string,
+  extra: Record<string, unknown> = {},
+): void {
+  const carrier = world.characters[contract.carrierId];
+  emit(world, events, {
+    type,
+    actorId,
+    targetId: actorId === contract.buyerId ? contract.carrierId : contract.buyerId,
+    settlementId: type === "contract-fulfilled" || type === "contract-breached" ? contract.destinationId : undefined,
+    data: {
+      contract: { ...contract },
+      buyerId: contract.buyerId,
+      carrierId: contract.carrierId,
+      buyerMoney,
+      carrierMoney,
+      escrow: contract.escrow,
+      price: contract.price,
+      quantity: contract.quantity,
+      destinationId: contract.destinationId,
+      ...(type === "contract-fulfilled" && carrier
+        ? {
+            settlementStocks: extra.settlementStocks,
+            carrierCargo: extra.carrierCargo,
+          }
+        : {}),
+      ...Object.fromEntries(Object.entries(extra).filter(([key]) => key !== "settlementStocks" && key !== "carrierCargo")),
+    },
+  });
+}
+
+function writeContractRelationships(
+  world: WorldState,
+  events: SimEvent[],
+  buyer: Character,
+  carrier: Character,
+  victory: boolean,
+  trigger: string,
+): void {
+  const sides = [buyer, carrier].sort((left, right) => left.id.localeCompare(right.id));
+  for (const from of sides) {
+    const to = from.id === buyer.id ? carrier : buyer;
+    emit(world, events, {
+      type: "relationship-changed",
+      actorId: from.id,
+      targetId: to.id,
+      data: {
+        characterId: to.id,
+        trigger,
+        relationship: contractRelationship(from, to.id, world.tick, victory),
+      },
+    });
+  }
+}
+
+/** Return the escrow to the buyer and close the contract. Does nothing if it already settled. */
+function refundEscrow(
+  world: WorldState,
+  events: SimEvent[],
+  contract: SupplyContract,
+  status: "refused" | "breached" | "cancelled",
+  type: string,
+  actorId: string,
+  extra: Record<string, unknown> = {},
+): SupplyContract | null {
+  if (contract.settled) return null;
+  const parties = contractParties(world, contract);
+  if (!parties) return null;
+  const next: SupplyContract = {
+    ...contract,
+    status,
+    escrow: 0,
+    settled: true,
+    observedTick: world.tick,
+  };
+  emitContract(
+    world,
+    events,
+    type,
+    next,
+    round(parties.buyer.money + contract.escrow, 2),
+    parties.carrier.money,
+    actorId,
+    extra,
+  );
+  return world.contracts?.[contract.id] ?? next;
+}
+
+function resolveContractCommand(
+  world: WorldState,
+  events: SimEvent[],
+  commander: Character,
+  command: Extract<PlayerCommand, { type: "offer-contract" | "cancel-contract" }>,
+): void {
+  if (command.type === "cancel-contract") {
+    const contract = world.contracts?.[command.contractId];
+    if (!contract || contract.buyerId !== commander.id || (contract.status !== "offered" && contract.status !== "accepted")) {
+      emit(world, events, {
+        type: "player-command-failed",
+        actorId: commander.id,
+        targetId: command.characterId,
+        data: { commandId: command.id, reason: "the contract is no longer open" },
+      });
+      return;
+    }
+    const wasAccepted = contract.status === "accepted";
+    refundEscrow(world, events, contract, "cancelled", "contract-cancelled", commander.id, { commandId: command.id });
+    if (wasAccepted) {
+      const parties = contractParties(world, contract);
+      if (parties) writeContractRelationships(world, events, parties.buyer, parties.carrier, false, "supply contract cancelled");
+    }
+    emit(world, events, {
+      type: "player-command-resolved",
+      actorId: commander.id,
+      targetId: command.characterId,
+      data: { commandId: command.id, outcome: "contract-cancelled", contractId: contract.id },
+    });
+    return;
+  }
+
+  const carrier = world.characters[command.characterId];
+  if (!carrier || carrierBlocked(world, carrier)) {
+    emit(world, events, {
+      type: "player-command-failed",
+      actorId: commander.id,
+      targetId: command.characterId,
+      data: { commandId: command.id, reason: "the carrier is no longer available" },
+    });
+    return;
+  }
+
+  if (command.contractId) {
+    const existing = world.contracts?.[command.contractId];
+    if (!existing || existing.status !== "offered" || existing.buyerId !== commander.id || existing.settled) {
+      emit(world, events, {
+        type: "player-command-failed",
+        actorId: commander.id,
+        targetId: carrier.id,
+        data: { commandId: command.id, reason: "the offer is no longer open" },
+      });
+      return;
+    }
+    const due = round(command.price - existing.escrow, 2);
+    if (due > commander.money) {
+      emit(world, events, {
+        type: "player-command-failed",
+        actorId: commander.id,
+        targetId: carrier.id,
+        data: { commandId: command.id, reason: "the offerer can no longer cover the escrow" },
+      });
+      return;
+    }
+    const next: SupplyContract = {
+      ...existing,
+      quantity: command.quantity,
+      destinationId: command.destinationId,
+      price: command.price,
+      escrow: command.price,
+      deadlineTick: command.expiresTick,
+      revision: existing.revision + 1,
+      observedTick: world.tick,
+    };
+    emitContract(
+      world,
+      events,
+      "contract-amended",
+      next,
+      round(commander.money - due, 2),
+      carrier.money,
+      commander.id,
+      { commandId: command.id },
+    );
+    emit(world, events, {
+      type: "player-command-resolved",
+      actorId: commander.id,
+      targetId: carrier.id,
+      data: { commandId: command.id, outcome: "contract-amended", contractId: existing.id, revision: next.revision },
+    });
+    return;
+  }
+
+  if (command.price > commander.money) {
+    emit(world, events, {
+      type: "player-command-failed",
+      actorId: commander.id,
+      targetId: carrier.id,
+      data: { commandId: command.id, reason: "the offerer can no longer cover the escrow" },
+    });
+    return;
+  }
+  const contract: SupplyContract = {
+    id: `${command.id}:contract`,
+    buyerId: commander.id,
+    carrierId: carrier.id,
+    good: "provisions",
+    quantity: command.quantity,
+    destinationId: command.destinationId,
+    price: command.price,
+    escrow: command.price,
+    settled: false,
+    deadlineTick: command.expiresTick,
+    issuedTick: world.tick,
+    acceptedTick: null,
+    status: "offered",
+    revision: 1,
+    observedTick: world.tick,
+  };
+  emitContract(
+    world,
+    events,
+    "contract-offered",
+    contract,
+    round(commander.money - command.price, 2),
+    carrier.money,
+    commander.id,
+    { commandId: command.id },
+  );
+  emit(world, events, {
+    type: "player-command-resolved",
+    actorId: commander.id,
+    targetId: carrier.id,
+    data: { commandId: command.id, outcome: "contract-offered", contractId: contract.id },
+  });
+}
+
+/**
+ * Score contracts that were already offered before this tick.
+ *
+ * A new offer, and only a new offer, waits. The player has to be able to see
+ * `offered` and restate it. An amendment asked for a new score, so a revision
+ * above 1 is judged on the tick it is written. Acceptance does not move the
+ * escrow again.
+ */
+function resolveOfferedContracts(world: WorldState, events: SimEvent[]): void {
+  const offered = Object.values(world.contracts ?? {})
+    .filter((contract) =>
+      contract.status === "offered" &&
+      !contract.settled &&
+      (contract.revision > 1 || contract.observedTick < world.tick)
+    )
+    .sort((left, right) => left.id.localeCompare(right.id));
+  for (const contract of offered) {
+    const parties = contractParties(world, contract);
+    if (!parties) continue;
+    const assessment = assessSupplyContract(world, parties.carrier, {
+      buyerId: parties.buyer.id,
+      quantity: contract.quantity,
+      price: contract.price,
+      destinationId: contract.destinationId,
+      deadlineTick: contract.deadlineTick,
+    });
+    if (assessment.accepted) {
+      const next: SupplyContract = {
+        ...contract,
+        status: "accepted",
+        acceptedTick: world.tick,
+        observedTick: world.tick,
+      };
+      emitContract(world, events, "contract-accepted", next, parties.buyer.money, parties.carrier.money, parties.carrier.id, {
+        score: assessment.score,
+        threshold: assessment.threshold,
+        factors: assessment.factors,
+        travelTicks: assessment.travelTicks,
+        ticksLeft: assessment.ticksLeft,
+        costBasis: assessment.costBasis,
+      });
+      continue;
+    }
+    refundEscrow(world, events, contract, "refused", "contract-refused", parties.carrier.id, {
+      gate: assessment.gate,
+      score: assessment.score,
+      threshold: assessment.threshold,
+      factors: assessment.factors,
+      travelTicks: assessment.travelTicks,
+      ticksLeft: assessment.ticksLeft,
+      costBasis: assessment.costBasis,
+    });
+  }
+}
+
+/**
+ * Pay a delivery that has landed, or return the escrow once the deadline has
+ * passed. The deadline test is the one `expireStandingOrders` uses:
+ * `world.tick >= deadlineTick`. A short hold does not count.
+ */
+function resolveContractOutcomes(world: WorldState, events: SimEvent[]): void {
+  const accepted = Object.values(world.contracts ?? {})
+    .filter((contract) => contract.status === "accepted" && !contract.settled)
+    .sort((left, right) => left.id.localeCompare(right.id));
+  for (const contract of accepted) {
+    const parties = contractParties(world, contract);
+    if (!parties) continue;
+    if (world.tick >= contract.deadlineTick) {
+      refundEscrow(world, events, contract, "breached", "contract-breached", parties.carrier.id);
+      const current = contractParties(world, contract);
+      if (current) writeContractRelationships(world, events, current.buyer, current.carrier, false, "supply contract breached");
+      continue;
+    }
+    const { carrier, buyer } = parties;
+    const landed = carrier.locationId === contract.destinationId && !carrier.travel && carrier.cargo.provisions >= contract.quantity;
+    if (!landed) continue;
+    const cargo = cloneResources(carrier.cargo);
+    cargo.provisions = round(cargo.provisions - contract.quantity);
+    const stocks = cloneResources(world.settlements[contract.destinationId].stocks);
+    stocks.provisions = round(stocks.provisions + contract.quantity);
+    const next: SupplyContract = {
+      ...contract,
+      status: "fulfilled",
+      escrow: 0,
+      settled: true,
+      observedTick: world.tick,
+    };
+    emitContract(
+      world,
+      events,
+      "contract-fulfilled",
+      next,
+      buyer.money,
+      round(carrier.money + contract.escrow, 2),
+      carrier.id,
+      { settlementStocks: stocks, carrierCargo: cargo },
+    );
+    const current = contractParties(world, contract);
+    if (current) writeContractRelationships(world, events, current.buyer, current.carrier, true, "supply contract fulfilled");
+  }
+}
+
 function processPlayerCommands(
   world: WorldState,
   events: SimEvent[],
@@ -1897,6 +2252,11 @@ function processPlayerCommands(
         targetId: recipient.id,
         data: { commandId: command.id, outcome: "order-delivered", orderId: order.id },
       });
+      continue;
+    }
+
+    if (command.type === "offer-contract" || command.type === "cancel-contract") {
+      resolveContractCommand(world, events, commander, command);
       continue;
     }
 
@@ -2413,6 +2773,8 @@ export function runTick(world: WorldState): TickResult {
 
   produceSettlements(world, events);
   processPlayerCommands(world, events, rng);
+  resolveOfferedContracts(world, events);
+  resolveContractOutcomes(world, events);
   processCaptivityDeadlines(world, events, rng);
   progressTroopRecoveries(world, events);
   const battleParticipants = progressActiveBattles(world, events, rng);

@@ -1,4 +1,5 @@
 import { openStandingOrder } from "./agency.ts";
+import { openSupplyContract } from "./contracts.ts";
 import { applyEvent, clamp, round, settlementClaimAvailableTo } from "./state.ts";
 import { MARKET_DEPTH_FRACTION, quotedPassage, tradeQuote } from "./engine.ts";
 import type {
@@ -61,6 +62,21 @@ export type CommandRequest =
   | {
       playerId: string;
       type: "escape-captivity";
+    }
+  | {
+      playerId: string;
+      type: "offer-contract";
+      characterId: string;
+      quantity: number;
+      destinationId: string;
+      price: number;
+      expiresInTicks: number;
+    }
+  | {
+      playerId: string;
+      type: "cancel-contract";
+      characterId: string;
+      contractId: string;
     };
 
 export type CommandSubmission =
@@ -163,6 +179,8 @@ export const COMMAND_TYPES: readonly string[] = [
   "cancel-order",
   "retreat-battle",
   "escape-captivity",
+  "offer-contract",
+  "cancel-contract",
 ];
 
 /**
@@ -194,14 +212,17 @@ function requestContract(transport: CommandTransport): Record<string, unknown> {
         type: `required; one of ${COMMAND_TYPES.join(", ")}`,
         action: "required for character-action; one of the documented actions",
         targetId: "optional settlement id or faction id, per the action's targetKinds",
-        characterId: "required for issue-order; the receiving character (officerId is accepted as an alias)",
+        characterId: "required for issue-order, offer-contract, and cancel-contract; the receiving character (officerId is accepted as an alias on issue-order)",
         directive: "required for issue-order; one of the documented directives",
         priority: `optional for issue-order; ${COMMAND_LIMITS.orderPriority.min}..${COMMAND_LIMITS.orderPriority.max}, defaults to ${COMMAND_LIMITS.orderPriority.default}`,
-        expiresInTicks: `optional for issue-order; ${COMMAND_LIMITS.orderDurationTicks.min}..${COMMAND_LIMITS.orderDurationTicks.max}, omitted means the order runs until it is finished`,
+        expiresInTicks: `optional for issue-order; required for offer-contract; ${COMMAND_LIMITS.orderDurationTicks.min}..${COMMAND_LIMITS.orderDurationTicks.max}. Omitted on an order means it runs until it is finished`,
         orderId: "required for confirm-order, amend-order and cancel-order",
         battleId: "required for retreat-battle",
         resource: `required for buy-resource and sell-resource; one of ${RESOURCE_KEYS.join(", ")}`,
-        quantity: `required for buy-resource and sell-resource; a whole number ${COMMAND_LIMITS.tradeQuantity.min}..${COMMAND_LIMITS.tradeQuantity.max}`,
+        quantity: `required for buy-resource, sell-resource, and offer-contract; a whole number ${COMMAND_LIMITS.tradeQuantity.min}..${COMMAND_LIMITS.tradeQuantity.max}`,
+        price: "required for offer-contract; the escrow taken from the offerer when the offer is applied",
+        destinationId: "required for offer-contract; the settlement shelf that receives the provisions",
+        contractId: "required for cancel-contract",
       },
       failure: "any 4xx body is { ok: false, code, error }; `code` is stable, `error` is human prose",
     },
@@ -750,6 +771,147 @@ function validateOrderCancellation(
   return { ok: true, command, event: acceptedEvent(world, command) };
 }
 
+function carrierUnavailable(world: WorldState, carrierId: string): CommandSubmission | null {
+  const carrier = world.characters[carrierId];
+  if (!carrier) return reject("unknown-character", "The carrier is unknown");
+  if (carrier.controller.kind !== "autonomous") {
+    return reject("human-carrier", "A contract cannot bind another human-controlled character");
+  }
+  if (carrier.captivity) return reject("carrier-captive", "The carrier is being held captive");
+  if (carrier.travel) return reject("carrier-traveling", "The carrier is already traveling");
+  if (Object.values(world.activeBattles).some((battle) => battle.attackerId === carrier.id)) {
+    return reject("carrier-in-battle", "The carrier is in battle");
+  }
+  return null;
+}
+
+function validateOfferContract(
+  world: WorldState,
+  request: Extract<CommandRequest, { type: "offer-contract" }>,
+): CommandSubmission {
+  const player = world.players[request.playerId];
+  const buyer = world.characters[player.characterId];
+  const carrier = world.characters[request.characterId];
+  if (!carrier) return reject("unknown-character", "The carrier is unknown");
+  if (carrier.id === buyer.id) return reject("invalid-carrier", "A character cannot contract with themselves");
+  if (!player.knownCharacterIds.includes(carrier.id)) {
+    return reject("identity-unknown", "The player has not learned this character's identity");
+  }
+  const unavailable = carrierUnavailable(world, carrier.id);
+  if (unavailable) return unavailable;
+  const quantity = request.quantity;
+  if (!Number.isInteger(quantity) || quantity < COMMAND_LIMITS.tradeQuantity.min || quantity > COMMAND_LIMITS.tradeQuantity.max) {
+    return reject("invalid-quantity", `Delivery quantity must be a whole number from ${COMMAND_LIMITS.tradeQuantity.min} to ${COMMAND_LIMITS.tradeQuantity.max}`);
+  }
+  if (!request.destinationId || !world.settlements[request.destinationId]) {
+    return reject("invalid-destination", "The delivery destination is not a known settlement");
+  }
+  const duration = request.expiresInTicks;
+  if (!Number.isInteger(duration) || duration < COMMAND_LIMITS.orderDurationTicks.min || duration > COMMAND_LIMITS.orderDurationTicks.max) {
+    return reject("invalid-deadline", `The deadline must be a whole number from ${COMMAND_LIMITS.orderDurationTicks.min} to ${COMMAND_LIMITS.orderDurationTicks.max} ticks`);
+  }
+  if (!Number.isFinite(request.price) || request.price <= 0) {
+    return reject("invalid-price", "The contract price must be greater than zero");
+  }
+  const price = round(request.price, 2);
+  if (price <= 0) return reject("invalid-price", "The contract price must be greater than zero");
+
+  // One open contract per buyer and carrier. An offer still `offered` is
+  // restated. An accepted contract is frozen. A refused, fulfilled, breached,
+  // or cancelled contract does not hold the slot.
+  const open = openSupplyContract(world, buyer.id, carrier.id);
+  if (open?.status === "accepted") {
+    return reject("terms-frozen", "The accepted terms are frozen");
+  }
+  if (open?.status === "offered") {
+    if (contractMutationPending(world, open.id)) {
+      return reject("contract-already-queued", "Another command already queued will act on that contract");
+    }
+    const deadlineTick = world.tick + duration;
+    if (
+      open.quantity === quantity &&
+      open.destinationId === request.destinationId &&
+      open.price === price &&
+      open.deadlineTick === deadlineTick
+    ) {
+      return reject("no-change", "The offer does not change the contract");
+    }
+    const due = round(price - open.escrow, 2);
+    if (due > 0 && round(buyer.money, 2) < due) {
+      return reject("insufficient-money", `Raising the price to ${price} needs ${due} more; the character holds ${round(buyer.money, 2)}`);
+    }
+    const command: PlayerCommand = {
+      id: `command-${String(world.nextCommandSequence).padStart(5, "0")}`,
+      playerId: player.id,
+      issuedTick: world.tick,
+      type: "offer-contract",
+      characterId: carrier.id,
+      contractId: open.id,
+      quantity,
+      destinationId: request.destinationId,
+      price,
+      expiresTick: deadlineTick,
+    };
+    return { ok: true, command, event: acceptedEvent(world, command) };
+  }
+  if (world.pendingCommands.some((command) =>
+    command.type === "offer-contract" &&
+    command.characterId === carrier.id &&
+    world.players[command.playerId]?.characterId === buyer.id
+  )) {
+    return reject("contract-already-queued", "Another command already queued will act on that contract");
+  }
+  if (round(buyer.money, 2) < price) {
+    return reject("insufficient-money", `The contract price is ${price}; the character holds ${round(buyer.money, 2)}`);
+  }
+  const command: PlayerCommand = {
+    id: `command-${String(world.nextCommandSequence).padStart(5, "0")}`,
+    playerId: player.id,
+    issuedTick: world.tick,
+    type: "offer-contract",
+    characterId: carrier.id,
+    quantity,
+    destinationId: request.destinationId,
+    price,
+    expiresTick: world.tick + duration,
+  };
+  return { ok: true, command, event: acceptedEvent(world, command) };
+}
+
+function contractMutationPending(world: WorldState, contractId: string): boolean {
+  return world.pendingCommands.some((command) =>
+    (command.type === "offer-contract" && command.contractId === contractId) ||
+    (command.type === "cancel-contract" && command.contractId === contractId)
+  );
+}
+
+function validateCancelContract(
+  world: WorldState,
+  request: Extract<CommandRequest, { type: "cancel-contract" }>,
+): CommandSubmission {
+  const player = world.players[request.playerId];
+  const buyer = world.characters[player.characterId];
+  const contract = world.contracts?.[request.contractId];
+  if (!contract) return reject("unknown-contract", "That contract does not exist");
+  if (contract.buyerId !== buyer.id) return reject("not-buyer", "Only the character who offered a contract may cancel it");
+  if (contract.carrierId !== request.characterId) return reject("unknown-contract", "That contract does not exist");
+  if (contract.status !== "offered" && contract.status !== "accepted") {
+    return reject("contract-not-open", "That contract is already closed");
+  }
+  if (contractMutationPending(world, contract.id)) {
+    return reject("contract-already-queued", "Another command already queued will act on that contract");
+  }
+  const command: PlayerCommand = {
+    id: `command-${String(world.nextCommandSequence).padStart(5, "0")}`,
+    playerId: player.id,
+    issuedTick: world.tick,
+    type: "cancel-contract",
+    characterId: contract.carrierId,
+    contractId: contract.id,
+  };
+  return { ok: true, command, event: acceptedEvent(world, command) };
+}
+
 export function submitCommand(world: WorldState, request: CommandRequest): CommandSubmission {
   const player = world.players[request.playerId];
   if (!player) return reject("unknown-player", "The player session is unknown");
@@ -768,6 +930,8 @@ export function submitCommand(world: WorldState, request: CommandRequest): Comma
   if (request.type === "confirm-order") return validateOrderConfirmation(world, request);
   if (request.type === "amend-order") return validateOrderAmendment(world, request);
   if (request.type === "cancel-order") return validateOrderCancellation(world, request);
+  if (request.type === "offer-contract") return validateOfferContract(world, request);
+  if (request.type === "cancel-contract") return validateCancelContract(world, request);
   // Without this, an unrecognised `type` fell through to order cancellation and
   // was reported as "The order recipient is unknown", because the request also
   // carried no `characterId`. A playtest lost time to exactly that.

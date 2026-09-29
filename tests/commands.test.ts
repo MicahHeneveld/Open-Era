@@ -865,3 +865,111 @@ test("two different standing orders may still be changed in the same tick", () =
   }));
   assert.deepEqual(cancellations.map((result) => result.ok), [true, true]);
 });
+
+function offerToZara(world: ReturnType<typeof createPrototypeWorld>, price = 18, expiresInTicks = 12) {
+  return submitCommand(world, {
+    playerId: "prototype-player",
+    type: "offer-contract",
+    characterId: "character-17",
+    quantity: 10,
+    destinationId: "crown-harbor",
+    price,
+    expiresInTicks,
+  });
+}
+
+test("an offer across factions queues once, and a second offer from the same buyer does not", () => {
+  const world = createPrototypeWorld(1847);
+  const buyer = world.characters["character-01"];
+  const carrier = world.characters["character-17"];
+  assert.equal(buyer.factionId, "world-government");
+  assert.equal(carrier.factionId, "free-tide");
+  assert.notEqual(buyer.factionId, carrier.factionId);
+
+  const first = offerToZara(world);
+  assert.equal(first.ok, true);
+  if (first.ok) {
+    assert.equal(first.command.type, "offer-contract");
+    assert.equal(first.command.characterId, "character-17");
+    assert.equal("contractId" in first.command, false);
+  }
+  assert.equal(buyer.money, 108);
+
+  const second = offerToZara(world);
+  assert.deepEqual(second, {
+    ok: false,
+    code: "contract-already-queued",
+    error: "Another command already queued will act on that contract",
+  });
+  assert.equal(world.pendingCommands.length, 1);
+});
+
+test("an open offer can be restated, identical terms are no-change, and accepted terms are frozen", () => {
+  const world = createPrototypeWorld(1847);
+  const carrier = world.characters["character-17"];
+  const offered = offerToZara(world, 18, 12);
+  assert.equal(offered.ok, true);
+  runTick(world);
+  carrier.locationId = "crown-harbor";
+  carrier.travel = null;
+  const contract = Object.values(world.contracts ?? {})[0];
+  assert.equal(contract.status, "offered");
+  assert.equal(contract.deadlineTick, 12);
+
+  const same = offerToZara(world, 18, contract.deadlineTick - world.tick);
+  assert.deepEqual(same, {
+    ok: false,
+    code: "no-change",
+    error: "The offer does not change the contract",
+  });
+
+  const revised = offerToZara(world, 20, contract.deadlineTick - world.tick);
+  assert.equal(revised.ok, true);
+  if (revised.ok && revised.command.type === "offer-contract") {
+    assert.equal(revised.command.contractId, contract.id);
+  }
+
+  carrier.locationId = "crown-harbor";
+  carrier.travel = null;
+  carrier.cargo.provisions = 9;
+  runTick(world);
+  assert.equal(world.contracts?.[contract.id].status, "accepted");
+  const frozen = offerToZara(world, 22, 12);
+  assert.deepEqual(frozen, {
+    ok: false,
+    code: "terms-frozen",
+    error: "The accepted terms are frozen",
+  });
+});
+
+test("cancelling an offer returns the escrow and writes no relationship", () => {
+  const world = createPrototypeWorld(1847);
+  const buyer = world.characters["character-01"];
+  const offered = offerToZara(world, 18, 12);
+  assert.equal(offered.ok, true);
+  runTick(world);
+  const contract = Object.values(world.contracts ?? {})[0];
+  assert.equal(contract.status, "offered");
+  assert.equal(buyer.money, 90);
+  assert.equal(contract.escrow, 18);
+
+  const cancel = submitCommand(world, {
+    playerId: "prototype-player",
+    type: "cancel-contract",
+    characterId: "character-17",
+    contractId: contract.id,
+  });
+  assert.equal(cancel.ok, true);
+  const settled = runTick(world);
+  assert.equal(world.contracts?.[contract.id].status, "cancelled");
+  assert.equal(world.contracts?.[contract.id].escrow, 0);
+  assert.equal(world.contracts?.[contract.id].settled, true);
+  assert.equal(buyer.money, 108);
+  assert.equal(
+    settled.events.filter((event) =>
+      event.type === "relationship-changed" &&
+      String(event.data.trigger).startsWith("supply contract")
+    ).length,
+    0,
+  );
+});

@@ -1,0 +1,161 @@
+import { travelDuration } from "./engine.ts";
+import { clamp, marketPrice, round } from "./state.ts";
+import type { Character, Relationship, SupplyContract, WorldState } from "./types.ts";
+
+/** Missing-relationship defaults from `assessStandingOrder`, used only by the score. */
+const SCORE_TRUST = 0.35;
+const SCORE_RESPECT = 0.35;
+
+/**
+ * A side that has no tie yet starts here. These are the defaults
+ * `evolveLocalRelationship` writes before it shifts anything.
+ */
+const RELATIONSHIP_BASE = {
+  trust: 0.28,
+  affinity: 0.25,
+  respect: 0.28,
+  fear: 0.08,
+  grievance: 0,
+  obligation: 0,
+} as const;
+
+/** The same shifts a fight under orders already writes. */
+const VICTORY = { trust: 0.012, respect: 0.028, fear: -0.005, grievance: -0.006, obligation: -0.01 } as const;
+const DEFEAT = { trust: -0.025, respect: -0.008, fear: 0.018, grievance: 0.035, obligation: 0.015 } as const;
+
+export interface ContractTerms {
+  buyerId: string;
+  quantity: number;
+  price: number;
+  destinationId: string;
+  deadlineTick: number;
+}
+
+export interface ContractFactors {
+  commerce: number;
+  margin: number;
+  trust: number;
+  respect: number;
+  grievance: number;
+  obligation: number;
+  perceivedRisk: number;
+}
+
+export interface ContractAssessment {
+  accepted: boolean;
+  /** `travel` and `purse` are hard gates. `score` is the line. Null when accepted. */
+  gate: "travel" | "purse" | "score" | null;
+  score: number;
+  threshold: number;
+  factors: ContractFactors;
+  travelTicks: number;
+  ticksLeft: number;
+  costBasis: number;
+}
+
+/**
+ * Ticks the carrier still needs to reach the shelf.
+ *
+ * Already standing there is 0, which `travelDuration` does not return: that
+ * helper's floor is 2, and a delivery that does not sail must not be refused
+ * for a voyage that will not happen.
+ */
+export function contractTravelTicks(world: WorldState, carrier: Character, destinationId: string): number {
+  if (carrier.locationId === destinationId && !carrier.travel) return 0;
+  return travelDuration(world, carrier, destinationId);
+}
+
+/**
+ * Whether the carrier takes the haul. No RNG.
+ *
+ * Hard gates first: the voyage does not fit the ticks left, or the hold is
+ * short and the purse cannot buy the shortfall where they stand. Past the
+ * gates the weights match `assessStandingOrder`, with margin in place of an
+ * order priority.
+ */
+export function assessSupplyContract(
+  world: WorldState,
+  carrier: Character,
+  terms: ContractTerms,
+): ContractAssessment {
+  const ticksLeft = terms.deadlineTick - world.tick;
+  const travelTicks = contractTravelTicks(world, carrier, terms.destinationId);
+  const standing = carrier.locationId ? marketPrice(world, carrier.locationId, "provisions") : 0;
+  const costBasis = round(terms.quantity * standing, 2);
+  const destination = world.settlements[terms.destinationId];
+  const alreadyThere = travelTicks === 0;
+  const neutral = destination?.factionId === null;
+  const theirs = destination?.factionId !== null && destination?.factionId === carrier.factionId;
+  const risk = alreadyThere || neutral || theirs ? 0.25 : 0.88;
+  const relationship = carrier.relationships[terms.buyerId];
+  const factors: ContractFactors = {
+    commerce: round(carrier.personality.commerce * 0.30),
+    margin: round(clamp(costBasis === 0 ? 0 : (terms.price - costBasis) / costBasis, -0.25, 0.25)),
+    trust: round((relationship?.trust ?? SCORE_TRUST) * 0.14),
+    respect: round((relationship?.respect ?? SCORE_RESPECT) * 0.16),
+    grievance: round(-(relationship?.grievance ?? 0) * 0.18),
+    obligation: round((relationship?.obligation ?? 0) * 0.08),
+    perceivedRisk: round(-carrier.personality.caution * risk * 0.16),
+  };
+  const score = round(clamp(
+    factors.commerce + factors.margin + factors.trust + factors.respect + factors.grievance + factors.obligation + factors.perceivedRisk,
+    0,
+    1,
+  ));
+  const threshold = round(0.54 + carrier.personality.ambition * 0.08);
+  const shortfall = Math.max(0, terms.quantity - carrier.cargo.provisions);
+  const shortfallCost = carrier.locationId ? round(shortfall * standing, 2) : Number.POSITIVE_INFINITY;
+  let gate: ContractAssessment["gate"] = null;
+  if (travelTicks > ticksLeft) gate = "travel";
+  else if (shortfall > 0 && carrier.money < shortfallCost) gate = "purse";
+  else if (score < threshold) gate = "score";
+  return {
+    accepted: gate === null,
+    gate,
+    score,
+    threshold,
+    factors,
+    travelTicks,
+    ticksLeft,
+    costBasis,
+  };
+}
+
+/** The open contract for one buyer and one carrier. Open is `offered` or `accepted`. */
+export function openSupplyContract(
+  world: WorldState,
+  buyerId: string,
+  carrierId: string,
+): SupplyContract | null {
+  return Object.values(world.contracts ?? {})
+    .filter((contract) =>
+      contract.buyerId === buyerId &&
+      contract.carrierId === carrierId &&
+      (contract.status === "offered" || contract.status === "accepted")
+    )
+    .sort((left, right) => left.id.localeCompare(right.id))[0] ?? null;
+}
+
+/** Victory or defeat, on one side. A missing tie starts from the local defaults. */
+export function contractRelationship(
+  from: Character,
+  toId: string,
+  tick: number,
+  victory: boolean,
+): Relationship {
+  const prior = from.relationships[toId] ?? {
+    characterId: toId,
+    ...RELATIONSHIP_BASE,
+    lastChangedTick: tick,
+  };
+  const delta = victory ? VICTORY : DEFEAT;
+  return {
+    ...prior,
+    trust: round(clamp(prior.trust + delta.trust, 0, 1)),
+    respect: round(clamp(prior.respect + delta.respect, 0, 1)),
+    fear: round(clamp(prior.fear + delta.fear, 0, 1)),
+    grievance: round(clamp(prior.grievance + delta.grievance, 0, 1)),
+    obligation: round(clamp(prior.obligation + delta.obligation, 0, 1)),
+    lastChangedTick: tick,
+  };
+}

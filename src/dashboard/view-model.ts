@@ -15,7 +15,7 @@ import {
 } from "../sim/engine.ts";
 import { marketPrice, round, settlementClaimAvailableTo } from "../sim/state.ts";
 import { RESOURCE_KEYS, type ActiveBattle, type Character, type CombatForecast, type SettlementKnowledge, type SimEvent, type WorldState } from "../sim/types.ts";
-import { projectCharacter, projectEvent, projectFactions } from "./visibility.ts";
+import { projectCharacter, projectEvent, projectFactions, projectSupplyContracts } from "./visibility.ts";
 
 /**
  * Whether a battle at this settlement is one the commander could actually know
@@ -30,6 +30,12 @@ import { projectCharacter, projectEvent, projectFactions } from "./visibility.ts
  */
 export function battleIsVisible(commander: Character, settlementId: string): boolean {
   return commander.locationId === settlementId;
+}
+
+function destinationName(world: WorldState, event: SimEvent): string {
+  const id = typeof event.data.destinationId === "string" ? event.data.destinationId : event.settlementId;
+  if (!id) return "the destination";
+  return world.settlements[id]?.name ?? id;
 }
 
 function eventSummary(world: WorldState, event: SimEvent): string {
@@ -95,6 +101,20 @@ function eventSummary(world: WorldState, event: SimEvent): string {
       return `${actor} departed for ${target}`;
     case "market-trade":
       return `${actor} ${event.data.direction} ${event.data.quantity} ${event.data.resource} at ${settlement}`;
+    case "contract-offered":
+      return `${actor} offered ${event.data.price} to land ${event.data.quantity} provisions at ${destinationName(world, event)}.`;
+    case "contract-amended":
+      return `${actor} revised the provisions contract to ${event.data.price} for ${event.data.quantity} at ${destinationName(world, event)}.`;
+    case "contract-accepted":
+      return `${actor} accepted the provisions contract.`;
+    case "contract-refused":
+      return `${actor} refused the provisions contract.`;
+    case "contract-fulfilled":
+      return `${actor} landed ${event.data.quantity} provisions at ${destinationName(world, event)}.`;
+    case "contract-breached":
+      return `${actor} missed the provisions deadline. The escrow returned.`;
+    case "contract-cancelled":
+      return `${actor} cancelled the provisions contract.`;
     case "goal-evolved":
       return `${actor}'s ambitions changed after ${event.data.trigger}`;
     case "settlement-shortage":
@@ -1072,6 +1092,7 @@ export function dashboardState(
     characters: Object.values(world.characters)
       .sort((left, right) => left.id.localeCompare(right.id))
       .map((character) => projectCharacter(world, commander, character)),
+    contracts: projectSupplyContracts(world, commander),
     events: projectEventFeed(world, commander.id, feed.events).reverse(),
     /**
      * How to page `events`. This is a page descriptor, not the feed itself: the

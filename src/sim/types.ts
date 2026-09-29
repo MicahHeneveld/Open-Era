@@ -280,6 +280,39 @@ export interface StandingOrderReport {
   summary: string;
 }
 
+export type SupplyContractStatus =
+  | "offered"
+  | "accepted"
+  | "refused"
+  | "fulfilled"
+  | "breached"
+  | "cancelled";
+
+/**
+ * A paid provisions delivery. The price sits on `escrow`, in neither purse and
+ * in no treasury, from the moment the offer is applied until it is paid or
+ * returned exactly once.
+ */
+export interface SupplyContract {
+  id: string;
+  buyerId: string;
+  carrierId: string;
+  good: "provisions";
+  quantity: number;
+  destinationId: string;
+  price: number;
+  escrow: number;
+  /** True after the escrow has been paid to the carrier or returned to the buyer. */
+  settled: boolean;
+  deadlineTick: number;
+  issuedTick: number;
+  acceptedTick: number | null;
+  status: SupplyContractStatus;
+  revision: number;
+  /** Tick of the last status change. The projection's age is `tick - observedTick`. */
+  observedTick: number;
+}
+
 export interface StandingOrder {
   id: string;
   issuerId: string;
@@ -442,6 +475,27 @@ export type PlayerCommand =
       playerId: string;
       issuedTick: number;
       type: "escape-captivity";
+    }
+  | {
+      id: string;
+      playerId: string;
+      issuedTick: number;
+      type: "offer-contract";
+      characterId: string;
+      /** Set when this offer restates a contract that is still `offered`. */
+      contractId?: string;
+      quantity: number;
+      destinationId: string;
+      price: number;
+      expiresTick: number;
+    }
+  | {
+      id: string;
+      playerId: string;
+      issuedTick: number;
+      type: "cancel-contract";
+      characterId: string;
+      contractId: string;
     };
 
 export interface Character {
@@ -508,6 +562,13 @@ export interface WorldState {
   conversationThreads: Record<string, ConversationThread>;
   conversationMessages: ConversationMessage[];
   scheduledReplies: ScheduledReply[];
+  /**
+   * Paid provisions contracts, keyed by id.
+   *
+   * Absent until the first offer. A headless world never writes it, so the
+   * golden hash stays the world that has no contracts.
+   */
+  contracts?: Record<string, SupplyContract>;
 }
 
 export interface DecisionCandidate {

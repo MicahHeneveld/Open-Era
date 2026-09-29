@@ -14,6 +14,7 @@ import {
   PASSAGE_COST_PER_TICK,
   priceDriftPerTick,
   runTick,
+  runTicks,
   tradeQuote,
 } from "../src/sim/engine.ts";
 import { createPrototypeWorld } from "../src/sim/scenario.ts";
@@ -582,4 +583,125 @@ test("a foreign beach names the owner, and an offshore port does not", () => {
   const beach = projected(world).settlements.find((settlement) => settlement.id === "cinder-key")!;
   assert.equal(beach.ownerId, "character-19");
   assert.equal(beach.factionId, cinder.factionId);
+});
+
+function offerProvisions(world: WorldState, price: number, expiresInTicks: number) {
+  return submitCommand(world, {
+    playerId: PLAYER,
+    type: "offer-contract",
+    characterId: "character-17",
+    quantity: 10,
+    destinationId: "crown-harbor",
+    price,
+    expiresInTicks,
+  });
+}
+
+function assertEscrowConserved(events: { type: string; data: Record<string, unknown> }[], expected: number): void {
+  const moved = events.filter((event) => event.type.startsWith("contract-"));
+  assert.ok(moved.length > 0);
+  for (const event of moved) {
+    const sum = round(
+      Number(event.data.buyerMoney) + Number(event.data.carrierMoney) + Number(event.data.escrow),
+      2,
+    );
+    assert.equal(sum, expected, event.type);
+  }
+}
+
+test("a headless Crown Harbor run has no contract event, and fulfilment is not production", () => {
+  const headless = runTicks(createPrototypeWorld(1847), 72);
+  assert.equal(headless.events.some((event) => event.type.startsWith("contract-")), false);
+  assert.ok(headless.events.some((event) =>
+    event.type === "settlement-produced" && event.settlementId === "crown-harbor"
+  ));
+  const view = dashboardState(headless.state, [], fullEventFeed([])) as { contracts: unknown[] };
+  assert.deepEqual(view.contracts, []);
+
+  const world = createPrototypeWorld(1847);
+  const submission = offerProvisions(world, 18, 12);
+  assert.equal(submission.ok, true);
+  runTick(world);
+  const shelfBefore = world.settlements["crown-harbor"].stocks.provisions;
+  const landed = runTick(world);
+  const produced = landed.events.find((event) =>
+    event.type === "settlement-produced" && event.settlementId === "crown-harbor"
+  );
+  const upkeep = landed.events.find((event) =>
+    event.settlementId === "crown-harbor" &&
+    (event.type === "settlement-upkeep" || event.type === "settlement-shortage")
+  );
+  const fulfilled = landed.events.find((event) => event.type === "contract-fulfilled");
+  assert.ok(fulfilled);
+  const shelf = upkeep ? (upkeep.data.stocks as { provisions: number }).provisions : shelfBefore;
+  const landedStocks = (fulfilled.data.settlementStocks as { provisions: number }).provisions;
+  assert.equal(landedStocks, round(shelf + 10));
+  if (produced) {
+    assert.notEqual(landedStocks, (produced.data.stocks as { provisions: number }).provisions);
+  }
+  assert.equal(
+    landed.events.some((event) => event.type === "settlement-produced" && event.data.contractId !== undefined),
+    false,
+  );
+  assert.equal(fulfilled.data.factionTreasury, undefined);
+});
+
+test("offer, fulfilment, refusal, and breach conserve the two purses and the escrow", () => {
+  const fulfilled = createPrototypeWorld(1847);
+  const fulfilBuyer = fulfilled.characters["character-01"];
+  const fulfilCarrier = fulfilled.characters["character-17"];
+  assert.equal(offerProvisions(fulfilled, 18, 12).ok, true);
+  const offerTick = runTick(fulfilled);
+  assertEscrowConserved(offerTick.events, round(108 + 93, 2));
+  const escrow = Object.values(fulfilled.contracts ?? {})[0].escrow;
+  assert.equal(escrow, 18);
+  const beforeFulfil = round(fulfilBuyer.money + fulfilCarrier.money + escrow, 2);
+  const fulfilTick = runTick(fulfilled);
+  assertEscrowConserved(fulfilTick.events, beforeFulfil);
+  assert.equal(Object.values(fulfilled.contracts ?? {})[0].status, "fulfilled");
+  assert.equal(Object.values(fulfilled.contracts ?? {})[0].escrow, 0);
+  assert.equal(fulfilBuyer.money, 90);
+
+  const refused = createPrototypeWorld(1847);
+  const refuseBuyer = refused.characters["character-01"];
+  const refuseCarrier = refused.characters["character-17"];
+  assert.equal(offerProvisions(refused, 8, 12).ok, true);
+  const cheapOffer = runTick(refused);
+  assertEscrowConserved(cheapOffer.events, round(108 + 93, 2));
+  const cheap = Object.values(refused.contracts ?? {})[0];
+  assert.equal(cheap.status, "offered");
+  const beforeRefuse = round(refuseBuyer.money + refuseCarrier.money + cheap.escrow, 2);
+  const refuseTick = runTick(refused);
+  assertEscrowConserved(refuseTick.events, beforeRefuse);
+  const refusal = refuseTick.events.find((event) => event.type === "contract-refused");
+  assert.ok(refusal);
+  assert.equal(refusal.data.gate, "score");
+  assert.equal(refusal.data.score, 0.197);
+  assert.equal(refusal.data.escrow, 0);
+  assert.equal(refuseBuyer.money, 108);
+  assert.equal(Object.values(refused.contracts ?? {})[0].status, "refused");
+  assert.equal(
+    refuseTick.events.filter((event) =>
+      event.type === "relationship-changed" && String(event.data.trigger).startsWith("supply contract")
+    ).length,
+    0,
+  );
+
+  const expired = createPrototypeWorld(1847);
+  const expireBuyer = expired.characters["character-01"];
+  const expireCarrier = expired.characters["character-17"];
+  assert.equal(offerProvisions(expired, 18, 1).ok, true);
+  const shortOffer = runTick(expired);
+  assertEscrowConserved(shortOffer.events, round(108 + 93, 2));
+  expireCarrier.locationId = "crown-harbor";
+  expireCarrier.travel = null;
+  const open = Object.values(expired.contracts ?? {})[0];
+  const beforeBreach = round(expireBuyer.money + expireCarrier.money + open.escrow, 2);
+  const breachTick = runTick(expired);
+  assertEscrowConserved(breachTick.events, beforeBreach);
+  assert.equal(Object.values(expired.contracts ?? {})[0].status, "breached");
+  assert.equal(Object.values(expired.contracts ?? {})[0].settled, true);
+  assert.equal(expireBuyer.money, 108);
+  const later = runTick(expired);
+  assert.equal(later.events.some((event) => event.type.startsWith("contract-")), false);
 });

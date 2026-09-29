@@ -1,6 +1,6 @@
 import { assessStandingOrder } from "../sim/agency.ts";
 import { factionPower, partyPower, round } from "../sim/state.ts";
-import type { Character, PartySighting, SimEvent, StandingOrder, WorldState } from "../sim/types.ts";
+import type { Character, PartySighting, SimEvent, StandingOrder, SupplyContract, WorldState } from "../sim/types.ts";
 
 /**
  * Decides what a player may legitimately know about the rest of the world.
@@ -179,6 +179,69 @@ function projectKnowledge(knowledge: Character["knowledge"]): Character["knowled
   ) as Character["knowledge"];
 }
 
+export interface ProjectedContract {
+  id: string;
+  buyerId: string;
+  carrierId: string;
+  destinationId: string;
+  deadlineTick: number;
+  status: SupplyContract["status"];
+  revision: number;
+  observedTick: number;
+  ageTicks: number;
+  source: "own-character" | "faction-report";
+  quantity: number | null;
+  price: number | null;
+  escrow: number | null;
+  good: "provisions";
+}
+
+/**
+ * Contracts the commander may know about.
+ *
+ * The two parties see the price, the quantity, and the escrow. A faction mate
+ * of either party sees that the job exists, where it goes, and whether it was
+ * kept. A bystander, including someone standing next to the purse, gets no row.
+ */
+export function projectSupplyContracts(world: WorldState, commander: Character): ProjectedContract[] {
+  return Object.values(world.contracts ?? {})
+    .sort((left, right) => left.id.localeCompare(right.id))
+    .flatMap((contract) => {
+      const row = projectOneContract(world, commander, contract);
+      return row ? [row] : [];
+    });
+}
+
+function projectOneContract(
+  world: WorldState,
+  commander: Character,
+  contract: SupplyContract,
+): ProjectedContract | null {
+  const party = commander.id === contract.buyerId || commander.id === contract.carrierId;
+  const buyer = world.characters[contract.buyerId];
+  const carrier = world.characters[contract.carrierId];
+  const factionMate = commander.factionId !== null && (
+    commander.factionId === buyer?.factionId || commander.factionId === carrier?.factionId
+  );
+  if (!party && !factionMate) return null;
+  return {
+    id: contract.id,
+    buyerId: contract.buyerId,
+    carrierId: contract.carrierId,
+    destinationId: contract.destinationId,
+    deadlineTick: contract.deadlineTick,
+    status: contract.status,
+    revision: contract.revision,
+    observedTick: contract.observedTick,
+    ageTicks: Math.max(0, world.tick - contract.observedTick),
+    source: party ? "own-character" : "faction-report",
+    good: "provisions",
+    quantity: party ? contract.quantity : null,
+    price: party ? contract.price : null,
+    escrow: party ? contract.escrow : null,
+  };
+}
+
 export function projectCharacter(
   world: WorldState,
   commander: Character,
@@ -301,6 +364,17 @@ export function eventPayloadVisible(
 
   // The commander's own actions are entirely theirs.
   if (event.actorId === commander.id) return true;
+
+  // A contract's payload is the two parties' business. The standing-order rule
+  // is the same shape, with both parties in the issuer's place. Holding the
+  // destination does not open it, and neither does sharing a faction.
+  if (event.type.startsWith("contract-")) {
+    const data = asRecord(event.data);
+    const nested = asRecord(data?.contract);
+    const buyerId = asString(data?.buyerId) ?? asString(nested?.buyerId);
+    const carrierId = asString(data?.carrierId) ?? asString(nested?.carrierId);
+    return commander.id === buyerId || commander.id === carrierId;
+  }
 
   // Orders are knowable within the chain of command that issued them.
   if (event.type.startsWith("standing-order-")) {
