@@ -14,6 +14,7 @@ These documents capture the decisions made during the initial design conversatio
 - [Port provisions](port-provisions.md) — Open / proposal: Crown Harbor's ration outruns its fields once stability slips, and the claim leaves a port that cannot regrow
 - [Portless recovery](portless-recovery.md) — Open / proposal: a landless faction may raid a hostile port once it has 8 soldiers, and the claim keeps the garrison the fight left
 - [Battle morale](battle-morale.md) — Open / proposal: a major battle that ends at morale 12 or under is the attacker's victory when the attacker's score was higher
+- [Autonomous provisioning](autonomous-provisioning.md) — Open / proposal: the 16% depth cap does not stop captains emptying a small port, and a reserve that they cannot buy below makes the crews hungrier
 - [Contracts](contracts.md) — Open / proposal: a paid provisions delivery the sim would enforce, once a standing order is one job rather than two
 - [Order confirmation](order-confirmation.md) — Open / proposal: a completion report closes when its issuer signs it, or after a day when nobody can
 - [Captivity debts](captivity-debts.md) — Open / proposal: the unpaid ransom comes out of the prisoner's purse, up to one day's wages, on each world day
