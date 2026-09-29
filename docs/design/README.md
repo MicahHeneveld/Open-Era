@@ -34,6 +34,7 @@ Every playtest below is evidence for a capability the project claims. Several ar
 | [Informed commitment 001](../playtests/informed-commitment-001.md) | Deciding before travel from earned knowledge, and four failed attempts to invert the forecast into ground truth |
 | [Own party 001](../playtests/own-party-001.md) | A party's own provisioning trajectory is legible before it bites, and the push warning precedes the shortage; also the first evidence that trade cannot be pursued |
 | [Economy pacing 001](../playtests/economy-pacing-001.md) | A round trip in arms and medicine beats the same ticks of work, with tax, passage, depth, and price expiry visible before they bind |
+| [Economy pacing 002](../playtests/economy-pacing-002.md) | Confirmation on `405ad6b`: the same route still beats work, and the hold, the sales tax, the whole-unit cap, the drift, and the rumor age were checked in play |
 
 ## Decision status
 

@@ -583,9 +583,9 @@
       byId("world-time").textContent = "Day " + fmt(world.day, 1) + " · " + (f ? f.name : "Unaffiliated");
       // The runway is the number that matters, not the stock: a falling count says
       // nothing about whether the party will reach a market before it empties.
-      var runway = party.provisionRunwayTicks == null
+      var runway = party.runwayTicks == null
         ? '<span class="subtle">unknown</span>'
-        : party.provisionRunwayTicks + " ticks (" + fmt(party.provisionRunwayDays, 1) + " days)";
+        : party.runwayTicks + " ticks (" + fmt(party.runwayDays, 1) + " days)";
       byId("header-stats").innerHTML =
         '<span class="pill">Money <strong>' + fmt(c.money) + "</strong></span>" +
         '<span class="pill">Provisions <strong>' + fmt(c.cargo.provisions, 1) + "</strong></span>" +
@@ -762,7 +762,7 @@
         (intel && item.stocks
           ? Object.keys(item.stocks).map(function (key) {
               var drift = item.priceDrift && item.priceDrift[key] != null
-                ? ' <span class="subtle">quiet ' + (item.priceDrift[key] > 0 ? "+" : "") + fmt(item.priceDrift[key], 2) + "/tick</span>"
+                ? ' <span class="subtle">own use ' + (item.priceDrift[key] > 0 ? "+" : "") + fmt(item.priceDrift[key], 2) + "/tick, if no one trades</span>"
                 : "";
               return '<div class="resource-row"><span>' + esc(key) + "</span><span><strong>" + approx + fmt(item.stocks[key], 1) + "</strong> @ " + approx + fmt(item.prices[key], 2) + drift + "</span></div>";
             }).join("")

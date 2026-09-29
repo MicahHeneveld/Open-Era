@@ -38,6 +38,8 @@ function stubElement() {
 type Renderer = {
   setWorld: (world: Record<string, unknown>) => void;
   settlementInspector: (settlement: Record<string, unknown>) => string;
+  renderHeader: () => void;
+  headerHtml: () => string;
 };
 
 function rendererFor(state: Record<string, unknown>): Renderer {
@@ -57,11 +59,14 @@ function rendererFor(state: Record<string, unknown>): Renderer {
     "window",
     "fetch",
     "console",
-    `${inlineScript()}\n; return { settlementInspector, setWorld: function (next) { world = next; } };`,
+    `${inlineScript()}\n; return { settlementInspector, renderHeader, setWorld: function (next) { world = next; } };`,
   );
-  const renderer = factory(document, windowStub, fetchStub, console) as Renderer;
+  const renderer = factory(document, windowStub, fetchStub, console) as Omit<Renderer, "headerHtml">;
   renderer.setWorld(state);
-  return renderer;
+  return {
+    ...renderer,
+    headerHtml: () => elements.get("header-stats")?.innerHTML ?? "",
+  };
 }
 
 function projectedState(): Record<string, unknown> {
@@ -143,8 +148,19 @@ test("an owned market is never marked approximate", () => {  const state = proje
     const section = stockSection(renderer.settlementInspector(settlement));
     assert.doesNotMatch(section, /~/, `${settlement.id} is an owned record and must not be marked approximate`);
     assert.doesNotMatch(section, /estimated/, `${settlement.id} is an owned record and must not be labelled estimated`);
-    assert.match(section, /quiet/, `${settlement.id} must show the live board's per-tick drift`);
+    assert.match(section, /own use/, `${settlement.id} must show the live board's own-use drift`);
+    assert.match(section, /if no one trades/, `${settlement.id} must say the drift is not the next quote`);
   }
+});
+
+test("the header runway reads the party's runwayTicks", () => {
+  const state = projectedState();
+  const party = state.party as { runwayTicks: number; runwayDays: number };
+  const renderer = rendererFor(state);
+  renderer.renderHeader();
+  const header = renderer.headerHtml();
+  assert.match(header, new RegExp(`Lasts <strong>${party.runwayTicks} ticks`));
+  assert.doesNotMatch(header, /unknown/, "a known runway must not render as unknown");
 });
 
 test("a market with no report says so instead of drawing zero stocks as fact", () => {

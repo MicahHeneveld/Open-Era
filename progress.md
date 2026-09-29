@@ -31,10 +31,10 @@ Git remains the complete history. This file exists for three things git does not
 ## Current state
 
 - **Baseline:** `main` carries the Phase 0 baseline as merge commit `1386e00`, from [pull request 1](https://github.com/taia-0/Open-Era/pull/1), approved by the owner and merged 2026-09-25.
-- **In review:** none open. [PR 10](https://github.com/taia-0/Open-Era/pull/10) (M16, player trade verbs) merged as `8c97d34` on owner approval. Both CI checks were green before the merge and the merge state was clean. The branch `feature/player-trade-verbs` is kept at `55d930c`, matching this repository's practice of retaining merged branches.
-- **Last verified commit:** `feature/economy-pacing` (M17), which contains `main` at `8285f45` (PR #11, the reconnaissance brief, docs only). **128 tests pass** and `./scripts/evaluate-milestone.sh m17-economy-pacing` passes, including split recovery. The playtest is [economy-pacing-001](docs/playtests/economy-pacing-001.md). On seed 1847 a Crown Harbor ↔ Glassport round trip in arms and medicine finished **117.90 ahead of working the same 17 ticks** (24.27/tick against a measured wage of 17.33). The session's verdict is `REVISE` for three presentation gaps, not for the economy; the cargo list, the sale-only tax label, and the whole-unit depth ceiling were fixed after the session and were not re-played.
-- **Gate status:** passing on this branch with **128 tests**. Golden hashes were regenerated twice on purpose. The pre-M17 three (`183e7f0a…`, `672be404…`, `b1fe59d0…`) described the world before consumption, passage, and shared depth. The intermediate three (`362ed57e…`, `425de436…`, `7f28ac8e…`) added those. The current three add a price-specific belief decay: `02f1aa2a…` (seed 1847, 8338 events), `76445c58…` (seed 2718, 8428 events), and `12e04439…` (seed 4096, 8361 events). Split recovery replays to the 1847 hash; replayed events are 571. The ICU risk is unchanged: these hashes were generated on Node 24.21.0, ICU 78.3.
-- **Headline risk:** no channel exists for a commander to learn a rival's strength other than a settlement-scoped forecast. The maritime economy now has a route that beats dock work on the Crown Harbor ↔ Glassport pair. An own-faction price stays live and publishes its quiet drift; a foreign price is still an estimate, and a remote order ceiling is still not quoted. Glassport ends a headless 72-tick run more worn down than it did before this change (garrison 8 against 24, stability 36 against 49), because arms stay scarce there. That scarcity is also why the route still pays at day 12. Verdant's stability was unchanged and neither treasury collapsed.
+- **In review:** [PR 12](https://github.com/taia-0/Open-Era/pull/12) (M17, economy pacing) is open from `feature/economy-pacing`. [PR 10](https://github.com/taia-0/Open-Era/pull/10) (M16) merged as `8c97d34`.
+- **Last verified commit:** `feature/economy-pacing` (M17), which contains `main` at `8285f45`. **129 tests pass** and `./scripts/evaluate-milestone.sh m17-economy-pacing` passes, including split recovery. The confirmation playtest is [economy-pacing-002](docs/playtests/economy-pacing-002.md). On seed 1847 the played round trip finished **343.62 ahead of working the same 22 ticks** (32.95/tick against a measured wage of 17.33). The session's verdict is `REVISE` for two presentation gaps. Both were projection-only and were fixed after the session; they were re-checked in the render tests, not by a second voyage.
+- **Gate status:** passing on this branch with **129 tests**. Golden hashes were not moved by the confirmation. They remain `02f1aa2a…` (seed 1847, 8338 events), `76445c58…` (seed 2718, 8428 events), and `12e04439…` (seed 4096, 8361 events). Split recovery replays 571 events to the 1847 hash. The ICU risk is unchanged: Node 24.21.0, ICU 78.3.
+- **Headline risk:** no channel exists for a commander to learn a rival's strength other than a settlement-scoped forecast. The maritime economy now has a route that beats dock work on the Crown Harbor ↔ Glassport pair. An own-faction price stays live and publishes an own-use drift that is not the next quote; a foreign price is still an estimate, and a remote order ceiling is still not quoted. Glassport's garrison falls in the first 50–90 ticks and then holds, on this branch and on `main` at `8285f45`. It does not change hands. The numbers are in the confirmation entry.
 - **Runtime:** Node 24.21.0, pinned by `.node-version`. Node 24 is installed keg-only at `/opt/homebrew/opt/node@24/bin`; the global `node` remains 22.
 
 ## Open items
@@ -152,6 +152,33 @@ Backfilled from the commit graph on 2026-09-25. **Attribution caveat:** commits 
 - A player can name a good and a quantity and see the price before paying, on any of the four resources, with every limit quoted before it is hit. A voyage pays for itself (+113.27 on 108 starting money in playtest). Whether it out-earns working the same ticks is a separate, deferred milestone.
 
 ## Entries
+
+### 2026-09-29 — Economy pacing: confirmation playtest, and Glassport over 144 ticks
+- **Agent:** Open Era Engineer (Cursor cloud agent) | **Branch:** `feature/economy-pacing` | **Type:** Records plus two projection fixes
+- **Changed** — nothing in the simulation. The dashboard no longer labels `priceDrift` as "quiet ±N/tick", which a player read as the next quote. It now says "own use ±N/tick, if no one trades". The header "Lasts" pill reads `party.runwayTicks` and `party.runwayDays`. It had been looking for `provisionRunwayTicks`, so a known runway rendered as unknown.
+- **Why** — the confirmation session on `405ad6b` beat working and found the books for cargo, sales tax, and whole-unit caps honest. The drift column was not: Crown Harbor arms were −0.13 and the next price rose, because another merchant traded. The header runway was a second miss between the page and the payload. Glassport was measured because the earlier 72-tick note (garrison 8 against a baseline of 24) looked like a slide.
+- **Verified** — `npm run typecheck` clean; **129 tests** pass. `./scripts/evaluate-milestone.sh m17-economy-pacing` passes. Golden hashes are unchanged (`02f1aa2a…`, `76445c58…`, `12e04439…`; recovery still replays 571 events). The fresh-context playtest is [economy-pacing-002](docs/playtests/economy-pacing-002.md): 108 → 832.88 over 22 state ticks, against 381.26 for working, every fill reconciled to the event log. Session verdict `REVISE`. The two label fixes were not sailed again.
+- **Glassport** — headless, no player commands, compared with `main` at `8285f45`. Garrison and stability. Surrender needs garrison ≤ 15 and stability ≤ 30. A raid candidate needs garrison ≥ 15, so once a port is under 15 the autonomous raids stop.
+
+| Seed | Tick | M17 garrison | M17 stability | Baseline garrison | Baseline stability |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| 1847 | 0 | 155 | 86 | 155 | 86 |
+| 1847 | 72 | 54 | 66.01 | 24 | 48.83 |
+| 1847 | 144 | 14 | 41.17 | 9 | 38.99 |
+| 1847 | 216 | 14 | 43.33 | 9 | 41.15 |
+| 1847 | 288 | 14 | 45.49 | 9 | 43.31 |
+| 2718 | 72 | 10 | 39.01 | 11 | 40.86 |
+| 2718 | 144 | 10 | 41.17 | 11 | 43.02 |
+| 2718 | 216 | 10 | 43.33 | 11 | 45.18 |
+| 2718 | 288 | — | — | 11 | 47.34 |
+| 4096 | 72 | 6 | 30.98 | 7 | 32.95 |
+| 4096 | 144 | 6 | 33.14 | 7 | 35.11 |
+| 4096 | 216 | 6 | 35.30 | 7 | 37.27 |
+| 4096 | 288 | — | — | 7 | 39.43 |
+
+The low point, then the hold: seed 1847 reaches garrison 14 and stability 39.55 at tick 90 and stays there while stability climbs about 0.03 a tick. Seed 2718 floors at garrison 10 / stability 38.38 at tick 51. Seed 4096 floors at garrison 6 / stability 30.2 at tick 46, then stability rises. No seed changes Glassport's faction or owner. No `settlement-claimed`. The same floor exists on the baseline (garrison 9, 11, and 7). At the floor the strongest hostile parties have on the order of 100–160 troops, but the raid verb will not fire under garrison 15, and stability never reaches 30, so surrender is not offered. It is not a slide and it is not a free capture. No hash-moving fix. Named follow-up: **Glassport raid floor** — a battered port sits under the raid gate and above the surrender line, so a neighbour who could take it is not offered the raid. That shape is older than M17. Runs past roughly tick 260 also throw `has no active goals` (Jun Ash or Kessa Dusk) on both trees, which is why two M17 cells at tick 288 are blank; the garrison had already been flat for more than a hundred ticks.
+- **Left open** — remote `maxBuy` / `maxSell`, foreign prices as estimates, `buy-provisions` without a preview, and the autonomous travel score still ignoring passage. The raid-floor follow-up above. The confirmation was not re-played after the two label fixes.
+- **Links** — [playtest](docs/playtests/economy-pacing-002.md) | [open items](#open-items)
 
 ### 2026-09-29 — Economy pacing: live drift, and prices that forget faster than garrisons
 - **Agent:** Open Era Engineer (Cursor cloud agent) | **Branch:** `feature/economy-pacing` | **Type:** Feature plus records
