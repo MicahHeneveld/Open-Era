@@ -11,6 +11,7 @@ import {
 } from "./combat.ts";
 import {
   activeStandingOrder,
+  openStandingOrder,
   assessOrderAction,
   believedGarrison,
   believedPrice,
@@ -1610,6 +1611,68 @@ function progressTroopRecoveries(world: WorldState, events: SimEvent[]): void {
   }
 }
 
+/**
+ * Write one amendment of an order the issuer already holds.
+ *
+ * Shared by `amend-order` and by `issue-order` when the pair already has an
+ * open order. A major change (directive or target) returns the order to
+ * pending and clears a plan that pointed at it. Priority or deadline alone
+ * keeps the current acceptance.
+ */
+function emitOrderAmendment(
+  world: WorldState,
+  events: SimEvent[],
+  commander: Character,
+  recipient: Character,
+  order: StandingOrder,
+  amendment: {
+    id: string;
+    directive: StandingOrder["directive"];
+    targetId?: string;
+    priority: number;
+    expiresTick: number | null;
+    majorChange: boolean;
+  },
+): void {
+  const amended: StandingOrder = {
+    ...order,
+    directive: amendment.directive,
+    targetId: amendment.targetId,
+    priority: amendment.priority,
+    expiresTick: amendment.expiresTick,
+    revision: order.revision + 1,
+    status: amendment.majorChange ? "pending" : order.status,
+    adherence: amendment.majorChange ? "unassessed" : order.adherence,
+    statusChangedTick: amendment.majorChange ? world.tick : order.statusChangedTick,
+    lastReport: {
+      tick: world.tick,
+      kind: "amended",
+      summary: amendment.majorChange
+        ? `${commander.name} materially revised the order; ${recipient.name} must reassess it.`
+        : `${commander.name} adjusted the order's priority or deadline without changing its objective.`,
+    },
+  };
+  emit(world, events, {
+    type: "standing-order-amended",
+    actorId: commander.id,
+    targetId: recipient.id,
+    data: {
+      commandId: amendment.id,
+      orderId: order.id,
+      majorChange: amendment.majorChange,
+      previousRevision: order.revision,
+      order: amended,
+      summary: amended.lastReport!.summary,
+    },
+  });
+  emit(world, events, {
+    type: "player-command-resolved",
+    actorId: commander.id,
+    targetId: recipient.id,
+    data: { commandId: amendment.id, outcome: "order-amended", orderId: order.id, revision: amended.revision },
+  });
+}
+
 function processPlayerCommands(
   world: WorldState,
   events: SimEvent[],
@@ -1687,7 +1750,9 @@ function processPlayerCommands(
         !recipient ||
         !order ||
         order.issuerId !== commander.id ||
-        (order.status !== "pending" && order.status !== "active")
+        // Awaiting confirmation is open for a further issue, which is stored as
+        // an amendment. Explicit amend-order still rejects that status at submit.
+        (order.status !== "pending" && order.status !== "active" && order.status !== "awaiting-confirmation")
       ) {
         emit(world, events, {
           type: "player-command-failed",
@@ -1697,43 +1762,7 @@ function processPlayerCommands(
         });
         continue;
       }
-      const amended: StandingOrder = {
-        ...order,
-        directive: command.directive,
-        targetId: command.targetId,
-        priority: command.priority,
-        expiresTick: command.expiresTick,
-        revision: order.revision + 1,
-        status: command.majorChange ? "pending" : order.status,
-        adherence: command.majorChange ? "unassessed" : order.adherence,
-        statusChangedTick: command.majorChange ? world.tick : order.statusChangedTick,
-        lastReport: {
-          tick: world.tick,
-          kind: "amended",
-          summary: command.majorChange
-            ? `${commander.name} materially revised the order; ${recipient.name} must reassess it.`
-            : `${commander.name} adjusted the order's priority or deadline without changing its objective.`,
-        },
-      };
-      emit(world, events, {
-        type: "standing-order-amended",
-        actorId: commander.id,
-        targetId: recipient.id,
-        data: {
-          commandId: command.id,
-          orderId: order.id,
-          majorChange: command.majorChange,
-          previousRevision: order.revision,
-          order: amended,
-          summary: amended.lastReport!.summary,
-        },
-      });
-      emit(world, events, {
-        type: "player-command-resolved",
-        actorId: commander.id,
-        targetId: recipient.id,
-        data: { commandId: command.id, outcome: "order-amended", orderId: order.id, revision: amended.revision },
-      });
+      emitOrderAmendment(world, events, commander, recipient, order, command);
       continue;
     }
 
@@ -1812,6 +1841,31 @@ function processPlayerCommands(
           actorId: commander.id,
           targetId: command.characterId,
           data: { commandId: command.id, reason: "order recipient is no longer available" },
+        });
+        continue;
+      }
+      // Do not mint `${command.id}:standing-order` while this issuer already
+      // has an open order with the recipient. Submit rewrites that issue into
+      // amend-order; this is the same rule if an issue-order is still queued.
+      const open = openStandingOrder(recipient, commander.id);
+      if (open) {
+        const majorChange = command.directive !== open.directive || command.targetId !== open.targetId;
+        if (!majorChange && command.priority === open.priority && command.expiresTick === open.expiresTick) {
+          emit(world, events, {
+            type: "player-command-failed",
+            actorId: commander.id,
+            targetId: recipient.id,
+            data: { commandId: command.id, reason: "the amendment does not change the order" },
+          });
+          continue;
+        }
+        emitOrderAmendment(world, events, commander, recipient, open, {
+          id: command.id,
+          directive: command.directive,
+          targetId: command.targetId,
+          priority: command.priority,
+          expiresTick: command.expiresTick,
+          majorChange,
         });
         continue;
       }

@@ -149,7 +149,15 @@ test("the local dashboard serves state and executes its command API", async () =
         assert.equal(event.data, null, `${event.type} withheld its payload but still shipped data`);
       }
     }
-    assert.ok(final.characters.find((character) => character.id === "character-04")?.standingOrders.some((order) => order.id === "command-00001:standing-order"));
+    const issued = final.characters.find((character) => character.id === "character-04")
+      ?.standingOrders.find((order) => order.id === "character-01:order:character-04");
+    assert.ok(issued);
+    assert.equal(issued.revision, 2);
+    assert.equal(
+      final.characters.find((character) => character.id === "character-04")
+        ?.standingOrders.some((order) => order.id === "command-00001:standing-order"),
+      false,
+    );
     assert.equal(final.briefing.reportingOfficer?.id, "character-05");
     const digest = final.briefing.items.find((item) => item.routed);
     assert.ok(digest?.throughSequence);
@@ -207,7 +215,7 @@ test("the local dashboard serves state and executes its command API", async () =
         playerId: "prototype-player",
         type: "amend-order",
         characterId: "character-04",
-        orderId: "command-00001:standing-order",
+        orderId: "character-01:order:character-04",
         priority: 0.88,
         expiresInTicks: 90,
       }),
@@ -222,8 +230,8 @@ test("the local dashboard serves state and executes its command API", async () =
       characters: Array<{ id: string; standingOrders: Array<{ id: string; revision: number; priority: number }> }>;
     };
     const amended = afterAmendment.characters.find((character) => character.id === "character-04")
-      ?.standingOrders.find((order) => order.id === "command-00001:standing-order");
-    assert.equal(amended?.revision, 2);
+      ?.standingOrders.find((order) => order.id === "character-01:order:character-04");
+    assert.equal(amended?.revision, 3);
     assert.equal(amended?.priority, 0.88);
 
     const completion = final.briefing.items.find((item) => item.action === "confirm-order");

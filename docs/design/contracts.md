@@ -136,15 +136,39 @@ The player verb and the identity rule do not. A reverted guard in `validateStand
 
 ## Playtest
 
-Follow `docs/playtests/TEMPLATE.md`. Dashboard HTTP JSON only, as in [informed-commitment-002](../playtests/informed-commitment-002.md). Seed 1847, Mara Vane (`character-01`), ticks 0–8. She starts at Crown Harbor with 108. Zara Gale starts there with 32 provisions. Ada Sorn starts there on the seeded explore order.
+Follow `docs/playtests/TEMPLATE.md`. Dashboard HTTP JSON only, as in [informed-commitment-002](../playtests/informed-commitment-002.md). This section is the order-identity half only. The paid delivery (`offer-contract`, escrow, fulfilment) is M26 and is not in this tree; sending it returns `unknown-type`. The tick table above, Glassport then Cinder Key by tick 8, is the old double-mint on the pre-M22 hashes. It is not the run to play.
 
-**Hypothesis.** A new instruction to Ada changes the order she already holds, and a paid delivery puts the price in escrow before any grain moves.
+Measured on this branch, seed 1847, Node v24.21.0. Mara Vane (`character-01`) starts at Crown Harbor. `party.hold.money` and her character `money` are 108. Ada Sorn (`character-13`, explorer) starts there. Her one order is `character-01:order:character-13`, directive `explore`, no `targetId`, priority 0.78, status `pending`, revision 1. Zara Gale (`character-17`) stands there with cargo provisions 32, and her `standingOrders` on Mara's panel is empty: Pax Ash's order is not projected.
 
-**Ambition.** At tick 0, `issue-order` explore, target `cinder-key`, to Ada, default priority. Then `offer-contract` to Zara: 10 provisions, destination `crown-harbor`, price 18, deadline 12. Advance to tick 8.
+**Hypothesis.** A new instruction to Ada changes the order she already holds. It does not mint a second id.
 
-**Success.** Ada has one open order, id `character-01:order:character-13`, revision 2, target `cinder-key`, and the log has no second issued id. Pax Ash's order is absent on Zara's panel. Mara sees price 18 and quantity 10. On accept her money is 90, Zara's is still 93, and escrow is 18. Fulfilment adds 10 to Crown Harbor's provisions and pays Zara from the escrow, with no `market-trade` for that quantity.
+**Start.** `npm run dashboard -- --reset --seed 1847`. The server listens on `http://127.0.0.1:4317`.
 
-`PROMOTE` if Ada has one order and the purses match that escrow. `REVISE` if a second order id appears, if Zara is paid before the grain moves, or if Pax Ash's order is readable. `ABANDON` if the offer is only a message and the shelf never changes.
+**Tick 0, before any advance.** `GET /api/state?limit=200`. Read `tick` 0, `party.hold.money` 108, and Ada's `characters[]` row (`id` `character-13`): `locationId` `crown-harbor`, `travel` null, one standing order as above.
+
+`POST /api/commands`
+
+```json
+{"playerId":"prototype-player","type":"issue-order","characterId":"character-13","directive":"explore","targetId":"cinder-key"}
+```
+
+HTTP 202. `command.id` is `command-00001`, `command.type` is `amend-order`, `command.orderId` is `character-01:order:character-13`, `command.majorChange` is true, `command.priority` is 0.78, `command.targetId` is `cinder-key`. State is still tick 0: `pendingCommands` length 1, and Ada's order is still revision 1 until the tick runs.
+
+**Advance 1.** `POST /api/advance` with `{"ticks":1}`. HTTP 200, `tick` 1, `ticksAdvanced` 1. Read the response `events` (do not wait for a later page). Expect, all with `tick` 0 and `payloadWithheld` false:
+
+- `standing-order-amended`, summary `Mara Vane materially revised the order; Ada Sorn must reassess it.`, `data.orderId` `character-01:order:character-13`
+- `player-command-resolved`, summary `Mara Vane: order amended`, same `orderId`
+- `standing-order-accepted`, summary `Ada Sorn accepted the explore order.`, same `orderId`
+
+No `standing-order-issued` anywhere in that array. `GET /api/state?limit=200` at tick 1 has `eventPage.total` 185 and `hasMore` false, so the same three events are on that single page (sequences 10, 11, and the acceptance just after). Ada: `locationId` null, `travel` `{fromId:"crown-harbor",toId:"cinder-key",totalTicks:4,remainingTicks:4}`, one order, revision 2, `targetId` `cinder-key`, status `active`, priority 0.78. No id `command-00001:standing-order`.
+
+**Same body again.** `POST /api/commands` with the same JSON. HTTP 400, `code` `no-change`, error `The amendment does not change the order`. Nothing is queued.
+
+**Advance 4, to tick 5.** `POST /api/advance` with `{"ticks":4}`. State `tick` 5. Ada `locationId` `cinder-key`, `travel` null, order still `active`, revision 2, `targetId` `cinder-key`. The advance events include `arrived` at event `tick` 4, summary `Ada Sorn: arrived`, `payloadWithheld` true. She has not reported yet.
+
+**Advance 1, to tick 6.** `POST /api/advance` with `{"ticks":1}`. State `tick` 6. Ada is still at `cinder-key`. The order status is `awaiting-confirmation`, revision 2, `targetId` `cinder-key`, `lastReport.kind` `completion`, `lastReport.tick` 5, summary `Ada Sorn considers the survey of Cinder Key complete and requests confirmation.` `briefing.items` contains `action` `confirm-order`, `characterId` `character-13`, `orderId` `character-01:order:character-13`, id `confirm:character-01:order:character-13`. The completion event is on the newest log page (`GET /api/state?limit=200`, event `tick` 5, sequence 637 when nothing else was sent). The tick-0 amendment is not on that page. Page with `?limit=200&beforeSequence=<eventPage.cursor>` until the page whose `oldestSequence` is 1 (the cursor that reaches it is `beforeSequence=105`). That page holds sequence 10.
+
+`PROMOTE` if Ada has that one order, revision 2, target `cinder-key`, the log has no `standing-order-issued`, the second identical issue is `no-change`, and the completion report at state tick 6 names the seeded id. `REVISE` if a second order id appears, if she is still on the untargeted explore at state tick 1, or if the report names `command-00001:standing-order`. `ABANDON` if the issue is rejected or the seeded order never changes. Do not score escrow or a shelf change; that delivery is not in this build.
 
 ## Questions for Micah
 

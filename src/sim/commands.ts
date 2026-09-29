@@ -1,3 +1,4 @@
+import { openStandingOrder } from "./agency.ts";
 import { applyEvent, clamp, round, settlementClaimAvailableTo } from "./state.ts";
 import { MARKET_DEPTH_FRACTION, quotedPassage, tradeQuote } from "./engine.ts";
 import type {
@@ -534,6 +535,35 @@ function validateStandingOrder(
     return reject("invalid-duration", "Order duration must be between 1 and 720 ticks");
   }
 
+  // One open order per issuer and recipient. A further issue restates that
+  // order through the amendment rules: a new directive or target returns it
+  // to pending, priority or deadline alone keeps acceptance, and identical
+  // terms are `no-change`. Awaiting confirmation is still open. A refused,
+  // completed, expired, or cancelled order does not hold the slot.
+  const open = openStandingOrder(recipient, issuer.id);
+  if (open) {
+    const amended = validateOrderAmendment(world, {
+      playerId: request.playerId,
+      type: "amend-order",
+      characterId: recipient.id,
+      orderId: open.id,
+      directive: request.directive,
+      // An issue states the whole order. An omitted target clears the previous
+      // one; a partial amend would have kept it.
+      targetId: request.targetId ?? null,
+      priority,
+      expiresInTicks: duration,
+    }, { allowAwaitingConfirmation: true });
+    if (!amended.ok) return amended;
+    const notice = exploreAlreadyPresentNotice(world, recipient, request.directive, request.targetId);
+    return { ...amended, ...(notice ? { notice } : {}) };
+  }
+  if (world.pendingCommands.some((command) =>
+    command.type === "issue-order" && command.characterId === recipient.id
+  )) {
+    return reject("order-already-queued", "Another command already queued will act on that order");
+  }
+
   const command: PlayerCommand = {
     id: `command-${String(world.nextCommandSequence).padStart(5, "0")}`,
     playerId: player.id,
@@ -647,11 +677,16 @@ function issuerOrder(
 function validateOrderAmendment(
   world: WorldState,
   request: Extract<CommandRequest, { type: "amend-order" }>,
+  options?: { allowAwaitingConfirmation?: boolean },
 ): CommandSubmission {
   const found = issuerOrder(world, request.playerId, request.characterId, request.orderId);
   if ("ok" in found) return found;
   const { order, recipient } = found;
-  if (order.status !== "pending" && order.status !== "active") {
+  // `amend-order` itself stays limited to pending and active. A further
+  // `issue-order` may also restate an order that is awaiting confirmation,
+  // because that status is still the pair's one open order.
+  const awaiting = options?.allowAwaitingConfirmation === true && order.status === "awaiting-confirmation";
+  if (order.status !== "pending" && order.status !== "active" && !awaiting) {
     return reject("order-not-amendable", "Only pending or active orders may be amended");
   }
   const directive = request.directive ?? order.directive;
