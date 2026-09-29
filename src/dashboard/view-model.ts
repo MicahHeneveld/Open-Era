@@ -8,6 +8,7 @@ import {
   passageCost,
   provisionRunway,
   sellableProvisions,
+  priceDriftPerTick,
   tradeQuote,
   travelDuration,
   type ProvisionRunway,
@@ -637,6 +638,23 @@ function settlementTaxRate(world: WorldState, factionId: string | null): number 
  * `live` is false and `expiresTick` is null in that case — unknown freshness
  * is not a one-tick promise.
  */
+/**
+ * Per-good change a live board would make in one quiet tick.
+ *
+ * Published beside `prices`, not inside them. A remote estimate has no slope
+ * worth stating, and that absence is null rather than a drift of zero.
+ */
+function projectPriceDrift(
+  world: WorldState,
+  live: boolean,
+  settlementId: string,
+): Record<string, number> | null {
+  if (!live) return null;
+  return Object.fromEntries(
+    RESOURCE_KEYS.map((resource) => [resource, priceDriftPerTick(world, settlementId, resource)]),
+  );
+}
+
 function projectPriceQuote(
   world: WorldState,
   live: boolean,
@@ -875,12 +893,12 @@ export function dashboardState(
           // garrison is: standing in it is direct observation, and showing an
           // estimate beside a quote taken from the real board is worse than
           // either. Away from it, nothing here is present-tense.
-          stocks: coLocated ? { ...settlement.stocks } : knowledge?.stocksEstimate ?? Object.fromEntries(RESOURCE_KEYS.map((resource) => [resource, 0])),
+          stocks: coLocated ? { ...settlement.stocks } : knowledge?.stocksEstimate ?? null,
           targetStocks: coLocated ? { ...settlement.targetStocks } : null,
           garrison: coLocated ? settlement.garrison : knowledge?.garrisonEstimate ?? null,
           fortification: coLocated ? settlement.fortification : null,
           stability: coLocated ? settlement.stability : null,
-          prices: coLocated ? currentPrices(world, settlement.id) : knowledge?.priceEstimate ?? Object.fromEntries(RESOURCE_KEYS.map((resource) => [resource, 0])),
+          prices: coLocated ? currentPrices(world, settlement.id) : knowledge?.priceEstimate ?? null,
           /**
            * Public, including from offshore and including a rival's ports.
            * A price is a rumor until you are standing in the market; the tax
@@ -888,6 +906,7 @@ export function dashboardState(
            */
           taxRate: settlementTaxRate(world, settlement.factionId),
           priceQuote: projectPriceQuote(world, coLocated, knowledge),
+          priceDrift: projectPriceDrift(world, coLocated, settlement.id),
           market,
           partyCount: null,
           // Present in the owned branch as well, so the settlement object has the
@@ -918,9 +937,12 @@ export function dashboardState(
         ...settlement,
         prices: currentPrices(world, settlement.id),
         taxRate: settlementTaxRate(world, settlement.factionId),
-        // Owned records are the live board, even from another of the faction's
-        // ports. They are current, and they expire next tick.
+        // Owned records stay the live board, even from another of the faction's
+        // ports. They expire next tick. `priceDrift` is how far that live
+        // number moves on its own, so a voyage can see the slope instead of
+        // treating one tick of truth as a fare.
         priceQuote: projectPriceQuote(world, true, knowledge),
+        priceDrift: projectPriceDrift(world, true, settlement.id),
         market,
         partyCount: Object.values(world.characters).filter((character) => character.locationId === settlement.id).length,
         battleInProgress: battleVisible,

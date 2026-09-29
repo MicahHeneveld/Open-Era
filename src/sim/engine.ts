@@ -28,6 +28,7 @@ import {
   distanceBetween,
   factionPower,
   marketPrice,
+  resourcePrice,
   partyPower,
   round,
   settlementClaimAvailableTo,
@@ -135,35 +136,86 @@ function emit(world: WorldState, events: SimEvent[], draft: EventDraft): SimEven
   return event;
 }
 
+/**
+ * Stocks after one tick of production, before the island eats.
+ *
+ * Shared with the published price drift, so the number on the board is the
+ * change this same step would make if nobody traded.
+ */
+export function producedStocks(settlement: {
+  focus: ResourceKey;
+  stability: number;
+  production: Resources;
+  stocks: Resources;
+}): Resources {
+  const stocks = cloneResources(settlement.stocks);
+  const workerCondition = 0.7 + (settlement.stability / 100) * 0.3;
+  for (const resource of RESOURCE_KEYS) {
+    const focusMultiplier = settlement.focus === resource ? 1.25 : 1;
+    stocks[resource] = round(stocks[resource] + settlement.production[resource] * focusMultiplier * workerCondition);
+  }
+  return stocks;
+}
+
+/**
+ * Stocks after one tick of local use, starting from `stocks`.
+ *
+ * Provisions use the population ration. The other goods use `localResourceUse`.
+ * The returned demand figures are the provision shortage path; they are not a
+ * second consumption of arms or medicine.
+ */
+export function consumedStocks(
+  settlement: { population: number; focus: ResourceKey },
+  stocks: Resources,
+): { stocks: Resources; demand: number; consumed: number; shortage: number } {
+  const after = cloneResources(stocks);
+  const demand = round(settlement.population / 3_600, 3);
+  const consumed = Math.min(after.provisions, demand);
+  after.provisions = round(after.provisions - consumed);
+  for (const resource of RESOURCE_KEYS) {
+    if (resource === "provisions") continue;
+    const use = localResourceUse(settlement, resource);
+    after[resource] = round(Math.max(0, after[resource] - use));
+  }
+  return { stocks: after, demand, consumed, shortage: round(demand - consumed) };
+}
+
+/**
+ * How far one good's price moves in one quiet tick.
+ *
+ * Quiet means production and local use only. Other merchants are not in the
+ * figure, and a price sitting on the floor or the ceiling reports 0 until
+ * stock would leave that clamp. A battle in the settlement skips the tick, so
+ * the drift is 0 while one is underway.
+ */
+export function priceDriftPerTick(
+  world: WorldState,
+  settlementId: string,
+  resource: ResourceKey,
+): number {
+  const settlement = world.settlements[settlementId];
+  const before = marketPrice(world, settlementId, resource);
+  if (Object.values(world.activeBattles).some((battle) => battle.settlementId === settlementId)) return 0;
+  const next = consumedStocks(settlement, producedStocks(settlement)).stocks;
+  const after = resourcePrice(resource, settlement.targetStocks[resource], next[resource]);
+  return round(after - before, 2);
+}
+
 function produceSettlements(world: WorldState, events: SimEvent[]): void {
   for (const settlement of Object.values(world.settlements).sort((a, b) => a.id.localeCompare(b.id))) {
     if (Object.values(world.activeBattles).some((battle) => battle.settlementId === settlement.id)) continue;
-    const stocks = cloneResources(settlement.stocks);
-    for (const resource of RESOURCE_KEYS) {
-      const focusMultiplier = settlement.focus === resource ? 1.25 : 1;
-      const workerCondition = 0.7 + (settlement.stability / 100) * 0.3;
-      stocks[resource] = round(stocks[resource] + settlement.production[resource] * focusMultiplier * workerCondition);
-    }
+    const stocks = producedStocks(settlement);
     emit(world, events, {
       type: "settlement-produced",
       settlementId: settlement.id,
       data: { focus: settlement.focus, stocks },
     });
 
-    const afterConsumption = cloneResources(stocks);
-    const demand = round(settlement.population / 3_600, 3);
-    const consumed = Math.min(afterConsumption.provisions, demand);
-    afterConsumption.provisions = round(afterConsumption.provisions - consumed);
     // Arms, medicine and ship materials are used as well. Without a sink those
     // stocks only rise, every price falls to the floor, and a cargo that paid
     // on the way out has nothing to do on the way home. Provisions keep the
     // shortage path above; running out of timber is a price, not a garrison loss.
-    for (const resource of RESOURCE_KEYS) {
-      if (resource === "provisions") continue;
-      const use = localResourceUse(settlement, resource);
-      afterConsumption[resource] = round(Math.max(0, afterConsumption[resource] - use));
-    }
-    const shortage = round(demand - consumed);
+    const { stocks: afterConsumption, demand, consumed, shortage } = consumedStocks(settlement, stocks);
     const stability = clamp(settlement.stability - shortage * 0.35 + (shortage === 0 ? 0.03 : 0), 0, 100);
     const garrisonLoss = shortage > 0 ? Math.min(settlement.garrison, Math.floor(shortage * 0.18)) : 0;
     emit(world, events, {

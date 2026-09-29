@@ -1,16 +1,23 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { dashboardState, fullEventFeed } from "../src/dashboard/view-model.ts";
+import {
+  believedGarrison,
+  believedPrice,
+  GARRISON_FRESHNESS_TICKS,
+  PRICE_FRESHNESS_TICKS,
+} from "../src/sim/agency.ts";
 import { submitCommand } from "../src/sim/commands.ts";
 import {
   marketDepth,
   passageCost,
   PASSAGE_COST_PER_TICK,
+  priceDriftPerTick,
   runTick,
   tradeQuote,
 } from "../src/sim/engine.ts";
 import { createPrototypeWorld } from "../src/sim/scenario.ts";
-import { marketPrice } from "../src/sim/state.ts";
+import { marketPrice, round } from "../src/sim/state.ts";
 import { RESOURCE_KEYS, type ResourceKey, type WorldState } from "../src/sim/types.ts";
 
 const PLAYER = "prototype-player";
@@ -166,6 +173,15 @@ test("a destination tax is public offshore, and a live price expires next tick",
   assert.equal(remoteOwned.priceQuote.asOfTick, world.tick);
   assert.equal(remoteOwned.priceQuote.expiresTick, world.tick + 1, "a live price is only good for this tick");
   assert.equal(remoteOwned.intelligence.confidence, 1, "knowing the island exactly is not the same claim as the price lasting");
+  assert.ok(remoteOwned.priceDrift, "a live own-faction board publishes its drift");
+  for (const resource of RESOURCE_KEYS) {
+    assert.equal(typeof remoteOwned.prices[resource], "number", "a live price stays one number, not a rumor/quote split");
+    assert.equal(
+      remoteOwned.priceDrift[resource],
+      priceDriftPerTick(world, remoteOwned.id, resource),
+      `${resource} drift must be the quiet tick, not a second price`,
+    );
+  }
 
   const remoteForeign = state.settlements.find((settlement) =>
     settlement.intelligence && settlement.intelligence.exact === false && settlement.intelligence.present === false
@@ -173,6 +189,10 @@ test("a destination tax is public offshore, and a live price expires next tick",
   assert.ok(remoteForeign, "a foreign port known only by report");
   assert.equal(remoteForeign.priceQuote.live, false);
   assert.equal(remoteForeign.priceQuote.expiresTick, null, "an estimate is not given a one-tick expiry it did not earn");
+  assert.equal(remoteForeign.priceDrift, null, "a report has an age, not a slope");
+  for (const resource of RESOURCE_KEYS) {
+    assert.equal(typeof remoteForeign.prices[resource], "number");
+  }
 
   const here = state.settlements.find((settlement) => settlement.id === commander.locationId)!;
   assert.equal(here.market.quotedTick, world.tick);
@@ -185,8 +205,31 @@ test("a destination tax is public offshore, and a live price expires next tick",
   const unreported = bare.settlements.find((settlement) => settlement.intelligence == null);
   assert.ok(unreported, "clearing hearsay must leave a settlement with no report");
   assert.equal(unreported.priceQuote, null);
+  assert.equal(unreported.priceDrift, null);
+  assert.equal(unreported.stocks, null, "unknown stock is null, not a board of zeros");
+  assert.equal(unreported.prices, null, "unknown price is null, not a board of zeros");
   assert.equal(typeof unreported.taxRate, "number");
   assert.ok(unreported.taxRate >= 0);
+});
+
+test("a price report fades faster than a garrison report", () => {
+  const world = createPrototypeWorld(1847);
+  const commander = commanderOf(world);
+  world.tick = GARRISON_FRESHNESS_TICKS;
+  const belief = commander.knowledge.glassport;
+  belief.observedTick = 0;
+  belief.confidence = 1;
+  belief.priceEstimate.arms = 14;
+  belief.garrisonEstimate = 155;
+
+  const price = believedPrice(world, commander, "glassport", "arms");
+  const priceWeight = 0.08;
+  assert.equal(price, round(14 * priceWeight + 5.6 * (1 - priceWeight), 2));
+  assert.ok(PRICE_FRESHNESS_TICKS < GARRISON_FRESHNESS_TICKS);
+
+  const garrison = believedGarrison(world, commander, "glassport");
+  assert.ok(garrison.confidence > 0.3 && garrison.confidence < 0.45, `garrison confidence was ${garrison.confidence}`);
+  assert.ok(price < 8, "a twelve-day-old price has fallen toward the prior, not stayed at 14");
 });
 
 interface RoundTrip {
@@ -286,6 +329,13 @@ test("a sensible round trip competes with working the same ticks", () => {
     route,
     "the opening world must contain a two-way route from the commander's port",
   );
+
+  const opening = projected(tradeWorld);
+  const destination = opening.settlements.find((settlement) => settlement.id === route.destinationId);
+  assert.ok(destination);
+  assert.equal(destination.taxRate, taxAt(tradeWorld, route.destinationId));
+  assert.equal(route.destinationId, "glassport", "the paced route is the taxed own-faction port, not a tax-free one");
+  assert.equal(destination.taxRate, 0.14);
 
   const tradeStart = commanderOf(tradeWorld).money;
   tradeWhole(tradeWorld, "buy-resource", route.outbound);

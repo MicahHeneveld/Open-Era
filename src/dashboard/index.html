@@ -759,9 +759,12 @@
           '<div class="stat"><span>Production</span><strong>' + esc(item.focus || "Unknown") + "</strong></div>" +
         "</div>" +
         "<h3>" + stockHeading + "</h3>" +
-        (intel
+        (intel && item.stocks
           ? Object.keys(item.stocks).map(function (key) {
-              return '<div class="resource-row"><span>' + esc(key) + "</span><span><strong>" + approx + fmt(item.stocks[key], 1) + "</strong> @ " + approx + fmt(item.prices[key], 2) + "</span></div>";
+              var drift = item.priceDrift && item.priceDrift[key] != null
+                ? ' <span class="subtle">quiet ' + (item.priceDrift[key] > 0 ? "+" : "") + fmt(item.priceDrift[key], 2) + "/tick</span>"
+                : "";
+              return '<div class="resource-row"><span>' + esc(key) + "</span><span><strong>" + approx + fmt(item.stocks[key], 1) + "</strong> @ " + approx + fmt(item.prices[key], 2) + drift + "</span></div>";
             }).join("")
           : '<div class="empty">No current report on this market.</div>') +
         marketHtml(item.market) +

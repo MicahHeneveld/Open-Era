@@ -143,6 +143,7 @@ test("an owned market is never marked approximate", () => {  const state = proje
     const section = stockSection(renderer.settlementInspector(settlement));
     assert.doesNotMatch(section, /~/, `${settlement.id} is an owned record and must not be marked approximate`);
     assert.doesNotMatch(section, /estimated/, `${settlement.id} is an owned record and must not be labelled estimated`);
+    assert.match(section, /quiet/, `${settlement.id} must show the live board's per-tick drift`);
   }
 });
 
@@ -158,8 +159,9 @@ test("a market with no report says so instead of drawing zero stocks as fact", (
     intelligence: null,
     garrison: null,
     market: null,
-    stocks: { provisions: 0, arms: 0, medicine: 0, shipMaterials: 0 },
-    prices: { provisions: 0, arms: 0, medicine: 0, shipMaterials: 0 },
+    stocks: null,
+    prices: null,
+    priceDrift: null,
   };
   const html = renderer.settlementInspector(unreported);
   const section = stockSection(html);

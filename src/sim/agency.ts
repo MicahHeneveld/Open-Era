@@ -50,9 +50,38 @@ const fallbackPrices: Record<ResourceKey, number> = {
   shipMaterials: 4.5,
 };
 
+/**
+ * How many ticks a garrison report takes to fall to about 1/e of its confidence.
+ *
+ * Garrisons move when a battle or a provision shortage says so. A report from
+ * twelve days ago can still be the best picture of a wall.
+ */
+export const GARRISON_FRESHNESS_TICKS = 72;
+
+/**
+ * How many ticks a price report takes to fall to about 1/e of its confidence.
+ *
+ * Prices are recomputed every tick from stock, and M17's local use moves a
+ * board by a meaningful amount inside a few days. A price and a garrison used
+ * to share the 72-tick horizon, so a merchant would still steer on a quote
+ * the market had already left. Eighteen ticks is three days: a report from
+ * this morning still dominates, and a report from last week has fallen to the
+ * floor. The alternative of twelve or twenty-four is the same shape.
+ */
+export const PRICE_FRESHNESS_TICKS = 18;
+
+function beliefWeight(age: number, confidence: number, horizon: number): number {
+  return clamp(confidence * Math.exp(-Math.max(0, age) / horizon), 0.08, 1);
+}
+
 function freshness(world: WorldState, belief: SettlementKnowledge): number {
   const age = Math.max(0, world.tick - belief.observedTick);
-  return clamp(belief.confidence * Math.exp(-age / 72), 0.08, 1);
+  return beliefWeight(age, belief.confidence, GARRISON_FRESHNESS_TICKS);
+}
+
+function priceFreshness(world: WorldState, belief: SettlementKnowledge): number {
+  const age = Math.max(0, world.tick - belief.observedTick);
+  return beliefWeight(age, belief.confidence, PRICE_FRESHNESS_TICKS);
 }
 
 export function believedPrice(
@@ -64,7 +93,7 @@ export function believedPrice(
   if (character.locationId === settlementId) return marketPrice(world, settlementId, resource);
   const belief = character.knowledge[settlementId];
   if (!belief) return fallbackPrices[resource];
-  const confidence = freshness(world, belief);
+  const confidence = priceFreshness(world, belief);
   return round(belief.priceEstimate[resource] * confidence + fallbackPrices[resource] * (1 - confidence), 2);
 }
 
