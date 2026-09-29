@@ -749,18 +749,19 @@ function projectPriceDrift(
 }
 
 /**
- * Age of a stored report, as the forecast already counts it.
+ * Age of a stored report, counted from the tick the player is shown.
  *
- * Seeded hearsay can carry a negative `observedTick`. That backdate is how the
- * simulation treats a report from before the world, and `combatForecast` ages
- * it from the raw tick. The player is not shown a tick that never happened.
- * Flooring the tick and also zeroing the age would make a stale rumor look
- * fresh, and the panel would disagree with the band.
+ * Seeded hearsay can carry a negative `observedTick`. That backdate stays in
+ * the simulation, and `combatForecast` still ages its band from the raw tick.
+ * The player is not shown a tick that never happened. The age beside the
+ * floored tick is the world tick minus that tick, so a rumor cannot read as
+ * older than the world.
  */
 function reportedAge(world: WorldState, observedTick: number): { observedTick: number; ageTicks: number } {
+  const shownTick = Math.max(0, observedTick);
   return {
-    observedTick: Math.max(0, observedTick),
-    ageTicks: Math.max(0, world.tick - observedTick),
+    observedTick: shownTick,
+    ageTicks: Math.max(0, world.tick - shownTick),
   };
 }
 
