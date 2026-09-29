@@ -114,6 +114,154 @@ Stop. No command.
 
 ## Session
 
+Blind session. One process. Seed 1847. No commands. Node v24.21.0. Head before the first request: `97ba340c75dc263b71b2a24f57b2f32b21abc1ea`. `npm ci` because `node_modules` was missing. `npm run dashboard -- --reset --seed 1847` on `http://127.0.0.1:4317`.
+
+`GET /api/health` HTTP 200 `{"ok":true,"tick":0,"events":0}`.
+
+Player `id` `prototype-player`, `displayName` `Mara Vane`, `characterId` `character-01`.
+
+### Checkpoint 1 — Sable Morrow's line, state tick 119
+
+`POST /api/advance` `{"ticks":119}` HTTP 200. Advance `tick` 119 (expected 119). Advance `day` 19.83 (expected 19.83).
+
+Sequence 13680 in that response's `events`:
+
+| Field | Expected | Observed |
+| --- | --- | --- |
+| `type` | `captivity-released` | `captivity-released` |
+| `actorId` | `character-04` | `character-04` |
+| `targetId` | `free-tide` | `free-tide` |
+| `tick` | 118 | 118 |
+| `payloadWithheld` | true | true |
+| `data` | null | null |
+| `summary` | the Sable Morrow sentence | the same sentence |
+
+Summary, observed:
+
+`Sable Morrow was released from Cinder Key: 13.4 paid and 103.21 recorded as debt. Loyalty fell. Sable Morrow paid 13.4 ransom: 6.7 to the Free Tide Compact treasury and 6.7 to Pax Ash`
+
+Recipients on the line: the Free Tide Compact treasury 6.7, Pax Ash 6.7. Sum 13.4. The shares are equal. The odd cent is not in this payment.
+
+`GET /api/state?limit=200` HTTP 200. State `tick` 119 (expected 119). State `day` 19.83 (expected 19.83). `eventPage.oldestSequence` 13588, so sequence 13680 is on this page.
+
+Briefing `id` `event:13680` (expected `event:13680`). Title `A captain was released` (expected `A captain was released`). Summary that same sentence.
+
+Mara `factionId` `world-government`. The faction `name` is `World Government` (expected World Government). `party.locationId` `crown-harbor`. `party.hold.money` 108.
+
+`free-tide` `treasury` null (expected null). `world-government` `treasury` 21553.01. Pax Ash (`character-14`) is not that party purse. His card `money` is 51.58 at `glassport`. The 6.7 figures are on the line. Free Tide's treasury is not a balance she can see.
+
+### Checkpoint 2 — Dax Pike at state tick 276
+
+From tick 119, `POST /api/advance` `{"ticks":144}` HTTP 200. Advance `tick` 263, `day` 43.83.
+
+`POST /api/advance` `{"ticks":13}` HTTP 200. Advance `tick` 276 (expected 276). Advance `day` 46 (expected 46).
+
+`GET /api/state?limit=200` HTTP 200. State `tick` 276 (expected 276). State `day` 46 (expected 46). Page sequences 33167–33366.
+
+Dax Pike, `character-20`:
+
+| Field | Expected | Observed |
+| --- | --- | --- |
+| `locationId` | `glassport` | `glassport` |
+| `money` | null | null |
+| `captivity` | null | null |
+
+No `captivity-released` row is on this page. He is not an actor or a named recipient of one here.
+
+Mara, the party:
+
+| Field | Expected | Observed |
+| --- | --- | --- |
+| `party.locationId` | `crown-harbor` | `crown-harbor` |
+| `party.hold.money` | 108 | 108 |
+
+Factions:
+
+| Field | Expected | Observed |
+| --- | --- | --- |
+| `world-government` `treasury` | 27132.81 | 27132.81 |
+| `free-tide` `treasury` | null | null |
+
+Sequence 13680 is not on this page (expected absent). Briefing `items` are `provision:critical`, `intel:verdant-cay:0`, and `intel:cinder-key:0`. No `event:13680` (expected absent).
+
+`GET /api/state?limit=200&beforeSequence=13880` HTTP 200. Page sequences 13680–13879. Sequence 13680 is on that page. `payloadWithheld` true. `data` null. The summary is the sentence from checkpoint 1.
+
+The three advance responses from tick 0 through 276 contain one `captivity-released` row, sequence 13680. Dax Pike is not that actor and is not named. That is the only ransom paid by state tick 276. He has not been released and has not been paid a share.
+
+### Checkpoint 3 — Dax Pike's release, state tick 902
+
+Each advance HTTP 200.
+
+| Request | Expected tick | Observed tick | Observed day |
+| --- | ---: | ---: | --- |
+| `{"ticks":144}` | 420 | 420 | 70 |
+| `{"ticks":144}` | 564 | 564 | 94 |
+| `{"ticks":144}` | 708 | 708 | 118 |
+| `{"ticks":144}` | 852 | 852 | 142 |
+| `{"ticks":49}` | 901 | 901 | 150.17 |
+
+`GET /api/state?limit=200` at state tick 901, `day` 150.17, before the last advance:
+
+| Field | Expected | Observed |
+| --- | --- | --- |
+| Dax `captivity` | not null | null |
+| Dax `locationId` | `glassport` | `glassport` |
+| Dax `money` | null | null |
+| `party.hold.money` | 473.02 | 473.02 |
+| `world-government` `treasury` | 39969.99 | 39969.99 |
+
+`captiveIntel` is present on his card: `settlementId` `glassport`, `observedTick` 817, `ageTicks` 84, `leadership` 68, `troops` 433, `partyPower` 397.082, `source` `direct`, `confidence` 1. `free-tide` `treasury` is null.
+
+`POST /api/advance` `{"ticks":1}` HTTP 200. Advance `tick` 902 (expected 902). Advance `day` 150.33.
+
+`GET /api/state?limit=200` HTTP 200. State `tick` 902 (expected 902). State `day` 150.33. Page sequences 118348–118547. Sequence 118405 is on this page.
+
+| Field | Expected | Observed |
+| --- | --- | --- |
+| `type` | `captivity-released` | `captivity-released` |
+| `actorId` | `character-20` | `character-20` |
+| `tick` | 901 | 901 |
+| `payloadWithheld` | true | true |
+| `data` | null | null |
+| `targetId` | (not specified) | `world-government` |
+| `summary` | the Dax Pike sentence | the same sentence |
+
+Summary, observed:
+
+`Dax Pike was released from Glassport: 62.69 paid and 380.67 recorded as debt. Loyalty fell. Dax Pike paid 62.69 ransom: 31.35 to the World Government treasury and 31.34 to Mara Vane`
+
+Recipients: the World Government treasury 31.35, Mara Vane 31.34. Sum 62.69. The odd cent is on the treasury share.
+
+Briefing `id` `event:118405` (expected `event:118405`). Title `A captain was released` (expected `A captain was released`). Summary that same sentence.
+
+Balances Mara can see:
+
+| Field | Expected | Observed |
+| --- | --- | --- |
+| `party.hold.money` | 504.36 | 504.36 |
+| Purse change from 473.02 | +31.34, and nothing else | +31.34 |
+| `world-government` `treasury` | 40003.64 | 40003.64 |
+| Dax `money` | null | null |
+| Dax debt on Mara's card | not shown | Dax `debts` null; Mara `debts` `[]` |
+
+The treasury change from 39969.99 to 40003.64 is 33.65, which is 31.35 plus 2.30. The response does not show the intermediate 40001.34, and no summary states 2.30. The four `settlement-upkeep` rows on that tick say `World: settlement upkeep`, with `data` null.
+
+After the release, Dax `captivity` is null, `captiveIntel` is null, and `locationId` is null. `travel` is `glassport` to `cinder-key`, `totalTicks` 2, `remainingTicks` 1.
+
+Stopped. No command.
+
 ## Findings
 
+At state tick 901 the checkpoint said Dax Pike was still held and `captivity` was not null. The card's `captivity` was null. The hold was on `captiveIntel`: Glassport, observed tick 817, age 84, leadership 68, troops 433, party power 397.082. After the release both fields are null. The card shows the voyage to Cinder Key and no debt. The debt 380.67 is only in the sentence. The same tick's feed says `Dax Pike: travel progressed` with `data` null, so the route is on the card and not in that feed line.
+
+Mara's purse rose by 31.34, matching the leader share. The World Government treasury rose by 33.65, from 39969.99 to 40003.64, while the ransom line names 31.35. Nothing she can read calls the other 2.30 tax. The upkeep rows are `World: settlement upkeep` with `data` null.
+
+At state tick 119 Pax Ash's card showed `money` 51.58. Free Tide `treasury` was null, and his purse is not `party.hold.money` (108). The 6.7 shares are only on the sentence, with no before figure for that 51.58. At state tick 276 his `money` is null while `locationId` is still `glassport`.
+
 ## Verdict
+
+PROMOTE
+
+Sequence 13680's summary is the Sable Morrow sentence. Sequence 118405's summary is the Dax Pike sentence. Both titles are `A captain was released`. Dax Pike at state tick 276 has `captivity` null and `money` null at Glassport. Mara's purse at state tick 902 is 504.36. The World Government treasury at state tick 902 is 40003.64.
+
+The tick-901 `captivity` null is in Findings. It is not a revise or abandon condition. Both lines keep the debt wording and "Loyalty fell". Each names two recipients. 6.7 + 6.7 = 13.4. 31.35 + 31.34 = 62.69. Mara's purse rose by 31.34 on the tick Dax was released. Both types are `captivity-released`. `actorId` on sequence 118405 is `character-20`. This session had no payment of 0.
