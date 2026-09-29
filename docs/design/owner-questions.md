@@ -710,6 +710,58 @@ Answer by number, for example "4: yes" or "4: keep the default." The default is 
 
 **Source:** [Captive intelligence](captive-intelligence.md#questions-for-micah) question 8
 
+## Port churn
+
+### 69. Crown Harbor on seed 1847 changes hands 20 times over 1200 ticks, five of them within two ticks. Should that stay?
+
+**Default:** Yes. Leave the churn. Those five retakes are the landless raid at 8 soldiers, already built, winning a fight the victory rule, also already built, now counts. The other seeds do not do this at Crown Harbor.
+
+**If you pick the other way:** A wait before the retake, or soldiers left as the garrison, would be added. The wait leaves the changes in the same range, and the garrison deposit makes the churn worse.
+
+**Status:** Default: yes, leave the churn
+
+**Source:** [Port churn and captures](port-churn-and-captures.md#questions-for-micah) question 1
+
+### 70. When a captain takes a port, should some of their soldiers stay as its garrison?
+
+**Default:** No. Leaving up to 10, and never dropping the captain below 25, raised Crown Harbor from 20 changes of hands to 87 and moved every fixture.
+
+**If you pick the other way:** Some of the captain's soldiers would stay as the garrison. Leaving up to 10 raised Crown Harbor from 20 changes to 87 and moved every fixture.
+
+**Status:** Default: no
+
+**Source:** [Port churn and captures](port-churn-and-captures.md#questions-for-micah) question 2
+
+### 71. Should the side that lost a port have to wait before retaking it?
+
+**Default:** No. A 3-tick wait still leaves 18 changes of hands, and both the 3-tick and 6-tick waits rewrite seed 2718 inside the first 72 ticks.
+
+**If you pick the other way:** The side that lost the port would wait before taking it back. A 3-tick wait still leaves 18 changes, and both waits rewrite seed 2718 inside the first 72 ticks.
+
+**Status:** Default: no
+
+**Source:** [Port churn and captures](port-churn-and-captures.md#questions-for-micah) question 3
+
+### 72. Captures are 1, 3, and 5 on the three seeds, and the faction's order-giver is never captured. Is that too quiet for the acting-commander seat?
+
+**Default:** Yes. It is too quiet for the acting-commander seat. Keep the M29 victory rule, and do not undo it to get the captures back: a fight they outscored should not also imprison them.
+
+**If you pick the other way:** The M29 victory rule would be undone so those captures return. A fight they outscored would also imprison them.
+
+**Status:** Default: yes, but keep the M29 victory rule and do not undo it to get captures back
+
+**Source:** [Port churn and captures](port-churn-and-captures.md#questions-for-micah) question 4
+
+### 73. Should unpaid ransom be collected from wages (captivity-debt installments)?
+
+**Default:** No, not yet. Only four debts remain, so the day's-wage collector stays parked.
+
+**If you pick the other way:** Unpaid ransom would be collected from wages now, on the four debts that remain.
+
+**Status:** Default: no, not yet
+
+**Source:** [Port churn and captures](port-churn-and-captures.md#questions-for-micah) question 5
+
 ## Already settled
 
 The [progress log](../../progress.md) (reconnaissance brief, 2026-09-29) answered reconnaissance questions 1–8. Reconnaissance question 1 is no: a survey or an officer's look stores population, walls, and who was anchored. Reconnaissance question 2 keeps confidence and the original date on that handoff. Reconnaissance questions 3–8 stay put: public sea courses, a live garrison from your other ports, no captives or informants. [Party sightings](party-sightings.md#left-open) repeats those. A foreign price is that dated report, not a live quote ([World simulation](world-simulation.md#player-trade)). An idle player with money still starves if they give no orders ([Port provisions](port-provisions.md#the-idle-commander)). Unpaid ransom is questions 22–29 ([Captivity debts](captivity-debts.md#questions-for-micah)). A landless raid once a town has 8 soldiers, and no troops left behind on the claim, is questions 30–32 ([Portless recovery](portless-recovery.md#questions-for-micah)). A higher score is the attacker's victory when morale is 12 or under, a close fight included and the short retake accepted, rest does not refill the hold, and the capture die is still rolled, is questions 33–37 ([Battle morale](battle-morale.md#questions-for-micah)). Someone else covers the seat while the commander is in prison and hands it back on release, the cover is the highest leadership plus loyalty with the lower id winning a tie and trust is not used, you cannot name someone else or keep the cover after release, everyone including a rival sees who holds the seat, and if that cover is captured the next person steps up for the whole 14 days, is questions 38–42 ([Political layer](political-layer.md#questions-for-micah)). A character released still owing ransom loses 0.04 loyalty once, a paid release changes nothing, orders, plans and work keep using the starting loyalty, and you see loyalty only for your own faction, is questions 43–45 ([Loyalty drift](loyalty-drift.md#questions-for-micah)). Battered-port surrender, fed garrisons, and refusing an unpaid voyage are built. The first hour is a test, not a choice. The one-click food buy is a known bug queued for engineering: the button will show the cost, apply the share-of-stock cap, and its refusal text will be fixed ([World simulation](world-simulation.md#player-trade); [progress log](../../progress.md#open-items)).
