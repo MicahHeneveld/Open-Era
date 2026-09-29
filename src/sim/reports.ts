@@ -241,6 +241,9 @@ function eventStory(world: WorldState, event: SimEvent): string | null {
   }
   if (event.type === "goal-evolved") {
     const goal = event.data.goal as { label: string };
+    if (event.data.trigger === "satisfying every open ambition") {
+      return `- Day ${round(event.tick / world.ticksPerDay, 1)}: ${actor} had satisfied every open ambition and renewed _${goal.label}_.`;
+    }
     return `- Day ${round(event.tick / world.ticksPerDay, 1)}: ${actor}'s experience at **${settlement}** created or reshaped the ambition _${goal.label}_.`;
   }
   if (event.type === "relationship-changed") {

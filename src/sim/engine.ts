@@ -42,6 +42,7 @@ import {
   type CaptivityState,
   type Character,
   type CharacterAttributes,
+  type CharacterGoal,
   type CharacterScar,
   type CombatRisk,
   type DebtObligation,
@@ -1291,6 +1292,56 @@ function resolveSettlementClaim(
   });
 }
 
+/**
+ * Ambitions the character was given at creation: the universal survival motive,
+ * the archetype root, and faction membership. Battle-born goals such as
+ * `recover-strength` are not roots; the next victory or defeat reopens those.
+ */
+function isOpeningAmbition(character: Character, goal: CharacterGoal): boolean {
+  if (goal.kind === "material-security") return true;
+  if (goal.kind === "recover-strength") return false;
+  if (goal.kind === "expand-influence" && character.archetype !== "raider") return false;
+  return goal.createdTick === 0;
+}
+
+function renewedOrigin(origin: string): string {
+  const prefix = "renewed: ";
+  return origin.startsWith(prefix) ? origin : `${prefix}${origin}`;
+}
+
+/**
+ * Satisfaction is a finished cycle, not retirement. When it would leave the
+ * character with nothing to score, reopen the personality roots at progress 0.
+ */
+function renewOpeningAmbitions(
+  world: WorldState,
+  character: Character,
+  events: SimEvent[],
+): void {
+  const roots = character.goals
+    .filter((goal) => isOpeningAmbition(character, goal))
+    .sort((left, right) => left.id.localeCompare(right.id));
+  const renewing = roots.length > 0
+    ? roots
+    : [...character.goals].sort((left, right) => left.id.localeCompare(right.id));
+  for (const goal of renewing) {
+    emit(world, events, {
+      type: "goal-evolved",
+      actorId: character.id,
+      settlementId: character.locationId ?? undefined,
+      data: {
+        trigger: "satisfying every open ambition",
+        goal: {
+          ...goal,
+          progress: 0,
+          status: "active" as const,
+          origin: renewedOrigin(goal.origin),
+        },
+      },
+    });
+  }
+}
+
 function progressActiveGoal(
   world: WorldState,
   character: Character,
@@ -1312,6 +1363,9 @@ function progressActiveGoal(
       status: progress >= 1 ? "satisfied" : "active",
     },
   });
+  if (progress >= 1 && !character.goals.some((candidate) => candidate.status === "active")) {
+    renewOpeningAmbitions(world, character, events);
+  }
 }
 
 /**
