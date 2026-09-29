@@ -261,14 +261,16 @@ test("the commander's card says which loyalty figure the seat reads", () => {
   const rounded = round(seed, 3);
   assert.equal(
     plain.loyaltyNote,
-    `The seat reads personality loyalty, with no stored adjustment. This card shows ${rounded}. personality.loyalty is the seed and is not the figure the seat reads.`,
+    `The seat reads ${rounded}. personality.loyalty is the seed and is not the figure the seat reads.`,
   );
+  assert.equal(/\d+\.\d{4,}/.test(String(plain.loyaltyNote)), false);
   commander.loyaltyAdjustment = -0.04;
   const scarred = projectCharacter(world, commander, commander);
   assert.equal(
     scarred.loyaltyNote,
-    `The seat reads the unrounded sum of personality loyalty and the stored adjustment -0.04. This card shows ${round(seed + -0.04, 3)}. personality.loyalty is the seed and is not the figure the seat reads.`,
+    `The seat reads ${round(seed + -0.04, 3)}. personality.loyalty is the seed and is not the figure the seat reads.`,
   );
+  assert.equal(/\d+\.\d{4,}/.test(String(scarred.loyaltyNote)), false);
   const mate = world.characters["character-05"];
   assert.equal(projectCharacter(world, commander, mate).loyaltyNote, null);
   assert.equal(commander.personality.loyalty, seed);
@@ -317,7 +319,7 @@ test("a sea row carries its sentence, and a ship outside the stretch is named wi
   assert.equal(adaRow.arriving, true);
   assert.equal(
     adaRow.summary,
-    "Ada Sorn is overtaking, Crown Harbor to Glassport. Docks at Glassport on this tick. 35 troops, 0 ticks old.",
+    "Ada Sorn is overtaking on this route, Crown Harbor to Glassport. Docks at Glassport on this tick. 35 troops, 0 ticks old.",
   );
   const stretch = outOfStretchFor(world, mara);
   assert.ok(stretch);
@@ -379,11 +381,20 @@ test("Mina Vale's capture on seed 2718 names World Government beside the captor 
   const mina = world.characters["character-15"];
   const before = stateHash(world);
   const card = projectCharacter(world, mara, mina);
-  const intel = card.captiveIntel as { leadership: number; troops: number; partyPower: number; ports: unknown[] };
+  const intel = card.captiveIntel as {
+    leadership: number;
+    troops: number;
+    partyPower: number;
+    ports: unknown[];
+    portsNote: string | null;
+  };
   assert.equal(intel.leadership, 25);
   assert.equal(intel.troops, 12);
   assert.equal(intel.partyPower, 60.244);
   assert.deepEqual(intel.ports, []);
+  assert.equal(intel.portsNote, "Mina Vale named no ports. The list may be incomplete.");
+  assert.equal((card.troops as { count: number }).count, 0);
+  assert.equal(card.troopsNote, "0 with Mina Vale; 12 held by World Government.");
   assert.equal(card.skillsNote, null);
   const held = card.captivity as { cause: string; causeLabel: string | null };
   assert.equal(held.cause, "failed-retreat");
@@ -402,9 +413,11 @@ test("Mina Vale's capture on seed 2718 names World Government beside the captor 
   assert.equal(row?.data, null);
   assert.equal(row?.summary, sentence);
   const view = dashboardState(world, result.events, fullEventFeed(result.events)) as {
-    briefing: { items: Array<{ id: string; summary: string }> };
+    briefing: { items: Array<{ id: string; title: string; summary: string }> };
   };
-  assert.equal(view.briefing.items.find((item) => item.id === "event:8402")?.summary, sentence);
+  const briefing = view.briefing.items.find((item) => item.id === "event:8402");
+  assert.equal(briefing?.title, "A captain was taken");
+  assert.equal(briefing?.summary, sentence);
   assert.equal(
     characterCapturedChronicle(world, capture, result.events),
     "**World Government** took **Mina Vale** at **Crown Harbor** after failed retreat; their surviving troops scattered.",

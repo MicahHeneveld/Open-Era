@@ -200,6 +200,43 @@ test("a sea count uses the row's kind and the check-in title names background li
   assert.equal((html.match(/Sighted troops/g) ?? []).length, 1);
 });
 
+test("a held card names the captor beside live troops 0 and an empty port list", () => {
+  const state = projectedState();
+  const renderer = rendererFor(state);
+  const characters = state.characters as Array<Record<string, any>>;
+  const [template] = characters;
+  const card = {
+    ...template,
+    id: "mina-card",
+    name: "Mina Vale",
+    troops: { count: 0, experience: 1, discipline: 1 },
+    troopsNote: "0 with Mina Vale; 12 held by World Government.",
+    partySighting: null,
+    seaSighting: null,
+    skills: null,
+    captiveIntel: {
+      troops: 12,
+      ageTicks: 1,
+      observedTick: 71,
+      partyPower: 60.244,
+      leadership: 25,
+      ports: [],
+      portsNote: "Mina Vale named no ports. The list may be incomplete.",
+    },
+    standingOrders: [],
+    activeOrderAssessment: null,
+    relationship: null,
+    activeGoal: null,
+    plan: null,
+    releaseSighting: null,
+    controller: { kind: "autonomous" },
+  };
+  const html = renderer.characterInspector(card);
+  assert.match(html, /0 with Mina Vale; 12 held by World Government\./);
+  assert.match(html, /Mina Vale named no ports\. The list may be incomplete\./);
+  assert.doesNotMatch(html, /No port report from this prisoner/);
+});
+
 test("the header runway reads the party's runwayTicks", () => {
   const state = projectedState();
   const party = state.party as { runwayTicks: number; runwayDays: number };

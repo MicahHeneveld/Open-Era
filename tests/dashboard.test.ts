@@ -423,7 +423,7 @@ test("accelerated time pauses when mandatory captivity release changes player st
     };
     assert.equal(state.captivity.active, null);
     assert.ok(state.briefing.items.some((item) =>
-      item.title === "Prisoner released" && item.summary.includes("recorded as debt")
+      item.title === "A captain was released" && item.summary.includes("recorded as debt")
     ));
   } finally {
     await app.close();

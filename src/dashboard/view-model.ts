@@ -284,7 +284,8 @@ function provisionSourceHint(
   }
   if (resupply.aboard) return `${resupply.name} is alongside and sells provisions.`;
   if (resupply.travelTicks === null) {
-    return `${here}${resupply.name} sells provisions, and you cannot reach it from here.`;
+    const why = commander.captivity ? "while you are held" : "from this voyage";
+    return `${here}${resupply.name} sells provisions, and you cannot reach it ${why}.`;
   }
   const reach = resupply.reachable
     ? "within reach, but there will be nothing to spare"

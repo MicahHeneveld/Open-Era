@@ -819,6 +819,7 @@
             ? '<div class="stat"><span>Captured troops</span><strong>' + item.captiveIntel.troops + ' <span class="subtle">' + item.captiveIntel.ageTicks + " ticks old</span></strong></div>"
             : "") +
         "</div>" +
+        (item.troopsNote ? '<div class="subtle">' + esc(item.troopsNote) + "</div>" : "") +
         (item.captiveIntel
           ? "<h3>Captive reading</h3><div class=\"subtle\">Taken at tick " + item.captiveIntel.observedTick + ", party power " + item.captiveIntel.partyPower + ".</div>" +
             (item.captiveIntel.ports.length
@@ -826,7 +827,7 @@
                   var place = settlement(port.settlementId);
                   return '<div class="subtle">' + esc(place ? place.name : port.settlementId) + " garrison " + port.garrisonEstimate + ", " + fmt(port.displayConfidence * 100) + "% confidence, " + port.ageTicks + " ticks old" + (port.stale ? ", stale" : "") + "</div>";
                 }).join("")
-              : '<div class="subtle">No port report from this prisoner.</div>')
+              : '<div class="subtle">' + esc(item.captiveIntel.portsNote || "The list may be incomplete.") + "</div>")
           : "") +
         (item.releaseSighting
           ? (function () {

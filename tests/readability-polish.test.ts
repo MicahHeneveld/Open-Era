@@ -5,10 +5,11 @@ import { join } from "node:path";
 import test from "node:test";
 import { createDashboardApp } from "../src/dashboard/server.ts";
 import { dashboardState, fullEventFeed } from "../src/dashboard/view-model.ts";
-import { projectCharacter, seaSightingsFor } from "../src/dashboard/visibility.ts";
-import { provisionRunway, travelDuration } from "../src/sim/engine.ts";
+import { projectCharacter, projectEvent, seaSightingsFor } from "../src/dashboard/visibility.ts";
+import { eventBriefingTitle } from "../src/dashboard/wording.ts";
+import { provisionRunway, runTicks, travelDuration } from "../src/sim/engine.ts";
 import { createPrototypeWorld } from "../src/sim/scenario.ts";
-import { round } from "../src/sim/state.ts";
+import { round, stateHash } from "../src/sim/state.ts";
 import type { Character, PartySighting, SimEvent, WorldState } from "../src/sim/types.ts";
 
 function commanderOf(world: WorldState): Character {
@@ -111,9 +112,47 @@ test("capture, battle, and release briefing titles are not the event type", () =
     briefing: { items: Array<{ id: string; title: string }> };
   };
   const title = (id: string) => view.briefing.items.find((item) => item.id === id)?.title;
-  assert.equal(title("event:10"), "Prisoner taken");
-  assert.equal(title("event:11"), "Battle decided");
-  assert.equal(title("event:12"), "Prisoner released");
+  assert.equal(title("event:10"), "A captain was taken");
+  assert.equal(title("event:11"), "A battle was decided");
+  assert.equal(title("event:12"), "A captain was released");
+  assert.equal(title("event:10"), eventBriefingTitle("character-captured"));
+  assert.notEqual(eventBriefingTitle("character-captured"), "character captured");
+  assert.equal(eventBriefingTitle("captivity-escaped"), "A captain escaped");
+  assert.equal(eventBriefingTitle("player-command-failed"), "A command failed");
+  assert.equal(eventBriefingTitle("standing-order-completed"), "An order was completed");
+  assert.equal(eventBriefingTitle("settlement-claimed"), "A port was claimed");
+  assert.equal(eventBriefingTitle("travel-progressed"), "travel progressed");
+});
+
+test("a briefing title does not change when actorId and targetId are swapped", () => {
+  const world = createPrototypeWorld(1847);
+  const stored = event({
+    sequence: 10,
+    type: "character-captured",
+    actorId: "character-11",
+    targetId: "free-tide",
+    settlementId: "glassport",
+    data: { cause: "failed-retreat" },
+  });
+  const swappedIds = event({
+    sequence: 11,
+    type: "character-captured",
+    actorId: "free-tide",
+    targetId: "character-11",
+    settlementId: "glassport",
+    data: { cause: "failed-retreat" },
+  });
+  const titleOf = (item: SimEvent) => {
+    const view = dashboardState(world, [item], fullEventFeed([])) as {
+      briefing: { items: Array<{ id: string; title: string }> };
+    };
+    return view.briefing.items.find((row) => row.id === `event:${item.sequence}`)?.title;
+  };
+  assert.equal(titleOf(stored), "A captain was taken");
+  assert.equal(titleOf(swappedIds), titleOf(stored));
+  const projected = projectEvent(world, commanderOf(world), stored, "stored sentence");
+  assert.equal(projected.actorId, "character-11");
+  assert.equal(projected.targetId, "free-tide");
 });
 
 test("an empty berth is named, and a stocked market is not called unsold", () => {
@@ -164,28 +203,142 @@ test("an empty berth is named, and a stocked market is not called unsold", () =>
   const heldRunway = provisionRunway(world, commander);
   assert.equal(
     heldLine.summary,
-    `The hold is empty and ${heldRunway.shortage} provisions per tick cannot be found. That costs health ${heldRunway.shortageHealthPerTick} per tick. Morale is already 0, so the shortage does not lower it. Morale gains nothing while the shortage lasts, so it will not recover on its own. Crown Harbor has no provisions to sell. Verdant Cay sells provisions, and you cannot reach it from here.`,
+    `The hold is empty and ${heldRunway.shortage} provisions per tick cannot be found. That costs health ${heldRunway.shortageHealthPerTick} per tick. Morale is already 0, so the shortage does not lower it. Morale gains nothing while the shortage lasts, so it will not recover on its own. Crown Harbor has no provisions to sell. Verdant Cay sells provisions, and you cannot reach it while you are held.`,
   );
 });
 
-test("the commander's loyalty note does not print the raw seed", () => {
+test("the commander's loyalty note shows only the rounded figure", () => {
   const world = createPrototypeWorld(1847);
   const commander = commanderOf(world);
   const seed = commander.personality.loyalty;
   const plain = projectCharacter(world, commander, commander);
   assert.equal(
     plain.loyaltyNote,
-    `The seat reads personality loyalty, with no stored adjustment. This card shows ${round(seed, 3)}. personality.loyalty is the seed and is not the figure the seat reads.`,
+    `The seat reads ${round(seed, 3)}. personality.loyalty is the seed and is not the figure the seat reads.`,
   );
+  assert.equal(/\d+\.\d{4,}/.test(String(plain.loyaltyNote)), false);
   assert.equal(String(plain.loyaltyNote).includes(String(seed)), false);
   commander.loyaltyAdjustment = -0.04;
   const scarred = projectCharacter(world, commander, commander);
   assert.equal(
     scarred.loyaltyNote,
-    "The seat reads the unrounded sum of personality loyalty and the stored adjustment -0.04. This card shows 0.768. personality.loyalty is the seed and is not the figure the seat reads.",
+    `The seat reads ${round(seed - 0.04, 3)}. personality.loyalty is the seed and is not the figure the seat reads.`,
   );
+  assert.equal(scarred.loyaltyNote, "The seat reads 0.768. personality.loyalty is the seed and is not the figure the seat reads.");
+  assert.equal(/\d+\.\d{4,}/.test(String(scarred.loyaltyNote)), false);
   assert.equal(String(scarred.loyaltyNote).includes("0.767927391717676"), false);
   assert.equal(String(scarred.loyaltyNote).includes("0.807927391717676"), false);
+  assert.equal(commander.personality.loyalty, seed);
+});
+
+test("overtaking, passing, and arriving read as sentences, and the kind stays", () => {
+  const world = createPrototypeWorld(1847);
+  const mara = commanderOf(world);
+  const ada = world.characters["character-13"];
+  const sable = world.characters["character-24"];
+  const toma = world.characters["character-07"];
+  assert.equal(ada.name, "Ada Sorn");
+  assert.equal(sable.name, "Sable Sorn");
+  assert.equal(toma.name, "Toma Reef");
+
+  sail(mara, "crown-harbor", "glassport", 4, 2);
+  sail(ada, "crown-harbor", "glassport", 3, 2);
+  ada.troops.count = 35;
+  const overtaking = seaSightingsFor(world, mara)?.[ada.id];
+  assert.ok(overtaking);
+  assert.equal(overtaking.kind, "overtaking");
+  assert.equal(
+    overtaking.summary,
+    "Ada Sorn is overtaking on this route, Crown Harbor to Glassport. 35 troops, 0 ticks old.",
+  );
+
+  sail(mara, "crown-harbor", "glassport", 4, 1);
+  sail(sable, "glassport", "crown-harbor", 4, 2);
+  sable.troops.count = 36;
+  const passing = seaSightingsFor(world, mara)?.[sable.id];
+  assert.ok(passing);
+  assert.equal(passing.kind, "passing");
+  assert.equal(
+    passing.summary,
+    "Sable Sorn is passing on the opposite course, Glassport to Crown Harbor. 36 troops, 0 ticks old.",
+  );
+
+  sail(toma, "cinder-key", "glassport", 2, 1);
+  toma.troops.count = 42;
+  const arriving = seaSightingsFor(world, mara)?.[toma.id];
+  assert.ok(arriving);
+  assert.equal(arriving.kind, "arriving");
+  assert.equal(arriving.arriving, true);
+  assert.equal(
+    arriving.summary,
+    "Toma Reef is arriving at the same port, Cinder Key to Glassport. Docks at Glassport on this tick. 42 troops, 0 ticks old.",
+  );
+});
+
+test("seed 1847 at tick 595 names Verdant Cay and says she is held", () => {
+  const result = runTicks(createPrototypeWorld(1847), 595);
+  const view = dashboardState(result.state, result.events, fullEventFeed(result.events)) as {
+    day: number;
+    party: { resupply: { settlementId: string; provisions: number; price: number; reachable: boolean; travelTicks: number | null } | null };
+    briefing: { items: Array<{ id: string; summary: string; settlementId: string | null }> };
+  };
+  assert.equal(result.state.tick, 595);
+  assert.equal(view.day, 99.17);
+  const starving = view.briefing.items.find((item) => item.id === "provision:critical");
+  assert.ok(starving);
+  assert.equal(starving.settlementId, "verdant-cay");
+  assert.equal(
+    starving.summary,
+    "The hold is empty and 0.256 provisions per tick cannot be found. That costs health 0.205 per tick. Morale is already 0, so the shortage does not lower it. Morale gains nothing while the shortage lasts, so it will not recover on its own. Crown Harbor has no provisions to sell. Verdant Cay sells provisions, and you cannot reach it while you are held.",
+  );
+  assert.equal(starving.summary.includes("No market you could still reach sells provisions"), false);
+  const resupply = view.party.resupply;
+  assert.ok(resupply);
+  assert.equal(resupply.settlementId, "verdant-cay");
+  assert.equal(resupply.provisions, 269);
+  assert.equal(resupply.price, 1.18);
+  assert.equal(resupply.reachable, false);
+  assert.equal(resupply.travelTicks, null);
+});
+
+test("seed 1847 at tick 679 shows only the rounded loyalty", () => {
+  const world = runTicks(createPrototypeWorld(1847), 679).state;
+  const commander = commanderOf(world);
+  const card = projectCharacter(world, commander, commander);
+  assert.equal(world.tick, 679);
+  assert.equal(card.loyalty, 0.768);
+  assert.equal(
+    card.loyaltyNote,
+    "The seat reads 0.768. personality.loyalty is the seed and is not the figure the seat reads.",
+  );
+  assert.equal(/\d+\.\d{4,}/.test(String(card.loyaltyNote)), false);
+  assert.equal(commander.personality.loyalty, 0.807927391717676);
+  assert.equal(String(card.loyaltyNote).includes("0.807927391717676"), false);
+  assert.equal(String(card.loyaltyNote).includes("0.767927391717676"), false);
+});
+
+test("Mina Vale at tick 72 says she named no ports, and 12 are held by World Government", () => {
+  const world = runTicks(createPrototypeWorld(2718), 72).state;
+  const before = stateHash(world);
+  const mara = commanderOf(world);
+  const mina = world.characters["character-15"];
+  assert.equal(mina.name, "Mina Vale");
+  assert.equal(world.tick, 72);
+  const card = projectCharacter(world, mara, mina);
+  const intel = card.captiveIntel as {
+    troops: number;
+    ports: unknown[];
+    portsNote: string | null;
+  };
+  assert.equal(intel.troops, 12);
+  assert.deepEqual(intel.ports, []);
+  assert.equal(intel.portsNote, "Mina Vale named no ports. The list may be incomplete.");
+  assert.equal((card.troops as { count: number }).count, 0);
+  assert.equal(card.troopsNote, "0 with Mina Vale; 12 held by World Government.");
+  assert.equal(mina.troops.count, 0);
+  assert.equal(projectCharacter(world, mina, mina).captiveIntel, null);
+  assert.equal(projectCharacter(world, mina, mina).troopsNote, null);
+  assert.equal(stateHash(world), before);
 });
 
 test("an advance response rounds day the way the state does", async () => {
