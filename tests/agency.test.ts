@@ -495,6 +495,19 @@ test("a carrier already at sea refuses under the travel gate and the escrow retu
   assert.equal(refusal.data.gate, "travel");
   assert.notEqual(refusal.data.gate, "score");
   assert.equal(refusal.data.reason, AT_SEA_REASON);
+  assert.equal(refusal.data.score, null);
+  assert.equal(refusal.data.costBasis, null);
+  assert.equal(typeof refusal.data.threshold, "number");
+  assert.deepEqual(refusal.data.factors, {
+    commerce: 0,
+    margin: 0,
+    trust: 0,
+    respect: 0,
+    grievance: 0,
+    obligation: 0,
+    perceivedRisk: 0,
+  });
+  assert.equal(refusal.data.travelTicks, 2);
   assert.equal(refusal.data.escrow, 0);
   assert.equal(refusal.data.buyerMoney, 108);
   assert.equal(world.contracts?.[contract.id].status, "refused");
@@ -532,13 +545,16 @@ test("scoring a contract always has a positive cost basis", () => {
       });
       if (assessment.gate === null || assessment.gate === "score" || assessment.gate === "purse") {
         assert.ok(
-          assessment.costBasis > 0,
+          assessment.costBasis !== null && assessment.costBasis > 0,
           `${carrier.id} price ${price} gate ${assessment.gate} costBasis ${assessment.costBasis}`,
         );
       }
       if (assessment.gate === "travel") {
         assert.equal(assessment.reason, VOYAGE_REASON);
-        assert.ok(assessment.costBasis > 0, `${carrier.id} voyage refusal still has a market price`);
+        assert.ok(
+          assessment.costBasis !== null && assessment.costBasis > 0,
+          `${carrier.id} voyage refusal still has a market price`,
+        );
       }
     }
   }
@@ -556,7 +572,9 @@ test("scoring a contract always has a positive cost basis", () => {
   assert.equal(atSea.gate, "travel");
   assert.equal(atSea.reason, AT_SEA_REASON);
   assert.notEqual(atSea.gate, "score");
-  assert.equal(atSea.costBasis, 0);
+  assert.equal(atSea.score, null);
+  assert.equal(atSea.costBasis, null);
+  assert.equal(atSea.threshold, round(0.54 + corin.personality.ambition * 0.08));
 
   corin.locationId = "glassport";
   corin.travel = null;
@@ -569,8 +587,45 @@ test("scoring a contract always has a positive cost basis", () => {
   });
   assert.equal(tooShort.gate, "travel");
   assert.equal(tooShort.reason, VOYAGE_REASON);
-  assert.ok(tooShort.costBasis > 0);
+  assert.equal(typeof tooShort.score, "number");
+  assert.notEqual(tooShort.score, null);
+  assert.ok(tooShort.costBasis !== null && tooShort.costBasis > 0);
   assert.ok(tooShort.travelTicks > tooShort.ticksLeft);
+});
+
+test("a docked voyage that misses the deadline keeps the computed score on the refusal", () => {
+  const world = createPrototypeWorld(1847);
+  const corin = world.characters["character-16"];
+  assert.equal(corin.locationId, "glassport");
+  assert.equal(corin.travel, null);
+  const submission = submitCommand(world, {
+    playerId: "prototype-player",
+    type: "offer-contract",
+    characterId: "character-16",
+    quantity: 10,
+    destinationId: "crown-harbor",
+    price: 30,
+    expiresInTicks: 1,
+  });
+  assert.equal(submission.ok, true);
+  const offered = runTick(world);
+  assert.equal(offered.events.some((event) => event.type === "contract-refused"), false);
+  // The offer tick can send him to sea. Put him back on the dock before the
+  // judgment, which is the next tick, so this refusal is the voyage gate.
+  corin.locationId = "glassport";
+  corin.travel = null;
+
+  const judged = runTick(world);
+  const refusal = judged.events.find((event) => event.type === "contract-refused");
+  assert.ok(refusal);
+  assert.equal(refusal.data.gate, "travel");
+  assert.equal(refusal.data.reason, VOYAGE_REASON);
+  assert.equal(typeof refusal.data.score, "number");
+  assert.notEqual(refusal.data.score, null);
+  assert.equal(typeof refusal.data.costBasis, "number");
+  assert.ok(Number(refusal.data.costBasis) > 0);
+  assert.notEqual(refusal.data.factors, undefined);
+  assert.notEqual((refusal.data.factors as { commerce: number }).commerce, 0);
 });
 
 test("fulfilling a delivery of 10 adds 10 provisions to Crown Harbor, pays the carrier from escrow, and is not a market-trade", () => {
