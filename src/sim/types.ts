@@ -215,6 +215,21 @@ export interface Relationship {
   lastChangedTick: number;
 }
 
+/**
+ * Population and walls, dated separately from the rest of a settlement report.
+ *
+ * Garrison, stocks and prices keep refreshing while a character stands in a
+ * port. The ground does not: a later arrival or a daily refresh must carry this
+ * record forward, because the reducer replaces the whole knowledge entry.
+ * Absent means the ground was never surveyed. It is never stored as null.
+ */
+export interface SettlementGround {
+  population: number;
+  fortification: number;
+  observedTick: number;
+  source: "direct" | "faction-report";
+}
+
 export interface SettlementKnowledge {
   settlementId: string;
   observedTick: number;
@@ -224,6 +239,7 @@ export interface SettlementKnowledge {
   stocksEstimate: Resources;
   priceEstimate: Resources;
   source: "direct" | "faction-report" | "rumor";
+  ground?: SettlementGround;
 }
 
 export type OrderDirective = "protect" | "pressure" | "trade-supplies" | "explore";
@@ -334,6 +350,7 @@ export type PlayerAction =
   | "raid"
   | "claim-settlement"
   | "decline-surrender"
+  | "survey"
   | "rest";
 
 export type PlayerCommand =

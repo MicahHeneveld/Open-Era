@@ -120,7 +120,12 @@ export function believedGarrison(
 export function directObservation(world: WorldState, character: Character): SettlementKnowledge | null {
   if (!character.locationId) return null;
   const settlement = world.settlements[character.locationId];
-  return {
+  const previous = character.knowledge[settlement.id];
+  // Garrison, stocks and prices are what is here now. Ground is not: nothing
+  // in a passive refresh records walls or population, and writing them here
+  // would turn standing in a port into a survey. A survey that already happened
+  // has to survive, because the reducer replaces the whole entry.
+  const knowledge: SettlementKnowledge = {
     settlementId: settlement.id,
     observedTick: world.tick,
     confidence: 1,
@@ -132,6 +137,8 @@ export function directObservation(world: WorldState, character: Character): Sett
     ) as SettlementKnowledge["priceEstimate"],
     source: "direct",
   };
+  if (previous?.ground) knowledge.ground = { ...previous.ground };
+  return knowledge;
 }
 
 export function needsObservation(world: WorldState, character: Character): boolean {

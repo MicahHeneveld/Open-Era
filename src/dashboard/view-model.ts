@@ -665,6 +665,31 @@ function projectPriceQuote(
   return { asOfTick: Math.max(0, knowledge.observedTick), expiresTick: null, live: false };
 }
 
+/**
+ * Where a population and a wall figure came from.
+ *
+ * Own-faction ports are the faction's record. Standing there is present truth.
+ * Away, only a survey or an officer's report supplies one, and it keeps the
+ * age of that record. No record is null, not a zero.
+ */
+function projectGroundIntelligence(
+  world: WorldState,
+  exact: boolean,
+  coLocated: boolean,
+  knowledge: SettlementKnowledge | undefined,
+): { source: string; observedTick: number; ageTicks: number } | null {
+  if (exact) return { source: "owned", observedTick: world.tick, ageTicks: 0 };
+  if (coLocated) return { source: "direct-observation", observedTick: world.tick, ageTicks: 0 };
+  const ground = knowledge?.ground;
+  if (!ground) return null;
+  const observedTick = Math.max(0, ground.observedTick);
+  return {
+    source: ground.source,
+    observedTick,
+    ageTicks: Math.max(0, world.tick - observedTick),
+  };
+}
+
 function projectCommandedBattle(world: WorldState, battle: ActiveBattle): Record<string, unknown> {
   return {
     ...battle,
@@ -848,11 +873,18 @@ export function dashboardState(
       // visibility test so a hidden battle cannot announce itself by making the
       // forecast silently vanish.
       const battleVisible = settlementBattle !== null && battleIsVisible(commander, settlement.id);
-      const surrenderOffered = commander.locationId === settlement.id &&
+      const coLocated = commander.locationId === settlement.id;
+      const surrenderOffered = coLocated &&
         settlement.factionId !== null &&
         settlement.factionId !== commander.factionId &&
         settlementClaimAvailableTo(settlement, commander.id);
-      const hostile = settlement.factionId !== null && settlement.factionId !== commander.factionId;
+      // Remote hostility follows the report the panel already shows. Testing the
+      // true faction here let a port that changed hands announce it by gaining
+      // or losing a forecast while `factionId` still named the old owner.
+      // Standing there, and a port the commander's faction holds, are present
+      // records, so they use the faction that is actually there.
+      const knownFactionId = exact || coLocated ? settlement.factionId : knowledge?.factionId ?? null;
+      const hostile = knownFactionId !== null && knownFactionId !== commander.factionId;
       // A forecast no longer requires standing on the island. It requires some
       // earned basis for one: either direct observation or a report. The forecast
       // blends every input by that report's confidence, so this widens when a
@@ -862,16 +894,14 @@ export function dashboardState(
         !surrenderOffered &&
         !battleVisible &&
         !commandedBattle &&
-        (commander.locationId === settlement.id || knowledge !== undefined);
+        (coLocated || knowledge !== undefined);
       const forecast = forecastAvailable ? combatForecast(world, commander.id, settlement.id) : null;
       const voyage = travelEstimate(world, commander, settlement.id);
-      // Standing in a settlement is direct perception of the ground. Reporting a
-      // wall estimate in the forecast's own factor list while the panel showed
-      // "fortification unknown" for the same island was a contradiction a
-      // playtest caught: the commander could read the ground in one place and not
-      // in the other. Perception is present-tense here, because nothing persisted
-      // records the ground of a place the commander has left.
-      const coLocated = commander.locationId === settlement.id;
+      // Standing in a settlement is direct perception of the ground, and it does
+      // not last. A survey, or an officer's delivered report, is what remains
+      // after the commander leaves; without one the panel says unknown.
+      const recordedGround = coLocated ? undefined : knowledge?.ground;
+      const groundIntelligence = projectGroundIntelligence(world, exact, coLocated, knowledge);
       // What the commander can trade, and on what terms, wherever they are
       // standing. Trading needs a market they are physically at, so this is the
       // only place the true stock and price may be quoted — and building it from
@@ -885,7 +915,7 @@ export function dashboardState(
           position: settlement.position,
           factionId: knowledge?.factionId ?? null,
           ownerId: null,
-          population: coLocated ? settlement.population : null,
+          population: coLocated ? settlement.population : recordedGround?.population ?? null,
           workers: null,
           focus: null,
           production: null,
@@ -896,7 +926,7 @@ export function dashboardState(
           stocks: coLocated ? { ...settlement.stocks } : knowledge?.stocksEstimate ?? null,
           targetStocks: coLocated ? { ...settlement.targetStocks } : null,
           garrison: coLocated ? settlement.garrison : knowledge?.garrisonEstimate ?? null,
-          fortification: coLocated ? settlement.fortification : null,
+          fortification: coLocated ? settlement.fortification : recordedGround?.fortification ?? null,
           stability: coLocated ? settlement.stability : null,
           prices: coLocated ? currentPrices(world, settlement.id) : knowledge?.priceEstimate ?? null,
           /**
@@ -919,6 +949,7 @@ export function dashboardState(
           travelDays: voyage.travelDays,
           passageCost: voyage.passageCost,
           passageCostPerTick: voyage.passageCostPerTick,
+          groundIntelligence,
           intelligence: (knowledge || coLocated) ? {
             exact: false,
             /** True when these figures are what the commander can see right now. */
@@ -952,6 +983,7 @@ export function dashboardState(
         travelDays: voyage.travelDays,
         passageCost: voyage.passageCost,
         passageCostPerTick: voyage.passageCostPerTick,
+        groundIntelligence,
         intelligence: { exact: true, present: commander.locationId === settlement.id, source: "owned", confidence: 1, observedTick: world.tick, ageTicks: 0 },
       };
     }),

@@ -2102,7 +2102,78 @@ function resolveDecision(
       });
       break;
     }
+    case "survey": {
+      // The action slot is the cost. Passive presence still refreshes garrison,
+      // stocks and prices without recording the ground; only this verb does.
+      const observed = directObservation(world, character);
+      if (!observed) break;
+      emit(world, events, {
+        type: "knowledge-updated",
+        actorId: character.id,
+        settlementId,
+        data: {
+          settlementId,
+          knowledge: {
+            ...observed,
+            ground: {
+              population: settlement.population,
+              fortification: settlement.fortification,
+              observedTick: world.tick,
+              source: "direct",
+            },
+          },
+          reason: "survey",
+        },
+      });
+      break;
+    }
   }
+}
+
+/**
+ * Hand an officer's completed, targeted survey to the issuer.
+ *
+ * The officer is standing on the target, so the record is what they see this
+ * tick, dated to the report. It is written onto the issuer, not the officer:
+ * the faction tier already hides the officer's map. An explore order with no
+ * target never calls this.
+ */
+function deliverTargetedExploreReport(
+  world: WorldState,
+  officer: Character,
+  order: StandingOrder,
+  events: SimEvent[],
+): void {
+  const targetId = order.targetId;
+  if (!targetId || order.directive !== "explore" || officer.locationId !== targetId) return;
+  const settlement = world.settlements[targetId];
+  const observed = directObservation(world, officer);
+  if (!observed || observed.settlementId !== targetId || !world.characters[order.issuerId]) return;
+  emit(world, events, {
+    type: "knowledge-updated",
+    actorId: order.issuerId,
+    settlementId: targetId,
+    data: {
+      settlementId: targetId,
+      knowledge: {
+        settlementId: targetId,
+        observedTick: world.tick,
+        confidence: observed.confidence,
+        factionId: observed.factionId,
+        garrisonEstimate: observed.garrisonEstimate,
+        stocksEstimate: { ...observed.stocksEstimate },
+        priceEstimate: { ...observed.priceEstimate },
+        source: "faction-report",
+        ground: {
+          population: settlement.population,
+          fortification: settlement.fortification,
+          observedTick: world.tick,
+          source: "faction-report",
+        },
+      },
+      reason: "explore-report",
+    },
+  });
 }
 
 function progressTravel(world: WorldState, character: Character, events: SimEvent[]): void {
@@ -2251,6 +2322,9 @@ export function runTick(world: WorldState): TickResult {
             summary: judgment.summary,
           },
         });
+        if (order.directive === "explore" && order.targetId) {
+          deliverTargetedExploreReport(world, character, order, events);
+        }
       }
     }
     evolveLocalRelationship(world, character, events, rng);
