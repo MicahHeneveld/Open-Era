@@ -149,6 +149,14 @@ Backfilled from the commit graph on 2026-09-25. **Attribution caveat:** commits 
 
 ## Entries
 
+### 2026-09-29 — Reconnaissance brief: earned intelligence (proposal, Open)
+- **Agent:** Open Era Researcher | **Branch:** `docs/reconnaissance-brief` | **Commits:** `895a345` | **Type:** docs
+- **Changed** — added docs/design/reconnaissance.md (reconnaissance / earned-intelligence design brief) and indexed it in docs/design/README.md.
+- **Why** — playtests showed no channel to estimate rival strength, so this brief proposes earned, dated knowledge with provenance; the lead accepted a 'survey' channel as the first slice (planned as M18, after M17 pacing).
+- **Verified** — docs only, no code changed, golden hashes unaffected (hash-neutral).
+- **Left open** — the brief's six joint pacing items go to the Engineer with M17; owner questions Q1-Q8 use lead defaults for now (Q1 no, survey-only ground; Q2 confidence kept per hop with the original observedTick; Q3-Q8 deferred to later slices).
+- **Links** — [docs/design/reconnaissance.md](docs/design/reconnaissance.md)
+
 ### 2026-09-25 — Trade typography: four projection defects the voyage playtest found
 - **Agent:** Cursor | **Branch:** `feature/player-trade-verbs` | **Type:** Defect fixes and records
 - **Changed** — four defects, none of which alters a simulation transition. The settlement `market` block now carries market facts only — `settlementId`, `taxRate` and the board of `resources` — because its `money`, `load`, `free` and `capacity` were the commander's own purse and hold wearing a market's name; those figures move to the commander's own `party.hold`, where `load + free == capacity`. `capabilities.requests.commands.body` publishes `resource` and `quantity`, derived from `RESOURCE_KEYS` and `COMMAND_LIMITS.tradeQuantity` so the documented bounds cannot drift from the enforced ones, and `capabilities.requests.state.response` now names both `events` and the paging descriptor. Projected `character.knowledge` floors `observedTick` at 0 without touching the simulation's own copy, so a report seeded before tick 0 no longer shows a tick that never happened. The metadata envelope `eventFeed` — which contained no events — is renamed `eventPage`, and the inline dashboard reads it there.
