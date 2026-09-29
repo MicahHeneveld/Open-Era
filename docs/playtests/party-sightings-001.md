@@ -2,7 +2,7 @@
 
 ## Session
 
-- **Candidate commit:** the party-sightings implementation on `feature/party-sightings`
+- **Candidate commit:** `6bfdeea`
 - **Date:** 2026-09-29 UTC
 - **Operator:** The implementing agent, Open Era Engineer, a Cursor cloud agent. This was not a fresh-context operator. The agent had already read the repository and written the sighting slice. During the session every decision was taken from the dashboard HTTP JSON (`GET /api/state`, `POST /api/commands`, `POST /api/advance`). The database, the event log, and the world report were opened only after the session stopped, for this evidence review.
 - **Interface:** Dashboard over HTTP, JSON API only for every decision

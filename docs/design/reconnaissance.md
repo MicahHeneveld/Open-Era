@@ -168,7 +168,7 @@ The expectation is that the golden hashes stay **byte-identical**, so a moved ha
 
 ### Out of scope
 
-Still a proposal. Party sightings are the second slice, drafted in [party sightings](party-sightings.md): the same survey and targeted-explore path, recording who was anchored at the port. Informants, captives and faction aggregates were not built.
+Party sightings, the second slice, are **built in M21** (`6bfdeea` on `feature/party-sightings`): the same survey and targeted-explore path, recording who was anchored at the port. The note is [party sightings](party-sightings.md). Informants, captives, and faction aggregates were not built.
 
 ## The trade question
 

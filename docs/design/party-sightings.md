@@ -1,8 +1,17 @@
 # Party sightings
 
-**Status: Open.** Proposal for the owner to accept, change, or reject. Current behavior is `main` at `5d2b7f0`. It is not decided until it moves into [world simulation](world-simulation.md) or [autonomous characters](autonomous-characters.md). The parent brief is [reconnaissance](reconnaissance.md).
+**Status: Built in M21** (`6bfdeea` on `feature/party-sightings`). The recommendation below is in the code. The playtest is [party-sightings-001](../playtests/party-sightings-001.md). Sea sightings, a passive glance, and the planner read stayed out. Where this note was silent, the build took the smallest deterministic reading and recorded it under [What was built](#what-was-built). The parent brief is [reconnaissance](reconnaissance.md).
 
 Runs are `createPrototypeWorld` plus `runTick`, no player commands, seeds 1847 / 2718 / 4096, Node v22.14.0, ICU 76.1. Rates are the 100 states at ticks 0–99. Staleness is 400 ticks. The 72-tick hashes matched `tests/fixtures/golden-hashes.json` before any prototype (`02f1aa2a…`, `76445c58…`, `12e04439…`; 8338, 8428, 8361 events). Patches were reverted.
+
+## What was built
+
+- `partySightings` on the character, keyed by the subject, absent until the first sighting. Not a field of `SettlementKnowledge`. `WorldState.version` stays 5.
+- A `survey` writes one sighting per other character anchored in that port (`locationId` set, `travel` null), `source: "direct"`, `observedTick` the survey tick, `confidence` 1. A targeted `explore` that `judgeOrderCompletion` accepts copies the same list onto the issuer only, `source: "faction-report"`, dated to the report tick. An explore with no `targetId` writes nothing. The officer's map does not gain the list.
+- The person looking is left off the list. A captive in the port is included, at `troops.count`. `partyPower()` at that tick is stored, which is 0 while captive. `captivity` is not copied. Health, money, cargo, skills, and orders stay off the record.
+- A later sighting replaces a stored one only when its `observedTick` is greater or equal. Nothing deletes one. The list rides on the `survey` and `explore-report` `knowledge-updated` events. A daily refresh does not carry it, so it is not erased when the knowledge entry is replaced.
+- Away, projected `troops` and `partyPower` stay null. `partySighting` is the record, with `ageTicks` computed at projection and not stored. The count is not blended toward a prior. Co-located troops stay live, including the faction-port clause. On anyone but the commander the map is null. Foreign `partyCount` stays null.
+- A remote `combatForecast` adds the stored `partyPower` of each sighting whose `locationId` is that port, and says `sighted parties at this port are N ticks old` using the oldest age, including ages past 72. The local branch is unchanged.
 
 ## The problem
 
