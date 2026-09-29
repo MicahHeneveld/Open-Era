@@ -30,10 +30,10 @@ Git remains the complete history. This file exists for three things git does not
 
 ## Current state
 
-- **Baseline:** `origin/main` at `8e396ac` (PR #52). This branch is `feature/commander-seat`. No pull request.
+- **Baseline:** `origin/main` at `d4470f4` (PR #54). This branch is `feature/commander-seat`. No pull request.
 - **Last verified:** `npm run typecheck` clean, **216 tests**, `./scripts/evaluate-milestone.sh commander-seat`. Node v24.21.0. Golden hashes were not regenerated.
 - **Gate status:** Tick-72 hashes stay `cb04ba5d…` / `bd7d8cc4…` / `20975bf4…` (8301, 8513, 8031). Recovery 572.
-- **Headline risk:** a headless run through tick 2400 never captures a command holder, so the cover is not on the playtest. The UI/readability queue is still open. A witnessed battle-resolved reason is first.
+- **Headline risk:** over 1200 quiet ticks the seat fires 0 times on 1847, 2718, and 4096; the playtest captures Mara on seed 2718.
 - **Runtime:** Node 24.21.0, pinned by `.node-version`. ICU 78.3.
 
 ## Open items
@@ -108,7 +108,7 @@ Backfilled from the commit graph on 2026-09-25. **Attribution caveat:** commits 
 ### 2026-09-29 — M30: Name the command seat
 - **Agent:** Open Era Engineer (Cursor cloud agent) | **Branch:** `feature/commander-seat` | **Playtest:** pending, [commander-seat-001](docs/playtests/commander-seat-001.md)
 - The issuer of a faction's standing orders is the commander. While that person is captive, the free mate with the highest leadership plus loyalty times 50 covers the seat. A lower id wins a tie. The cover does not issue, confirm, or retarget. Golden hashes were not regenerated. Tick-72 counts stay 8301 / 8513 / 8031.
-- Verified — typecheck, 216 tests, and `./scripts/evaluate-milestone.sh commander-seat`. The blind session is not run.
+- Verified — typecheck, 216 tests, and `./scripts/evaluate-milestone.sh commander-seat`. The playtest forces the vacancy by capturing Mara on seed 2718. The blind session is not run.
 - Links    — [commander-seat-001](docs/playtests/commander-seat-001.md)
 
 ### 2026-09-29 — M27: Close an unanswered completion report
@@ -229,11 +229,19 @@ Backfilled from the commit graph on 2026-09-25. **Attribution caveat:** commits 
 
 ## Entries
 
+### 2026-09-29 — Point the command-seat playtest at a forced vacancy
+- **Agent:** Open Era Engineer (Cursor cloud agent) | **Branch:** `feature/commander-seat` | **Commits:** `87a9638` merges `origin/main` at `d4470f4`. `3bc2575` rewrites the playtest. This entry is the record commit. | **Type:** Docs
+- **Changed** — [commander-seat-001](docs/playtests/commander-seat-001.md) is one session on seed 2718. Mara travels to Cinder Key, raids, retreats after phase 1, and the World Government row at state tick 34 keeps `commanderId` `character-01` and sets `actingCommanderId` to `character-06`. The merged `origin/main` at `d4470f4` adds [autonomous orders after M29](docs/design/autonomous-orders-after-m29.md), owner questions 74–80, and a design README link.
+- **Why** — A quiet run never captures Mara or Pax, so a null cover does not show the seat firing. Over 1200 quiet ticks the natural captures are not seat holders, and the seat fires 0 times. 1847: 1 capture (Sable Morrow, event tick 34). 2718: 3 (Mina Vale, event tick 71; Esme Dusk, event tick 411; Zara Gale, event tick 621). 4096: 5 (Sable Morrow, event tick 12; Dax Pike, event tick 18; Esme Dusk, event tick 39; Mina Vale, event tick 161; Esme Dusk, event tick 481).
+- **Verified** — Node v24.21.0. The seed-2718 path was read from `npm run dashboard -- --reset --seed 2718` on `http://127.0.0.1:4317`: travel HTTP 202 `command-00001`, raid HTTP 202 `command-00002`, retreat HTTP 202 `command-00003`, state tick 34 `actingCommanderId` `character-06`, sequence 3932 `character-captured` with `captureChance` 0.04 and `captureRoll` 0.0258. The census above is every `character-captured` through state tick 1200 on those three seeds with no commands. Both `actingCommanderId` values were still null at tick 1200. `npm run typecheck` clean. **216 tests**. `./scripts/evaluate-milestone.sh commander-seat` passed. Tick-72 hashes stayed `cb04ba5d392d8b1c868cc97e54cb21b21ec171edd546bb70d0d7aba86cc69c11` (1847, 8301), `bd7d8cc44d5fa21022ecb8f8086e13dfbb9475eb025b5ae53f87e2991f90035c` (2718, 8513), `20975bf480e5aa11eeafe1ce39c36cf5ba0fa8e2d5de2bb5887a35d7b3aecc9f` (4096, 8031). Split recovery replayed 572 events. No `golden:update`. The blind session is not run.
+- **Left open** — [commander-seat-001](docs/playtests/commander-seat-001.md). The UI/readability queue, starting with a witnessed battle-resolved reason.
+- **Links** — [commander-seat-001](docs/playtests/commander-seat-001.md), [autonomous orders after M29](docs/design/autonomous-orders-after-m29.md), [owner questions](docs/design/owner-questions.md) 74–80
+
 ### 2026-09-29 — M30: Name the command seat and cover a captive holder
 - **Agent:** Open Era Engineer (Cursor cloud agent) | **Branch:** `feature/commander-seat` | **Commits:** `31e39c5`, `e995413`, `ccf4ed8`. `e2668d5` merges `origin/main` at `0224942`. `abf09a3` merges `origin/main` at `8e396ac`. | **Type:** Behavior
 - **Changed** — A faction row publishes `commanderId`, the single issuer of that faction's standing orders, and `actingCommanderId`. The cover is written on `character-captured` when the holder, or the current cover, is captured, and the key is deleted when the holder is released or escapes. The sort is leadership plus loyalty times 50, skipping the holder and anyone captive, lower id on a tie. No new event and no new draw. The cover does not take the orders. Open items gained four readability rows under the battle-feed rows, and the buy-provisions defect is marked resolved by PR #50.
 - **Why** — The person who already issues the orders was not named, and a prison term did not change who sat there.
-- **Verified** — Node v24.21.0. `npm run typecheck` clean. **216 tests**. `./scripts/evaluate-milestone.sh commander-seat` passed. Tick-72 hashes stayed `cb04ba5d392d8b1c868cc97e54cb21b21ec171edd546bb70d0d7aba86cc69c11` (1847, 8301), `bd7d8cc44d5fa21022ecb8f8086e13dfbb9475eb025b5ae53f87e2991f90035c` (2718, 8513), `20975bf480e5aa11eeafe1ce39c36cf5ba0fa8e2d5de2bb5887a35d7b3aecc9f` (4096, 8031). Split recovery replayed 572 events. No `golden:update`. Headless runs through tick 2400 on those three seeds never capture `character-01` or `character-14`. The blind session is not run.
+- **Verified** — Node v24.21.0. `npm run typecheck` clean. **216 tests**. `./scripts/evaluate-milestone.sh commander-seat` passed. Tick-72 hashes stayed `cb04ba5d392d8b1c868cc97e54cb21b21ec171edd546bb70d0d7aba86cc69c11` (1847, 8301), `bd7d8cc44d5fa21022ecb8f8086e13dfbb9475eb025b5ae53f87e2991f90035c` (2718, 8513), `20975bf480e5aa11eeafe1ce39c36cf5ba0fa8e2d5de2bb5887a35d7b3aecc9f` (4096, 8031). Split recovery replayed 572 events. No `golden:update`. Headless runs through tick 2400 on those three seeds never capture `character-01` or `character-14`. The playtest forces the vacancy by capturing Mara on seed 2718. The blind session is not run.
 - **Left open** — [commander-seat-001](docs/playtests/commander-seat-001.md). The cover is unobservable in that headless window. The UI/readability queue, starting with a witnessed battle-resolved reason.
 - **Links** — [political layer](docs/design/political-layer.md), [world simulation](docs/design/world-simulation.md), [owner questions](docs/design/owner-questions.md) 38–42, [port churn and captures](docs/design/port-churn-and-captures.md), [commander-seat-001](docs/playtests/commander-seat-001.md)
 
