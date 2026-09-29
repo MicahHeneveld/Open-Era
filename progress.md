@@ -30,7 +30,7 @@ Git remains the complete history. This file exists for three things git does not
 
 ## Current state
 
-- **Baseline:** `origin/main` at `0224942` (PR #51). This branch is `feature/commander-seat`. No pull request.
+- **Baseline:** `origin/main` at `8e396ac` (PR #52). This branch is `feature/commander-seat`. No pull request.
 - **Last verified:** `npm run typecheck` clean, **216 tests**, `./scripts/evaluate-milestone.sh commander-seat`. Node v24.21.0. Golden hashes were not regenerated.
 - **Gate status:** Tick-72 hashes stay `cb04ba5d…` / `bd7d8cc4…` / `20975bf4…` (8301, 8513, 8031). Recovery 572.
 - **Headline risk:** a headless run through tick 2400 never captures a command holder, so the cover is not on the playtest. The UI/readability queue is still open. A witnessed battle-resolved reason is first.
@@ -230,7 +230,7 @@ Backfilled from the commit graph on 2026-09-25. **Attribution caveat:** commits 
 ## Entries
 
 ### 2026-09-29 — M30: Name the command seat and cover a captive holder
-- **Agent:** Open Era Engineer (Cursor cloud agent) | **Branch:** `feature/commander-seat` | **Commits:** `31e39c5`, `e995413`, `e2668d5` merges `origin/main` at `0224942`. The playtest plan is the commit that adds this entry. | **Type:** Behavior
+- **Agent:** Open Era Engineer (Cursor cloud agent) | **Branch:** `feature/commander-seat` | **Commits:** `31e39c5`, `e995413`, `ccf4ed8`. `e2668d5` merges `origin/main` at `0224942`. `abf09a3` merges `origin/main` at `8e396ac`. | **Type:** Behavior
 - **Changed** — A faction row publishes `commanderId`, the single issuer of that faction's standing orders, and `actingCommanderId`. The cover is written on `character-captured` when the holder, or the current cover, is captured, and the key is deleted when the holder is released or escapes. The sort is leadership plus loyalty times 50, skipping the holder and anyone captive, lower id on a tie. No new event and no new draw. The cover does not take the orders. Open items gained four readability rows under the battle-feed rows, and the buy-provisions defect is marked resolved by PR #50.
 - **Why** — The person who already issues the orders was not named, and a prison term did not change who sat there.
 - **Verified** — Node v24.21.0. `npm run typecheck` clean. **216 tests**. `./scripts/evaluate-milestone.sh commander-seat` passed. Tick-72 hashes stayed `cb04ba5d392d8b1c868cc97e54cb21b21ec171edd546bb70d0d7aba86cc69c11` (1847, 8301), `bd7d8cc44d5fa21022ecb8f8086e13dfbb9475eb025b5ae53f87e2991f90035c` (2718, 8513), `20975bf480e5aa11eeafe1ce39c36cf5ba0fa8e2d5de2bb5887a35d7b3aecc9f` (4096, 8031). Split recovery replayed 572 events. No `golden:update`. Headless runs through tick 2400 on those three seeds never capture `character-01` or `character-14`. The blind session is not run.
