@@ -105,6 +105,42 @@ test("an autonomous character claims a hostile settlement that offers surrender"
   assert.equal(settlement.factionId, claimant.factionId);
 });
 
+test("a claimed port is not claimed or raided again while its garrison stays under 15", () => {
+  const world = createPrototypeWorld(1847);
+  const claimant = world.characters["character-03"];
+  const settlement = world.settlements["cinder-key"];
+  claimant.locationId = settlement.id;
+  claimant.travel = null;
+  settlement.garrison = 8;
+  settlement.stability = 18;
+  settlement.surrender = {
+    offeredToId: claimant.id,
+    offeredTick: world.tick,
+    previousFactionId: "free-tide",
+  };
+
+  const claimed = runTick(world);
+  assert.ok(claimed.events.some((event) =>
+    event.type === "settlement-claimed" && event.settlementId === settlement.id
+  ));
+  assert.ok(settlement.garrison < 15);
+
+  const later = runTicks(world, 36);
+  const events = [...claimed.events, ...later.events];
+  const claims = events.filter((event) =>
+    event.type === "settlement-claimed" && event.settlementId === settlement.id
+  );
+  assert.equal(claims.length, 1);
+  const raids = events.filter((event) => {
+    const chosen = event.data.chosen as { action?: string; targetId?: string } | undefined;
+    return event.type === "decision-made" &&
+      chosen?.action === "raid" &&
+      (event.settlementId === settlement.id || chosen.targetId === settlement.id);
+  });
+  assert.equal(raids.length, 0);
+  assert.ok(settlement.garrison < 15, `garrison recovered to ${settlement.garrison}`);
+});
+
 test("satisfying the last ambition renews opening roots and leaves battle goals finished", () => {
   const world = createPrototypeWorld(1847);
   const character = world.characters["character-25"];

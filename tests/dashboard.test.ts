@@ -631,6 +631,43 @@ test("a projected settlement has the same keys whether or not the commander owns
     assert.ok("surrender" in foreign, "the foreign projection must carry the surrender key");
     assert.equal(foreign.surrender, null, "a foreign settlement has no surrender state the player can read");
     assert.notEqual(factionId, null);
+
+    // An offer addressed to someone else is still not a remote fact. The flag
+    // that makes it actionable is limited to the offeree standing on the ground.
+    const live = app.getWorld();
+    const commander = live.characters[live.players["prototype-player"].characterId];
+    const port = live.settlements["cinder-key"];
+    assert.notEqual(commander.locationId, port.id);
+    port.surrender = {
+      offeredToId: "character-14",
+      offeredTick: live.tick,
+      previousFactionId: port.factionId!,
+    };
+    const remoteState = await (await fetch(`${base}/api/state`)).json() as {
+      settlements: Array<Record<string, unknown> & { id: string; surrender: unknown; surrenderOffered: boolean }>;
+    };
+    const remotePort = remoteState.settlements.find((settlement) => settlement.id === port.id);
+    assert.ok(remotePort);
+    assert.equal(remotePort.surrender, null, "an offer to someone else stays null remotely");
+    assert.equal(remotePort.surrenderOffered, false);
+
+    commander.locationId = port.id;
+    commander.travel = null;
+    const beside = await (await fetch(`${base}/api/state`)).json() as {
+      settlements: Array<{ id: string; surrender: unknown; surrenderOffered: boolean }>;
+    };
+    const besideOther = beside.settlements.find((settlement) => settlement.id === port.id);
+    assert.equal(besideOther?.surrender, null);
+    assert.equal(besideOther?.surrenderOffered, false, "an offer to someone else is not actionable on the ground");
+    port.surrender = { ...port.surrender, offeredToId: commander.id };
+    const offered = await (await fetch(`${base}/api/state`)).json() as {
+      settlements: Array<{ id: string; surrenderOffered: boolean }>;
+    };
+    assert.equal(
+      offered.settlements.find((settlement) => settlement.id === port.id)?.surrenderOffered,
+      true,
+      "the offeree standing there is the one the offer is shown to",
+    );
   } finally {
     await app.close();
     rmSync(directory, { recursive: true, force: true });

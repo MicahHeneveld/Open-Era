@@ -92,7 +92,7 @@ When the owner declares separation:
 
 If the settlement survives a time threshold or makes peace, the owner may remain independent, found a new faction, or seek protection or membership elsewhere.
 
-The prototype uses a garrison surrender threshold followed by an explicit player claim decision. The conquering character personally owns a claimed settlement; longer-term occupation, negotiation, and population responses remain deferred.
+The prototype offers surrender after an attacker victory, in an immediate battle and at the end of a major one, when the garrison is still at most 15 and stability is at or below `min(80, 30 + 10 × max(0, 15 − garrison))`. A neighbour is not offered another raid once the garrison is under 15. The conquering character then claims personally. Longer-term occupation, negotiation, and population responses remain deferred. The measurement is [the raid floor](raid-floor.md).
 
 ## Parties, troops, and ships
 
