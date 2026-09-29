@@ -30,10 +30,10 @@ Git remains the complete history. This file exists for three things git does not
 
 ## Current state
 
-- **Baseline:** `origin/main` at `4cd53df` (PR #67, M33). This branch is `feature/capture-wording`.
-- **Last verified:** `npm run typecheck` clean, **273 tests**, `./scripts/evaluate-milestone.sh capture-wording`. Node v24.21.0. Golden hashes were not regenerated.
+- **Baseline:** `origin/main` at `0d1cc6e` (PR #68, M34). This branch is `fix/readability-polish`.
+- **Last verified:** `npm run typecheck` clean, **279 tests**, `./scripts/evaluate-milestone.sh capture-wording`. Node v24.21.0. Golden hashes were not regenerated.
 - **Gate status:** Tick-72 hashes stay `cb04ba5d…` / `bd7d8cc4…` / `20975bf4…` (8301, 8513, 8031). Recovery 572.
-- **Headline:** M33's captor row and release record stay. Capture, seat, and sea sentences are derived on that read. The stored cause stays `outscore-loss`. Tick-1200 hashes match `4cd53df`.
+- **Headline:** Six readability sentences are derived on read. Capture `actorId` and `targetId` stay. Tick-72 hashes match `0d1cc6e`.
 - **Runtime:** Node 24.21.0, pinned by `.node-version`. ICU 78.3.
 
 ## Open items
@@ -46,12 +46,12 @@ Git remains the complete history. This file exists for three things git does not
 | The visible port upkeep and the player's knowledge line give a garrison estimate (15) that disagrees with the dock panel (14, then 12) | Readability | Unassigned | Open |
 | The buy receipt's hold, shelf and price differ from the next screen because of the rest of the tick's upkeep and trading (for example hold 48 on the receipt, then 47.424, and price 1.54 then 1.78), and nothing says so | Readability | Unassigned | Open |
 | Doubled period in grouped briefing lines ("Crown Harbor.. The first was on day 1.") | Readability | Unassigned | Open |
-| The starvation item at an empty Crown Harbor (tick 135, seed 1847) points only at Glassport and doesn't say this port is empty. The morale-cost half, quoting 1.382 per tick when morale is already 0, is fixed in M34 | Readability | Unassigned | Open |
+| The starvation item at an empty Crown Harbor (tick 135, seed 1847) points only at Glassport and doesn't say this port is empty. The morale-cost half, quoting 1.382 per tick when morale is already 0, is fixed in M34 | Readability | Cursor | **Fixed in M34.1.** An empty berth is named. A market that has stock is not called unsold when she cannot sail there |
 | Recruit's queued and executed lines ("Command queued for Mara Vane", "Mara Vane: action executed") omit quantity and cost (8 for 96) | Readability | Unassigned | Open |
 | After a port is captured, the player's panel falls back to a stale tick-0 rumor (for example "free-tide, garrison 131" at Cinder Key on 2718) instead of the last exact reading | Readability | Unassigned | Open |
 | The owned-port panel shows a surrender block (offeredToId/offeredTick) beside surrenderOffered false, which reads as contradictory | Readability | Unassigned | Open |
 | A silent close is still event type `standing-order-completed` | Readability | Unassigned | Open |
-| Advance responses show unrounded days (for example 6.166666666666667) while the state shows 6.17 | Readability | Unassigned | Open |
+| Advance responses show unrounded days (for example 6.166666666666667) while the state shows 6.17 | Readability | Cursor | **Fixed in M34.1.** The advance `day` uses the same two-decimal rounding as the state |
 | Withheld decision-made lines mean a player can only infer that a captain didn't fight from a missing battle row | Readability | Unassigned | Open |
 | After a landing, the carrier's card changes through a withheld market trade, so the player cannot reconcile the numbers | Readability | Unassigned | Open |
 | The +10 on the destination shelf shows only on the fulfilment event | Readability | Unassigned | Open |
@@ -61,7 +61,7 @@ Git remains the complete history. This file exists for three things git does not
 | No briefing or event text says who covers a captive commander's seat, or that the cover doesn't take the orders. The player sees only `actingCommanderId` in the faction JSON and has to join ids. Seen again in M31: at t595 the seat is only `character-05` | Readability | Cursor | **Fixed in M34.** `seatSummary` names the cover and says the orders stay the holder's |
 | The captivity line "Escape is guaranteed but dangerous" contradicts the capture's displayedRisk `low` (captureChance 0.04). Seen again in M31 beside displayedRisk `severe` and capture chance 0.55 | Readability | Cursor | **Fixed in M34.** The card says escape always works and wounds you, and names `displayedRisk` |
 | `player.displayName` shows "Prototype Commander" while the party, feed, and briefing say Mara Vane. Seen again in M31, in M32, and in M33 | Readability | Cursor | **Fixed in M34.** The view derives the character's name. The stored string stays Prototype Commander |
-| No line says loyalty fell. Mara's card shows `loyalty` 0.768 beside `personality.loyalty` 0.8079…, and nothing says which figure the seat uses | Readability | Cursor | **Fixed in M34.** An unpaid release says loyalty fell. Her card's `loyaltyNote` names the unrounded sum the seat reads |
+| No line says loyalty fell. Mara's card shows `loyalty` 0.768 beside `personality.loyalty` 0.8079…, and nothing says which figure the seat uses | Readability | Cursor | **Fixed in M34.** An unpaid release says loyalty fell. **M34.1** keeps the note, and stops printing the raw seed. It says the seat reads the unrounded sum and the card shows the rounded figure |
 | A release feed row is only "Name: captivity released". The paid amount and the debt appear only in the briefing. Seen again in M33 | Readability | Cursor | **Fixed in M34.** A withheld release keeps the briefing sentence. `data` stays null |
 | The battle feed row does not say who won. The briefing does | Readability | Cursor | **Fixed in M34.** A withheld battle keeps the briefing sentence, including "on a higher score" when the payload rules a standing win out |
 | At morale 0 the starvation line still quotes a morale cost | Readability | Cursor | **Fixed in M34.** The line says morale is already 0 and keeps the health cost |
@@ -71,9 +71,11 @@ Git remains the complete history. This file exists for three things git does not
 | Ships on the same leg but outside the shared stretch are simply missing. Nothing says they are on the route | Readability | Cursor | **Fixed in M34.** `outOfStretch` names the ship and the ticks left. It does not add a troop count |
 | After both ships dock, the other hold and purse appear in full (Ada: provisions 36.384, arms 2, medicine 1, ship materials 6, money 141) with no line saying they were learned. The sea row never showed them | Readability | Cursor | **Fixed in M34.** `conditionNote` says the hold was learned because both ships are in port |
 | Mara's purse falls during a voyage (102, then 99, then 96) and `travel-progressed` does not show the money, so the feed does not say why it fell | Readability | Cursor | **Fixed in M34.** The upkeep row says she paid passage and what is left. `travel-progressed` is unchanged |
-| An old port record plus a live sea row shows the label "Sighted troops" twice | Readability | Cursor | **Fixed in M34.** The sea span uses the row's kind. The port record stays Sighted troops |
+| An old port record plus a live sea row shows the label "Sighted troops" twice | Readability | Cursor | **Fixed in M34.** The sea span uses the row's kind. **M34.1** puts `label` `Sighted troops` on the projected port record so the state JSON carries that string. The stored sighting has no label |
+| A sea row uses `sharing` as a verb and does not say the ships are in the same stretch | Readability | Cursor | **Fixed in M34.1.** The summary says she is in the same stretch of water. The kind stays `sharing` |
+| Briefing titles for a capture, a battle, and a release are the event type (`character captured`, `battle resolved`, `captivity released`) | Readability | Cursor | **Fixed in M34.1.** The titles are `Prisoner taken`, `Battle decided`, and `Prisoner released` |
 | Pax's leadership goes from 75 to null with no sentence explaining it | Readability | Cursor | **Fixed in M34.** `skillsNote` says the reading is distant, and does not print the withheld number. A captor row that already shows leadership does not get that sentence |
-| An outscore-loss capture sentence ("Rook Tern was captured at Glassport after outscore loss") and its feed row don't name the captor. The feed puts the prisoner as actorId and the captor faction as targetId, so "Rook Tern: character captured" reads as if the prisoner acted on Free Tide. Seen again in M33 | Readability | Cursor | **Fixed in M34.** The sentence names Free Tide and Rook. The ids are unchanged |
+| An outscore-loss capture sentence ("Rook Tern was captured at Glassport after outscore loss") and its feed row don't name the captor. The feed puts the prisoner as actorId and the captor faction as targetId, so "Rook Tern: character captured" reads as if the prisoner acted on Free Tide. Seen again in M33 | Readability | Cursor | **Sentence fixed in M34.** **M34.1 stopped** on the ids. Swapping stored `actorId` and `targetId` moves the event-body hash. The briefing titles are no longer the event type |
 | Captured troops (12) and power (60.244) appear only on the character read; the feed and briefing never state them | Readability | Unassigned | Open |
 | While a prisoner is held, the card shows live troops 0 next to scattered 12 and the captor row's 12, with live experience and discipline still filled in | Readability | Unassigned | Open |
 | An empty `ports: []` on a direct, confidence-1 row reads as a complete reading with no ports | Readability | Unassigned | Open |
@@ -125,6 +127,14 @@ Git remains the complete history. This file exists for three things git does not
 ## Milestones
 
 Backfilled from the commit graph on 2026-09-25. **Attribution caveat:** commits do not record which agent authored them. Milestones M1–M11 are attributed to the ChatGPT partner from session context, not from the repository, and should not be read as verified provenance.
+
+### 2026-09-29 — M34.1: Readability polish
+- **Agent:** Open Era Engineer (Cursor cloud agent) | **Branch:** `fix/readability-polish` | **Commits:** `c60da81`, and the commit that adds this entry | **Type:** fix
+- **Changed** — Six sentences are built when the state is read. A `sharing` sea row says the ships are in the same stretch of water. The kind stays `sharing`. A projected port record carries `label` `Sighted troops`. The stored sighting does not. Briefing titles for a capture, a battle, and a release are `Prisoner taken`, `Battle decided`, and `Prisoner released`. An empty berth is named in the starvation line. A market that has stock is not called unsold when she cannot sail there. `loyaltyNote` no longer prints the raw seed. It says the seat reads the unrounded sum and names the rounded figure on the card. Advance `day` uses the same two-decimal rounding as the state day.
+- **Why** — [capture-wording-001](docs/playtests/capture-wording-001.md) could not tell that `sharing` meant the same stretch, could not see `Sighted troops` in the state JSON, still read event types as briefing titles, was told no market sold provisions while Verdant Cay had them, and was shown raw loyalty floats beside a rounded card. Advance `day` was already an open row.
+- **Verified** — `npm run typecheck` clean. **279 tests.** `./scripts/evaluate-milestone.sh capture-wording` passed on this tree before the docs commit. Tick-72 hashes stayed `cb04ba5d392d8b1c868cc97e54cb21b21ec171edd546bb70d0d7aba86cc69c11` (1847, 8301), `bd7d8cc44d5fa21022ecb8f8086e13dfbb9475eb025b5ae53f87e2991f90035c` (2718, 8513), `20975bf480e5aa11eeafe1ce39c36cf5ba0fa8e2d5de2bb5887a35d7b3aecc9f` (4096, 8031). Split recovery replayed 572 events. No `golden:update`. The base at `0d1cc6e` was the same three hashes and the same 572, with 273 tests. `src/sim` is unchanged. Blind playtest [readability-polish-001](docs/playtests/readability-polish-001.md) is a plan. It has not been run.
+- **Left open** — Swapping a capture's stored `actorId` and `targetId` was not done. `applyEvent` puts the captivity on `actorId`, and the capture-wording note already measured that swap moving the event-body hash. The projected row still copies those ids. The other open readability rows are unchanged. Idle Mara still starves in place.
+- **Links** — [readability polish plan](docs/playtests/readability-polish-001.md), [capture wording playtest](docs/playtests/capture-wording-001.md)
 
 ### 2026-09-29 — M34: Capture wording
 - **Agent:** Open Era Engineer (Cursor cloud agent) | **Branch:** `feature/capture-wording` | **Commits:** `65b55a1`, `3cbdb89`, `0fa3429`, `063aaff`, `dc85bb8`, and the commit that adds this entry | **Type:** feature
