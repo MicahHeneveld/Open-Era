@@ -30,19 +30,19 @@ Git remains the complete history. This file exists for three things git does not
 
 ## Current state
 
-- **Baseline:** `origin/main` at `5aa98c4` (PR #71). This branch is `fix/readability-polish-2`.
-- **Last verified:** See the M34.2 entry. 301 tests. Tick-72 hashes and the post-split tick-1200 campaign are unchanged. The blind playtest is not run.
+- **Baseline:** `origin/main` at `f87beb5` (PR #72). This branch is `fix/readability-polish-3`.
+- **Last verified:** See the M34.3 entry. 308 tests. Tick-72 and tick-1200 hashes are unchanged. The blind playtest is not run.
 - **Gate status:** Tick-72 hashes stay `cb04ba5d…` / `bd7d8cc4…` / `20975bf4…` (8301, 8513, 8031). Recovery 572.
-- **Headline:** Withheld feed rows, briefing titles, and ransom notes are plain sentences. Stored events are unchanged.
+- **Headline:** The check-in is the last 180 ticks. A witnessed battle, a capture, and a withheld refusal are plain sentences. Stored events are unchanged.
 - **Runtime:** Node 24.21.0, pinned by `.node-version`. ICU 78.3.
 
 ## Open items
 
 | Item | Type | Owner | Status |
 | --- | --- | --- | --- |
-| HIGHEST PRIORITY: add a player-visible reason line on battle-resolved when the player witnessed the battle, such as "outscore" or "nerve broke" | Readability | Unassigned | Open |
-| With several attackers, the briefing says more than one captain "won at Crown Harbor" in the same tick while the panel still shows the other side | Readability | Unassigned | Open |
-| A claim says the captain "accepted Crown Harbor's surrender", but the surrender block is written and consumed within one tick, so the player never saw an offer | Readability | Unassigned | Open |
+| HIGHEST PRIORITY: add a player-visible reason line on battle-resolved when the player witnessed the battle, such as "outscore" or "nerve broke" | Readability | Cursor | **Fixed in M34.3.** The feed says why, from the payload. It does not say `outscore` or `nerve` |
+| With several attackers, the briefing says more than one captain "won at Crown Harbor" in the same tick while the panel still shows the other side | Readability | Cursor | **Fixed in M34.3.** Two wins on one tick name both captains and say the garrison was left standing |
+| A claim says the captain "accepted Crown Harbor's surrender", but the surrender block is written and consumed within one tick, so the player never saw an offer | Readability | Cursor | **Fixed in M34.3.** A claim taken on the next tick says the offer was not waiting. No same-tick consumption was found in 1,200 ticks |
 | The visible port upkeep and the player's knowledge line give a garrison estimate (15) that disagrees with the dock panel (14, then 12) | Readability | Unassigned | Open |
 | The buy receipt's hold, shelf and price differ from the next screen because of the rest of the tick's upkeep and trading (for example hold 48 on the receipt, then 47.424, and price 1.54 then 1.78), and nothing says so | Readability | Unassigned | Open |
 | Doubled period in grouped briefing lines ("Crown Harbor.. The first was on day 1.") | Readability | Cursor | **Fixed in M34.2.** A grouped summary drops one trailing period before it adds its own |
@@ -57,7 +57,7 @@ Git remains the complete history. This file exists for three things git does not
 | The +10 on the destination shelf shows only on the fulfilment event | Readability | Unassigned | Open |
 | The "Command queued for Mara Vane" summary does not name the carrier, the price, or the destination | Readability | Unassigned | Open |
 | Relationship-changed lines have null data and no stated reason | Readability | Unassigned | Open |
-| The names Toma Reef and Toma Hale collide in the feed | Readability | Unassigned | Open |
+| The names Toma Reef and Toma Hale collide in the feed | Readability | Cursor | **Fixed in M34.3.** Display only: `Toma Reef (World Government)` and `Toma Hale (unaffiliated)`. Stored names stay |
 | No briefing or event text says who covers a captive commander's seat, or that the cover doesn't take the orders. The player sees only `actingCommanderId` in the faction JSON and has to join ids. Seen again in M31: at t595 the seat is only `character-05` | Readability | Cursor | **Fixed in M34.** `seatSummary` names the cover and says the orders stay the holder's |
 | The captivity line "Escape is guaranteed but dangerous" contradicts the capture's displayedRisk `low` (captureChance 0.04). Seen again in M31 beside displayedRisk `severe` and capture chance 0.55 | Readability | Cursor | **Fixed in M34.** The card says escape always works and wounds you, and names `displayedRisk` |
 | `player.displayName` shows "Prototype Commander" while the party, feed, and briefing say Mara Vane. Seen again in M31, in M32, and in M33 | Readability | Cursor | **Fixed in M34.** The view derives the character's name. The stored string stays Prototype Commander |
@@ -76,10 +76,10 @@ Git remains the complete history. This file exists for three things git does not
 | Briefing titles for a capture, a battle, and a release are the event type (`character captured`, `battle resolved`, `captivity released`) | Readability | Cursor | **Fixed in M34.1.** The titles are `A captain was taken`, `A battle was decided`, and `A captain was released`. **M34.2** makes the held card `A captain is held captive.` and a grouped return `Scattered troops came back, 2 times.` They do not read `actorId` |
 | Pax's leadership goes from 75 to null with no sentence explaining it | Readability | Cursor | **Fixed in M34.** `skillsNote` says the reading is distant, and does not print the withheld number. A captor row that already shows leadership does not get that sentence |
 | An outscore-loss capture sentence ("Rook Tern was captured at Glassport after outscore loss") and its feed row don't name the captor. The feed puts the prisoner as actorId and the captor faction as targetId, so "Rook Tern: character captured" reads as if the prisoner acted on Free Tide. Seen again in M33 | Readability | Cursor | **Sentence fixed in M34.** **M34.1 stopped** on the ids. Swapping stored `actorId` and `targetId` moves the event-body hash. Briefing titles do not use those ids |
-| Captured troops (12) and power (60.244) appear only on the character read; the feed and briefing never state them | Readability | Unassigned | Open |
+| Captured troops (12) and power (60.244) appear only on the character read; the feed and briefing never state them | Readability | Cursor | **Fixed in M34.3.** At seed 2718 tick 72 the captor's feed and the check-in both say `12 troops were taken, power 60.244.` After release the check-in drops the figures |
 | While a prisoner is held, the card shows live troops 0 next to scattered 12 and the captor row's 12, with live experience and discipline still filled in | Readability | Cursor | **Fixed in M34.1**, and **M34.2** rounds the held figures. At tick 72, Mina Vale reads `0 with Mina Vale; 12 held by World Government. The experience and discipline are the troops now held by World Government.` Live troops stay 0. Experience reads 0.199 and discipline 0.384 |
 | An empty `ports: []` on a direct, confidence-1 row reads as a complete reading with no ports | Readability | Cursor | **Fixed in M34.1.** `portsNote` says Mina Vale named no ports and the list may be incomplete |
-| After release, the prisoner's card is empty except for the voyage, with no record Mara can see | Readability | Unassigned | Open |
+| After release, the prisoner's card is empty except for the voyage, with no record Mara can see | Readability | Cursor | **Stopped in M34.3.** On seed 1847, Mara has no capture and no release through tick 1200, so there is no prison record to project. The card already shows `releaseSighting` when one exists |
 | "after outscore loss" has no subject, reads as if the prisoner lost the fight (next to "Pax Ash won at Glassport"), never explains "outscore", and doesn't say the prisoner was only on the dock | Readability | Cursor | **Fixed in M34.** The sentence says the other side won on a higher score, on the dock. The stored cause stays `outscore-loss` |
 | A character whose ambitions all reach progress 1 throws `<name> has no active goals` on the next plan review | Defect | Cursor | **Fixed** on `fix/no-active-goals`. Satisfaction stays. The opening roots (survival, archetype, and faction membership) are renewed at progress 0. Battle-born goals stay satisfied until the next victory or defeat. Reproduced through the CLI at tick 307 / 269 / 260 on seeds 1847 / 2718 / 4096, the same ticks as the bare harness |
 | Event feed leaked foreign character payloads; capturing ground widened it | Defect | Cursor | Fixed in `82c9bfc`; validated by an independent session with 0 foreign payloads visible |
@@ -127,6 +127,14 @@ Git remains the complete history. This file exists for three things git does not
 ## Milestones
 
 Backfilled from the commit graph on 2026-09-25. **Attribution caveat:** commits do not record which agent authored them. Milestones M1–M11 are attributed to the ChatGPT partner from session context, not from the repository, and should not be read as verified provenance.
+
+### 2026-09-29 — M34.3: Readability polish 3
+- **Agent:** Open Era Engineer (Cursor cloud agent) | **Branch:** `fix/readability-polish-3` | **Commits:** `4ef629a` (the sentences). This commit records the notes and the unread plan. | **Type:** fix
+- **Changed** — Sentences are built when the state is read. The check-in is the last 180 world ticks, and the read is capped at 40,000 events. A capture the reader may already see states the troops and the power. A witnessed battle says why it ended, names every captain who won on that tick, and says when a surrender was taken on the next tick. A withheld refusal says it was a standing order and names the captain's public place. Toma Reef and Toma Hale gain a display qualifier. Stored names and stored events stay. `src/sim/persistence.ts` gains a tick-bounded read. No other `src/sim` file changed.
+- **Why** — At seed 2718 tick 168 the newest 5,000 events started at tick 127 and dropped every standing-order warning. Captured troops lived only on the captor row. Battle lines still used internal words, and two captains each sounded as if they had taken the port. A withheld refusal was only "refused an order." The two Tomas read as one person.
+- **Verified** — Base `f87beb5` is the parent. Node v24.21.0. `npm run typecheck` is clean. **308 tests.** `./scripts/evaluate-milestone.sh readability-polish-3` passed. Tick-72 hashes, before and after, are `cb04ba5d392d8b1c868cc97e54cb21b21ec171edd546bb70d0d7aba86cc69c11` (1847, 8301), `bd7d8cc44d5fa21022ecb8f8086e13dfbb9475eb025b5ae53f87e2991f90035c` (2718, 8513), `20975bf480e5aa11eeafe1ce39c36cf5ba0fa8e2d5de2bb5887a35d7b3aecc9f` (4096, 8031). Split recovery replayed 572 events. Tick-1200, before and after, is hashes `dac1ee50de935be4ea4bd9499ee9f49fb738909f4032b327ebb52d367cca6ded` / `6adbadbb35c81126930e5b46d5e9233166d3f63a0726a95c68dda082f9b57f0c` / `e4d66a14a2455d693cf659082b13c2558d01315f3a1dee39fd14422fce56066c`, events 162392 / 165428 / 162285, captures 16 / 10 / 16, releases 16 / 8 / 12, release records 10 / 7 / 8. No `golden:update`. The plan's checkpoints were read through `GET /api/state` on `127.0.0.1:4317` at HEAD `4ef629a`. The blind session is not run.
+- **Left open** — The blind playtest is not run. Mara's prison record on seed 1847 is stopped: through tick 1200 she has no capture and no release, and `releaseSighting` stays null. On seed 2718 she is captured at event tick 1034 and released at 1118, and that record already exists. The ransom leader-share is untouched.
+- **Links** — [playtest readability-polish-3-001](docs/playtests/readability-polish-3-001.md) (plan only; Session, Findings, and Verdict empty)
 
 ### 2026-09-29 — M34.2: Readability polish 2
 - **Agent:** Open Era Engineer (Cursor cloud agent) | **Branch:** `fix/readability-polish-2` | **Commits:** `ee26083` (the sentences). This commit records the notes and the unread plan. | **Type:** fix
