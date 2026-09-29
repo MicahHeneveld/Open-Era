@@ -30,10 +30,10 @@ Git remains the complete history. This file exists for three things git does not
 
 ## Current state
 
-- **Baseline:** `origin/main` at `0d1cc6e` (PR #68, M34). This branch is `fix/readability-polish`.
-- **Last verified:** `npm run typecheck` clean. **285 tests.** `./scripts/evaluate-milestone.sh readability-polish` passed. Node v24.21.0. Golden hashes were not regenerated.
-- **Gate status:** Tick-72 hashes stay `cb04ba5d…` / `bd7d8cc4…` / `20975bf4…` (8301, 8513, 8031). Recovery 572. Tick-1200 hashes, events, and the census match `0d1cc6e`.
-- **Headline:** Readability sentences are derived on read, including an empty captive port list and the held troop count. Capture `actorId` and `targetId` stay. Tick-72 and tick-1200 hashes match `0d1cc6e`.
+- **Baseline:** `origin/main` at `443be9e` (PR #70). This branch is `feature/ransom-split`.
+- **Last verified:** See the ransom-split entry. Tick-72 hashes match `443be9e`. Tick-1200 hashes move, because a paid ransom now arrives.
+- **Gate status:** Tick-72 hashes stay `cb04ba5d…` / `bd7d8cc4…` / `20975bf4…` (8301, 8513, 8031). Recovery 572. No ransom is paid before tick 72.
+- **Headline:** A ransom paid on release splits between the captor's treasury and party leader. The odd cent goes to the treasury. Question 24 is settled.
 - **Runtime:** Node 24.21.0, pinned by `.node-version`. ICU 78.3.
 
 ## Open items
@@ -127,6 +127,39 @@ Git remains the complete history. This file exists for three things git does not
 ## Milestones
 
 Backfilled from the commit graph on 2026-09-25. **Attribution caveat:** commits do not record which agent authored them. Milestones M1–M11 are attributed to the ChatGPT partner from session context, not from the repository, and should not be read as verified provenance.
+
+### 2026-09-29 — Ransom split
+- **Agent:** Open Era Engineer (Cursor cloud agent) | **Branch:** `feature/ransom-split` | **Commits:** the implementation commit on this branch | **Type:** feature
+- **Changed** — On `captivity-released`, the coins actually paid split in whole cents. A captor faction's treasury receives half and the captor's party leader receives half. The odd cent goes to the treasury. No faction: the leader receives every cent. The debt is still the unpaid remainder. The event type stays `captivity-released` and gains a `ransom` object. The feed, briefing, and chronicle add one line both sides can read, and keep the debt wording and "Loyalty fell".
+- **Why** — Question 24. The coins left the purse and arrived nowhere.
+- **Verified** — Base `443be9e` is an ancestor of this branch. Node v24.21.0. The base suite was 285 tests before this change. Tick-72 hashes do not move, and the reason is that no ransom is paid before tick 72: `cb04ba5d392d8b1c868cc97e54cb21b21ec171edd546bb70d0d7aba86cc69c11` (1847, 8301), `bd7d8cc44d5fa21022ecb8f8086e13dfbb9475eb025b5ae53f87e2991f90035c` (2718, 8513), `20975bf480e5aa11eeafe1ce39c36cf5ba0fa8e2d5de2bb5887a35d7b3aecc9f` (4096, 8031). Recovery replay stays 572. `golden:update` is not in this commit. The first state divergence is the first release, one tick later, because the credit is applied during that tick. The hash at the event tick itself still matches the base.
+
+  | Seed | First different state tick | Cause |
+  | ---: | ---: | --- |
+  | 1847 | 119 | Event tick 118, sequence 13680, Sable Morrow paid 13.4: 6.7 to the Free Tide Compact treasury and 6.7 to Pax Ash. Tick 118 still matches. |
+  | 2718 | 156 | Event tick 155, sequence 18482, Mina Vale paid 58.13: 29.07 to the World Government treasury and 29.06 to Mara Vane. Tick 155 still matches. |
+  | 4096 | 97 | Event tick 96, sequence 10683, Sable Morrow paid 106.84: 53.42 to the Free Tide Compact treasury and 53.42 to Pax Ash. Tick 96 still matches. |
+
+  Tick-1200 hashes, before → after:
+
+  - 1847 `be48975455c6380e83c0f2e6c7f9eb0a22e11e7c118cddac7ed31cdb9cac33b8` → `dac1ee50de935be4ea4bd9499ee9f49fb738909f4032b327ebb52d367cca6ded`. Events 164313 → 162392.
+  - 2718 `e26d716bb32bfca382e44c82478b3bdd5fa602fa2490f553318ba34b66f4a368` → `6adbadbb35c81126930e5b46d5e9233166d3f63a0726a95c68dda082f9b57f0c`. Events 165434 → 165428.
+  - 4096 `3344213969b48b1b5b02b287e711eab163466166764679abbdeafdd1b48f9e90` → `e4d66a14a2455d693cf659082b13c2558d01315f3a1dee39fd14422fce56066c`. Events 164691 → 162285.
+
+  Census before → after. Escapes stay 0. Before this change the paid coins arrived nowhere, so the total to treasuries and the total to leaders were 0.
+
+  | Seed | Captures | Releases | Release records | Ransoms paid (count, total) | Debt (count, total) | To treasuries | To leaders | Treasuries, World Government / Free Tide |
+  | ---: | --- | --- | --- | --- | --- | ---: | ---: | --- |
+  | 1847 before | 12 | 12 | 8 | 12, 827.65 | 11, 3643.86 | 0 | 0 | 43655.1 / 13407.83 |
+  | 1847 after | 16 | 16 | 10 | 15, 1381.10 | 10, 3130.26 | 690.58 | 690.52 | 44757.67 / 14252.98 |
+  | 2718 before | 8 | 8 | 7 | 8, 789.88 | 4, 1161.81 | 0 | 0 | 41200.02 / 14902.79 |
+  | 2718 after | 10 | 8 | 7 | 8, 741.80 | 3, 1230.20 | 370.92 | 370.88 | 42097 / 14972.74 |
+  | 4096 before | 6 | 6 | 6 | 5, 530.71 | 2, 598.41 | 0 | 0 | 45937.12 / 12940.52 |
+  | 4096 after | 16 | 12 | 8 | 12, 854.67 | 8, 1589.64 | 427.37 | 427.30 | 45522.66 / 14512.02 |
+
+  The shares sum to the ransom total on every seed. The treasury side is ahead by the odd cents. On 1847 and 4096 the first leader is Pax Ash. His purse is read by recruit, travel, and trade, so the next decision can change and the later captures and releases are a different campaign. On 2718 the first leader is Mara Vane. She does not choose autonomous actions, and the treasury is not an input to the planner, so the capture list stays the same until Pax is paid at tick 955. After that, Bram's payment, Iris's debt, and Mara's own later ransom change, two captures at ticks 1166 and 1168 are still open at tick 1200, and the event count falls by 6. The debt formula is unchanged. Debt counts move because the later releases are different. One 1847 release pays 0 (Esme Dusk, tick 1015), which is why 16 releases produce 15 ransoms. Blind playtest [ransom-split-001](docs/playtests/ransom-split-001.md) is not run.
+- **Left open** — The blind session is not run. `docs/design/captivity-debts.md` still says the release-day coins do not enter a treasury. No seeded release has a null captor faction.
+- **Links** — [ransom split](docs/design/ransom-split.md), [playtest plan](docs/playtests/ransom-split-001.md), question 24 in [owner questions](docs/design/owner-questions.md)
 
 ### 2026-09-29 — M34.1: Readability polish
 - **Agent:** Open Era Engineer (Cursor cloud agent) | **Branch:** `fix/readability-polish` | **Commits:** `c60da81`, `042d58e`, `e8a58dc`, and the commit that updates this entry | **Type:** fix

@@ -138,12 +138,60 @@ export function seatReturnSentence(seat: SeatReturn): string {
   return `${seat.name} holds the seat of ${seat.faction} again`;
 }
 
+interface RansomCredit {
+  treasuryShare: number;
+  leaderShare: number;
+  treasuryFactionId: string | null;
+  leaderId: string | null;
+}
+
+function ransomCredit(event: SimEvent): RansomCredit | null {
+  const ransom = event.data.ransom;
+  if (!ransom || typeof ransom !== "object") return null;
+  const credit = ransom as Partial<RansomCredit>;
+  if (typeof credit.treasuryShare !== "number" || typeof credit.leaderShare !== "number") return null;
+  return {
+    treasuryShare: credit.treasuryShare,
+    leaderShare: credit.leaderShare,
+    treasuryFactionId: typeof credit.treasuryFactionId === "string" ? credit.treasuryFactionId : null,
+    leaderId: typeof credit.leaderId === "string" ? credit.leaderId : null,
+  };
+}
+
+/**
+ * The payment line both sides read.
+ *
+ * Names each recipient and the amount. A faction line puts the treasury first.
+ * No faction names only the party leader. Absent when the release has no split.
+ */
+export function ransomPaidSentence(world: WorldState, event: SimEvent, chronicle = false): string | null {
+  const credit = ransomCredit(event);
+  if (!credit) return null;
+  const terms = event.data.terms as { moneyPaid?: number } | undefined;
+  const paid = typeof terms?.moneyPaid === "number" ? terms.moneyPaid : credit.treasuryShare + credit.leaderShare;
+  const payer = characterName(world, event.actorId, "Someone");
+  const payerText = chronicle ? `**${payer}**` : payer;
+  const leaderName = credit.leaderId ? characterName(world, credit.leaderId, "the party leader") : null;
+  const leaderText = leaderName ? (chronicle ? `**${leaderName}**` : leaderName) : null;
+  if (credit.treasuryFactionId) {
+    const factionName = world.factions[credit.treasuryFactionId]?.name ?? credit.treasuryFactionId;
+    const factionText = chronicle ? `**${factionName}**` : factionName;
+    const treasury = `${credit.treasuryShare} to the ${factionText} treasury`;
+    if (leaderText) return `${payerText} paid ${paid} ransom: ${treasury} and ${credit.leaderShare} to ${leaderText}`;
+    return `${payerText} paid ${paid} ransom: ${treasury}`;
+  }
+  if (!leaderText) return null;
+  return `${payerText} paid ${paid} ransom: ${credit.leaderShare} to ${leaderText}`;
+}
+
 export function captivityReleasedSentence(world: WorldState, event: SimEvent): string {
   const actor = characterName(world, event.actorId, "Someone");
   const settlement = settlementName(world, event.settlementId, "captivity");
   const terms = event.data.terms as { moneyPaid: number; debtValue: number };
   let sentence = `${actor} was released from ${settlement}: ${terms.moneyPaid} paid and ${terms.debtValue} recorded as debt`;
   if (typeof terms.debtValue === "number" && terms.debtValue > 0) sentence += ". Loyalty fell";
+  const paid = ransomPaidSentence(world, event, false);
+  if (paid) sentence += `. ${paid}`;
   const seat = seatReturn(world, event.actorId);
   if (seat) sentence += `. ${seatReturnSentence(seat)}`;
   return sentence;
@@ -155,6 +203,8 @@ export function captivityReleasedChronicle(world: WorldState, event: SimEvent): 
   const terms = event.data.terms as { moneyPaid: number; debtValue: number };
   let sentence = `**${actor}** was released from **${settlement}** under mandatory terms: ${terms.moneyPaid} paid and ${terms.debtValue} recorded as debt.`;
   if (typeof terms.debtValue === "number" && terms.debtValue > 0) sentence += " Loyalty fell.";
+  const paid = ransomPaidSentence(world, event, true);
+  if (paid) sentence += ` ${paid}.`;
   const seat = seatReturn(world, event.actorId);
   if (seat) sentence += ` **${seat.name}** holds the seat of **${seat.faction}** again.`;
   return sentence;

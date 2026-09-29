@@ -25,6 +25,7 @@ import {
 import { assessSupplyContract, contractRelationship } from "./contracts.ts";
 import {
   applyEvent,
+  captorPartyLeader,
   CLAIM_STABILITY_FLOOR,
   clamp,
   distanceBetween,
@@ -34,6 +35,7 @@ import {
   partyPower,
   retainGround,
   round,
+  splitRansom,
   settlementClaimAvailableTo,
   surrenderStabilityLimit,
   SURRENDER_GARRISON_THRESHOLD,
@@ -1658,7 +1660,18 @@ function processCaptivityDeadlines(
     const physicalAverage = Object.values(character.attributes).reduce((sum, value) => sum + value, 0) / 4;
     const systemMaximum = round(clamp(50 + captivity.scatteredTroops.count * 2 + physicalAverage * 0.5, 75, 600), 2);
     const demandedValue = round(systemMaximum * rng.between(0.55, 1), 2);
-    const moneyPaid = round(Math.min(character.money, demandedValue), 2);
+    // Only the coins that leave the purse are split. The debt is the unpaid
+    // remainder and is not split. A faction treasury takes half, and the
+    // captor's party leader takes half. The odd cent goes to the treasury.
+    // No faction: the leader takes the whole payment. No recipient at all:
+    // the coins stay in the purse, so a payment cannot destroy them.
+    const faction = captivity.captorFactionId ? world.factions[captivity.captorFactionId] : undefined;
+    const leader = captorPartyLeader(world, character);
+    let moneyPaid = round(Math.min(character.money, demandedValue), 2);
+    if (!faction && !leader) moneyPaid = 0;
+    const shares = faction && !leader
+      ? { treasuryShare: moneyPaid, leaderShare: 0 }
+      : splitRansom(moneyPaid, Boolean(faction));
     const debtValue = round(demandedValue - moneyPaid, 2);
     const debt: DebtObligation | null = debtValue > 0 ? {
       id: `debt-${String(world.nextEventSequence).padStart(6, "0")}`,
@@ -1678,6 +1691,16 @@ function processCaptivityDeadlines(
         reason: "mandatory-bounded-terms",
         daysHeld: round((world.tick - captivity.capturedTick) / world.ticksPerDay, 2),
         terms: { systemMaximum, demandedValue, moneyPaid, debtValue },
+        // Same event type. The split is extra fields so replay credits the
+        // treasury and the leader without a second draw or a second event.
+        ransom: {
+          treasuryShare: shares.treasuryShare,
+          leaderShare: shares.leaderShare,
+          treasuryFactionId: faction ? faction.id : null,
+          factionTreasury: faction ? round(faction.treasury + shares.treasuryShare, 2) : null,
+          leaderId: leader ? leader.id : null,
+          leaderMoney: leader ? round(leader.money + shares.leaderShare, 2) : null,
+        },
         characterMoney: round(character.money - moneyPaid, 2),
         debt,
         travel,
