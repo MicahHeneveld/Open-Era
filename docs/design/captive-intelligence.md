@@ -268,3 +268,64 @@ The capture rate is lower on this tree. None of the eight defaults changes becau
 6. **The prisoner is still there after the report is 18 ticks old, and after 72. Do the person-fields fade?** Default: no. Leadership and the captured troop count stay as taken, confidence 1, and the age is shown. The port beliefs use the garrison horizon, the same way a settlement report does. The stale warning stays 18 ticks, and it applies to those port beliefs and to the release record. The default stays no. Every completed hold on this tree still runs to age 84.
 7. **Does this change a fight, a plan, who sits in command, the loyalty loss on an unpaid release, or a ship met at sea?** Default: no. It is a reading. The outscore rule is already built, and it changes who is captured. This channel does not read it. The command seat, the scar, and a sea sighting do not read it either. A captain just let out is an ordinary ship. The sea row does not say they were a prisoner. The default stays no.
 8. **What about informants, and the ruling that the survey slice has no captives?** Default: informants stay closed. That ruling was the survey and the anchored list. This note is the captive channel those questions left out. It leaves public courses, the live garrison from your other ports, and seeded hearsay where they are. The default stays no. A quieter capture calendar is not a reason to open informants.
+
+## Addendum: after M30, M29.1 and M31
+
+2026-09-29. Main is `d76a0a0588c3d777fd1b0ec58859b09fa51ab4d3` (PR #58). That commit contains `e68281b` (PR #56, M30). `npm test` passed, 216 tests, Node v24.21.0, ICU 78.3. The committed 72-tick fixture reproduced, including the recovery replay of 572 events: `cb04ba5d392d8b1c868cc97e54cb21b21ec171edd546bb70d0d7aba86cc69c11` / `bd7d8cc44d5fa21022ecb8f8086e13dfbb9475eb025b5ae53f87e2991f90035c` / `20975bf480e5aa11eeafe1ce39c36cf5ba0fa8e2d5de2bb5887a35d7b3aecc9f`, with 8301 / 8513 / 8031 events.
+
+The harness patched the dock rule and the −0.04 scar the way [loyalty scar, remeasured](loyalty-scar-remeasure.md) describes, and reproduced that note's tree (2) at tick 1200: `95bd71dc877f4e12c77ba2f07a2f10f8e076fc32deaf997dd4cf5e4fa7d011b5` / `55d48cbbdeb6e562ca4002d6e22a713a9977175e06e0383b36a3af015e53c57d` / `f5355c1a254bd3df4924fd784da645b770cf01bafe6d73d8d9c99a82446715df`, with 164313 / 165434 / 164691 events. The patch was removed. No source change is in this commit. The captor row was derived after `runTick` and not written. `releaseSighting` was read inside `processCaptivityDeadlines`, after upkeep and before the release event.
+
+The [captures under M29](captures-under-m29.md) estimate of new facts, 44 / 29 / 22, reproduces. So do its captor snapshots, World Government then Free Tide, 252 / 756, 420 / 252, and 252 / 252, and its empty port lists, 0, 2, and 0. The two empty lists are Mina Vale and Zara Gale's first hold, both on seed 2718.
+
+| Seed | Captures | Releases | Still held | Escapes | People | WG rows | FT rows | WG ticks | FT ticks | New facts |
+| ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| 1847 | 12 | 12 | 0 | 0 | 8 | 252 | 756 | 168 | 519 | 44 |
+| 2718 | 8 | 8 | 0 | 0 | 7 | 420 | 252 | 365 | 194 | 29 |
+| 4096 | 6 | 6 | 0 | 0 | 6 | 252 | 252 | 189 | 252 | 22 |
+
+New facts are leadership readings, troop readings, and distinct port beliefs. Leadership and troops are one per hold: 12 and 12, 8 and 8, 6 and 6. Port beliefs, one per port, estimate, and original tick: 20, 13, and 10. Of those, direct / faction-report: 18 / 2, 12 / 1, and 10 / 0. Rumors that name the prisoner's own faction: 0, 0, 0. No prisoner is held by their own faction. Character-ticks with both captivity and travel: 0, 0, 0. Leadership, scattered troops, and the knowledge fingerprint were unchanged across every hold.
+
+| Seed | Tick | Who | Port | Cause | Captor |
+| ---: | ---: | --- | --- | --- | --- |
+| 1847 | 34 | Sable Morrow | Cinder Key | failed-retreat | Free Tide |
+| 1847 | 498 | Jun Marrow | Glassport | outscore-loss | Free Tide |
+| 1847 | 498 | Lio Crow | Glassport | outscore-loss | Free Tide |
+| 1847 | 594 | Mara Vane | Crown Harbor | outscore-loss | Free Tide |
+| 1847 | 740 | Rook Tern | Glassport | outscore-loss | Free Tide |
+| 1847 | 877 | Jun Marrow | Cinder Key | outscore-loss | World Government |
+| 1847 | 877 | Niko Wren | Crown Harbor | outscore-loss | Free Tide |
+| 1847 | 957 | Pax Ash | Crown Harbor | outscore-loss | World Government |
+| 1847 | 1045 | Jun Marrow | Glassport | outscore-loss | Free Tide |
+| 1847 | 1058 | Finn Frost | Crown Harbor | outscore-loss | World Government |
+| 1847 | 1058 | Pax Ash | Cinder Key | outscore-loss | World Government |
+| 1847 | 1060 | Niko Wren | Glassport | outscore-loss | Free Tide |
+| 2718 | 71 | Mina Vale | Crown Harbor | failed-retreat | World Government |
+| 2718 | 411 | Esme Dusk | Crown Harbor | major-defeat | World Government |
+| 2718 | 621 | Zara Gale | Crown Harbor | failed-retreat | World Government |
+| 2718 | 871 | Rook Tern | Glassport | outscore-loss | Free Tide |
+| 2718 | 1007 | Bram Tern | Glassport | outscore-loss | World Government |
+| 2718 | 1008 | Iris Stone | Cinder Key | outscore-loss | Free Tide |
+| 2718 | 1034 | Mara Vane | Crown Harbor | outscore-loss | Free Tide |
+| 2718 | 1036 | Zara Gale | Crown Harbor | outscore-loss | World Government |
+| 4096 | 12 | Sable Morrow | Cinder Key | failed-retreat | Free Tide |
+| 4096 | 18 | Dax Pike | Glassport | major-defeat | World Government |
+| 4096 | 39 | Esme Dusk | Crown Harbor | failed-retreat | World Government |
+| 4096 | 161 | Mina Vale | Crown Harbor | major-defeat | World Government |
+| 4096 | 475 | Rook Tern | Glassport | outscore-loss | Free Tide |
+| 4096 | 684 | Iris Stone | Glassport | outscore-loss | Free Tide |
+
+Every completed hold is still 84 snapshots. Holds with an open order: 0, 0, and 2. Both are on seed 4096 and both stay active through the hold. Sable Morrow's protect, issuer `character-01`, target Crown Harbor. Esme Dusk's pressure, issuer `character-14`, target `world-government`. Esme is held once on this tree. The row still leaves both orders off.
+
+On the first snapshot of each hold, belief age min / median / mean / max is 1 / 177.5 / 322 / 997, 2 / 16 / 290.846 / 1058, and 1 / 13 / 85.5 / 419. Stale beliefs, age at least 18: 19, 6, and 4. Beliefs for a port the faction no longer holds: 3, 3, and 0. Live ports with no belief: 6, 5, and 1. From the capture snapshot to the release record, absolute garrison change median / mean / max is 4 / 11.917 / 103, 4 / 6.25 / 15, and 4 / 39.5 / 124. The upkeep garrison differed from the last held snapshot on two releases: Jun Marrow, seed 1847, event tick 961, last held 11, upkeep 12; Esme Dusk, seed 2718, event tick 495, last held 123, upkeep 124. The record uses the upkeep figure. Release party rows: 86, 44, and 43. Fellow prisoners on those lists: 3, 1, and 0, at count 0 and power 0. Every release started a voyage: 12, 8, and 6.
+
+Release records present: 0 at tick 72 on every seed. At tick 400: 1, 1, and 4, ages 282; 245; and 304, 298, 277, 155. At tick 1200: 8, 7, and 6 records, all still on the characters. The tick-400 ages on 2718 and 4096, and the single age on 1847, match the lists above. The later campaign adds the rest.
+
+The Mina Vale playtest still matches. Seed 2718, no commands. At tick 72 Mara is at Crown Harbor, `travel` null. Mina is there, live troops 0, live power 0, scattered troops 12, `capturedTick` 71, captor World Government, leadership 25, reconstructed power 60.244, port list empty. Her money is 110.08. Cinder Key and Glassport are garrison 7. The release record, `observedTick` 155, is Crown Harbor, faction World Government, captor World Government, garrison 208, and the same four parties: Mara Vane 75 / 211.051, Vale Drake 31 / 107.672, Sable Sorn 107 / 159.331, Orin Frost 90 / 137.275. At tick 156 Mina's `captivity` is null, her travel is `crown-harbor` → `glassport` with 2 of 3 left, and her projected troops and power are null. Mara's character has no `releaseSighting`.
+
+M30's covers on this tree are Jun Marrow for Mara, Dax Pike for Pax twice, and Ada Sorn for Mara. The prisoner's knowledge stayed frozen through each of those holds. The acting commander's own knowledge changed, because that captain is free and the sim already observes. The channel was not written onto the cover: none of the four had a `releaseSighting`, and the captor row is the captor faction's reading. Pax's two captors are World Government, so Dax, in Free Tide, is not the reader. The scar is not an input. It is stored on the holder at the unpaid release, which is the tick the cover is deleted, and leadership, the scattered count, and the frozen knowledge do not move when it is written. Jun already carries −0.04 while he covers Mara. The row still reads `skills.leadership`.
+
+Hash. The read-only captor pass matches the fixture and the tree (2) tick-1200 hashes and event counts. Writing `releaseSighting` at the release, and nowhere else, leaves those event counts in place (164313 / 165434 / 164691) and leaves the fixture in place. The first world where the hash differs is the tick after the first release: event ticks 118, 155, and 96, so `world.tick` 119, 156, and 97. On 1847 that is also the first scar. On 2718 and 4096 the record lands first and the scar later, at event ticks 495 and 123. Tick-1200 hashes with the record stored: `be48975455c6380e83c0f2e6c7f9eb0a22e11e7c118cddac7ed31cdb9cac33b8`, `e26d716bb32bfca382e44c82478b3bdd5fa602fa2490f553318ba34b66f4a368`, and `3344213969b48b1b5b02b287e711eab163466166764679abbdeafdd1b48f9e90`.
+
+Writing the captor rows onto the faction for 72 ticks moves the fixture and leaves the event counts at 8301 / 8513 / 8031. The first differing worlds are tick 35, 72, and 13. Entries at tick 72: 1, 1, and 3. Hashes: `4886dfbd6fe85b8dc1fb309ad0c948cad5b30fbc642600a175266f81e0da200d`, `76e572244a0e115c574d8e397d4bd232b3950a588e56d24fd61d87d52c2d1a3f`, and `f91607cbd707ab2327c3c210c35c02b78371f2f9989861ce4b0d6d9148a537f6`. The proposal still does not use that writer.
+
+**Verdict: no change.** The channel is still leadership, the captured troop count, the port beliefs the prisoner already carries, and one release record. The new-fact estimate 44 / 29 / 22 stands. Orders stay off the row. The cover does not receive it, and the scar does not change what it shows. The 72-tick fixture stays where it is, because the release record is still absent there and the captor list stays a projection. The Mina Vale beat in the playtest still happens.
