@@ -1750,8 +1750,9 @@ function processPlayerCommands(
         !recipient ||
         !order ||
         order.issuerId !== commander.id ||
-        // Awaiting confirmation is open for a further issue, which is stored as
-        // an amendment. Explicit amend-order still rejects that status at submit.
+        // Awaiting confirmation is the pair's open order. Explicit amend-order
+        // and a further issue-order both accept it: a major change returns it
+        // to pending, and priority or deadline alone keeps this state.
         (order.status !== "pending" && order.status !== "active" && order.status !== "awaiting-confirmation")
       ) {
         emit(world, events, {

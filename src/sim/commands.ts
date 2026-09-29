@@ -553,13 +553,18 @@ function validateStandingOrder(
       targetId: request.targetId ?? null,
       priority,
       expiresInTicks: duration,
-    }, { allowAwaitingConfirmation: true });
+    });
     if (!amended.ok) return amended;
     const notice = exploreAlreadyPresentNotice(world, recipient, request.directive, request.targetId);
     return { ...amended, ...(notice ? { notice } : {}) };
   }
+  // No open order yet, so a queued issue would mint an id. Match the issuer as
+  // well as the recipient: another player's issue to this officer is a
+  // different pair and must not block this one.
   if (world.pendingCommands.some((command) =>
-    command.type === "issue-order" && command.characterId === recipient.id
+    command.type === "issue-order" &&
+    command.characterId === recipient.id &&
+    world.players[command.playerId]?.characterId === issuer.id
   )) {
     return reject("order-already-queued", "Another command already queued will act on that order");
   }
@@ -677,17 +682,15 @@ function issuerOrder(
 function validateOrderAmendment(
   world: WorldState,
   request: Extract<CommandRequest, { type: "amend-order" }>,
-  options?: { allowAwaitingConfirmation?: boolean },
 ): CommandSubmission {
   const found = issuerOrder(world, request.playerId, request.characterId, request.orderId);
   if ("ok" in found) return found;
   const { order, recipient } = found;
-  // `amend-order` itself stays limited to pending and active. A further
-  // `issue-order` may also restate an order that is awaiting confirmation,
-  // because that status is still the pair's one open order.
-  const awaiting = options?.allowAwaitingConfirmation === true && order.status === "awaiting-confirmation";
-  if (order.status !== "pending" && order.status !== "active" && !awaiting) {
-    return reject("order-not-amendable", "Only pending or active orders may be amended");
+  // Awaiting confirmation is still the pair's one open order, so an explicit
+  // amend and a further issue share this path. A major change returns the
+  // order to pending; priority or deadline alone keeps the current state.
+  if (order.status !== "pending" && order.status !== "active" && order.status !== "awaiting-confirmation") {
+    return reject("order-not-amendable", "Only pending, active, or awaiting-confirmation orders may be amended");
   }
   const directive = request.directive ?? order.directive;
   if (!directives.has(directive)) return reject("unknown-directive", `That standing-order directive is not supported. Supported directives are ${supportedDirectives}.`);
