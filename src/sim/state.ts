@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import type {
   Character,
   PartySighting,
+  TroopGroup,
   ResourceKey,
   Resources,
   Settlement,
@@ -174,12 +175,16 @@ export function personalPower(character: Character): number {
   return round(physical * healthFactor);
 }
 
-export function partyPower(character: Character): number {
-  if (character.captivity) return 0;
-  const troops = character.troops;
+/** Party power for a troop block, including a captive's scattered count. */
+export function partyPowerFromTroops(character: Character, troops: TroopGroup): number {
   const troopPower = troops.count * (0.65 + troops.experience * 0.8) * (0.6 + troops.discipline * 0.6);
   const leaderEffect = 1 + character.skills.leadership / 220;
   return round(personalPower(character) * 1.5 + troopPower * leaderEffect);
+}
+
+export function partyPower(character: Character): number {
+  if (character.captivity) return 0;
+  return partyPowerFromTroops(character, character.troops);
 }
 
 /**

@@ -52,6 +52,8 @@ import {
   type DecisionCandidate,
   type EventDraft,
   type PartySighting,
+  type ReleaseParty,
+  type ReleaseSighting,
   type PlayerCommand,
   type ResourceKey,
   type Resources,
@@ -1669,6 +1671,7 @@ function processCaptivityDeadlines(
       reason: "prisoner-release",
     } : null;
     const travel = releaseTravel(world, character, captivity);
+    writeReleaseSighting(world, character);
     emit(world, events, {
       type: "captivity-released",
       actorId: character.id,
@@ -1686,6 +1689,50 @@ function processCaptivityDeadlines(
       },
     });
   }
+}
+
+/**
+ * The prison, as it is on the morning of release, stored on the captive.
+ *
+ * Upkeep has already set the garrison. The character walk has not run. The
+ * parties are everyone else still anchored here, in id order. A fellow
+ * prisoner is included at the live count, which is 0, and `partyPower()` is 0.
+ * A later release replaces the record when its tick is greater or equal. An
+ * earlier one does not. No new event and no draw.
+ */
+function writeReleaseSighting(world: WorldState, character: Character): void {
+  const captivity = character.captivity;
+  if (!captivity) return;
+  const observedTick = world.tick;
+  const previous = character.releaseSighting;
+  if (previous && previous.observedTick > observedTick) return;
+  const settlement = world.settlements[captivity.settlementId];
+  const parties: ReleaseParty[] = Object.values(world.characters)
+    .filter((other) =>
+      other.id !== character.id &&
+      other.locationId === captivity.settlementId &&
+      other.travel === null,
+    )
+    .sort((left, right) => left.id.localeCompare(right.id))
+    .map((other) => ({
+      characterId: other.id,
+      troops: other.troops.count,
+      partyPower: partyPower(other),
+      observedTick,
+      source: "direct" as const,
+      confidence: 1 as const,
+    }));
+  const record: ReleaseSighting = {
+    settlementId: captivity.settlementId,
+    factionId: settlement.factionId,
+    captorFactionId: captivity.captorFactionId,
+    garrison: settlement.garrison,
+    parties,
+    observedTick,
+    source: "direct",
+    confidence: 1,
+  };
+  character.releaseSighting = record;
 }
 
 function progressTroopRecoveries(world: WorldState, events: SimEvent[]): void {

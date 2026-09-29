@@ -74,6 +74,16 @@ function beliefWeight(age: number, confidence: number, horizon: number): number 
   return clamp(confidence * Math.exp(-Math.max(0, age) / horizon), 0.08, 1);
 }
 
+/**
+ * The garrison confidence a player is shown.
+ *
+ * Two decimals, the same label `believedGarrison` already uses. The stored
+ * confidence is not replaced by this number.
+ */
+export function garrisonConfidenceLabel(confidence: number, ageTicks: number): number {
+  return round(beliefWeight(ageTicks, confidence, GARRISON_FRESHNESS_TICKS), 2);
+}
+
 function freshness(world: WorldState, belief: SettlementKnowledge): number {
   const age = Math.max(0, world.tick - belief.observedTick);
   return beliefWeight(age, belief.confidence, GARRISON_FRESHNESS_TICKS);
