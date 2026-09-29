@@ -69,20 +69,26 @@ export function distanceBetween(
   return Math.hypot(to.x - from.x, to.y - from.y);
 }
 
+const basePrices: Resources = {
+  provisions: 1.8,
+  arms: 5.6,
+  medicine: 7.4,
+  shipMaterials: 4.5,
+};
+
+/** Board price for one good, from its target holding and the stock on the shelf. */
+export function resourcePrice(resource: ResourceKey, targetStock: number, stock: number): number {
+  const scarcity = targetStock / Math.max(1, stock);
+  return round(basePrices[resource] * clamp(scarcity, 0.55, 2.5), 2);
+}
+
 export function marketPrice(
   world: WorldState,
   settlementId: string,
   resource: ResourceKey,
 ): number {
   const settlement = world.settlements[settlementId];
-  const basePrices: Resources = {
-    provisions: 1.8,
-    arms: 5.6,
-    medicine: 7.4,
-    shipMaterials: 4.5,
-  };
-  const scarcity = settlement.targetStocks[resource] / Math.max(1, settlement.stocks[resource]);
-  return round(basePrices[resource] * clamp(scarcity, 0.55, 2.5), 2);
+  return resourcePrice(resource, settlement.targetStocks[resource], settlement.stocks[resource]);
 }
 
 export function personalPower(character: Character): number {
@@ -320,6 +326,12 @@ export function applyEvent(world: WorldState, event: SimEvent): void {
       actor.health = event.data.health as number;
       actor.morale = event.data.morale as number;
       actor.troops.count = event.data.troopCount as number;
+      // Present only while the party is underway. Anchored upkeep does not
+      // touch the purse, and older events that predate the charge must not
+      // either.
+      if (event.type === "character-upkeep" && typeof event.data.characterMoney === "number") {
+        actor.money = event.data.characterMoney;
+      }
       if (event.type === "travel-progressed" && actor.travel) {
         actor.travel.remainingTicks = event.data.remainingTicks as number;
       }

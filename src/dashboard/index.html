@@ -583,9 +583,9 @@
       byId("world-time").textContent = "Day " + fmt(world.day, 1) + " · " + (f ? f.name : "Unaffiliated");
       // The runway is the number that matters, not the stock: a falling count says
       // nothing about whether the party will reach a market before it empties.
-      var runway = party.provisionRunwayTicks == null
+      var runway = party.runwayTicks == null
         ? '<span class="subtle">unknown</span>'
-        : party.provisionRunwayTicks + " ticks (" + fmt(party.provisionRunwayDays, 1) + " days)";
+        : party.runwayTicks + " ticks (" + fmt(party.runwayDays, 1) + " days)";
       byId("header-stats").innerHTML =
         '<span class="pill">Money <strong>' + fmt(c.money) + "</strong></span>" +
         '<span class="pill">Provisions <strong>' + fmt(c.cargo.provisions, 1) + "</strong></span>" +
@@ -681,7 +681,8 @@
       }).join("");
       return '<h3>Trade here</h3><div class="market">' +
         '<div class="subtle">' + fmt(hold.load, 1) + ' of ' + fmt(hold.capacity, 0) + ' hold used · ' + fmt(hold.money, 2) + ' money · ' +
-          (market.taxRate > 0 ? fmt(market.taxRate * 100, 0) + "% tax on sales" : "no tax on sales") +
+          (market.taxAppliesTo === "sell" && market.taxRate > 0 ? fmt(market.taxRate * 100, 0) + "% tax on sales, not on purchases" : market.taxRate > 0 ? fmt(market.taxRate * 100, 0) + "% tax on sales" : "no tax on sales") +
+          (market.expiresTick != null ? " · prices quoted tick " + market.quotedTick + ", expire tick " + market.expiresTick : "") +
           (hold.provisionsReserve > 0 ? " · " + fmt(hold.provisionsReserve, 1) + " provisions reserved for the crew" : "") +
         '</div>' + rows + '</div>';
     }
@@ -715,6 +716,11 @@
           ? "Direct observation of this island"
           : intel ? esc(intel.source) + " · " + fmt(intel.confidence * 100) + "% confidence · " + ageLabel : "No current report";
       var stockHeading = intel ? "Stocks and prices" + (derived ? ' <span class="subtle">estimated' + ageNote + "</span>" : "") : "Stocks and prices";
+      // A live price is the board right now, and the next tick recomputes it.
+      // Saying so here is what "exact" does not say: the number expires.
+      if (item.priceQuote && item.priceQuote.live && item.priceQuote.expiresTick != null) {
+        stockHeading += ' <span class="subtle">quoted tick ' + item.priceQuote.asOfTick + ", expires tick " + item.priceQuote.expiresTick + "</span>";
+      }
       var forecast = item.combatForecast;
       // Distinguish "I am fighting" from "someone else is fighting here". The
       // settlement flag alone cannot tell a player which of those is true.
@@ -739,7 +745,8 @@
           '</div><div class="combat-factor">' + forecast.revealedFactors.map(esc).join(" · ") + '</div></div>'
         : "";
       return '<div class="eyebrow">Island intelligence</div><h2>' + esc(item.name) + '</h2>' +
-        '<div class="subtle">' + esc(owningFaction ? owningFaction.name : "Independent") + (owner ? " · Owned by " + esc(owner.name) : "") + " · Population " + (item.population == null ? "unknown" : item.population.toLocaleString()) + "</div>" +
+        '<div class="subtle">' + esc(owningFaction ? owningFaction.name : "Independent") + (owner ? " · Owned by " + esc(owner.name) : "") + " · Population " + (item.population == null ? "unknown" : item.population.toLocaleString()) +
+          (typeof item.taxRate === "number" ? " · " + (item.taxRate > 0 ? fmt(item.taxRate * 100, 0) + "% sales tax" : "no sales tax") : " · sales tax unknown") + "</div>" +
         '<div class="subtle">' + intelLabel + "</div>" +
         '<div class="stat-grid">' +
           // Standing here is direct perception of the ground, so the garrison and
@@ -752,9 +759,12 @@
           '<div class="stat"><span>Production</span><strong>' + esc(item.focus || "Unknown") + "</strong></div>" +
         "</div>" +
         "<h3>" + stockHeading + "</h3>" +
-        (intel
+        (intel && item.stocks
           ? Object.keys(item.stocks).map(function (key) {
-              return '<div class="resource-row"><span>' + esc(key) + "</span><span><strong>" + approx + fmt(item.stocks[key], 1) + "</strong> @ " + approx + fmt(item.prices[key], 2) + "</span></div>";
+              var drift = item.priceDrift && item.priceDrift[key] != null
+                ? ' <span class="subtle">own use ' + (item.priceDrift[key] > 0 ? "+" : "") + fmt(item.priceDrift[key], 2) + "/tick, if no one trades</span>"
+                : "";
+              return '<div class="resource-row"><span>' + esc(key) + "</span><span><strong>" + approx + fmt(item.stocks[key], 1) + "</strong> @ " + approx + fmt(item.prices[key], 2) + drift + "</span></div>";
             }).join("")
           : '<div class="empty">No current report on this market.</div>') +
         marketHtml(item.market) +
@@ -763,7 +773,7 @@
           return '<button class="party-row" type="button" data-party="' + esc(party.id) + '"><span><strong>' + esc(party.name) + "</strong><br><span class=\"subtle\">" + esc(party.archetype) + '</span></span><span>' + (party.partyPower == null ? '<span class="subtle">strength unknown</span>' : fmt(party.partyPower)) + "</span></button>";
         }).join("") : '<div class="empty">' + (intel && intel.exact ? "No named parties are currently here." : "Foreign party positions are not available in this report.") + "</div>") + battleNotice + forecastHtml +
         "<h3>Direct command</h3><div class=\"actions\">" +
-          (travelAllowed ? '<button class="action" type="button" data-action="travel" data-target="' + esc(item.id) + '">Sail here' + (item.travelTicks == null ? "" : " — " + item.travelTicks + " ticks (" + fmt(item.travelDays, 1) + " days)") + "</button>" : "") +
+          (travelAllowed ? '<button class="action" type="button" data-action="travel" data-target="' + esc(item.id) + '">Sail here' + (item.travelTicks == null ? "" : " — " + item.travelTicks + " ticks (" + fmt(item.travelDays, 1) + " days), passage " + fmt(item.passageCost, 2)) + "</button>" : "") +
           (here && item.surrenderOffered ? '<button class="action danger" type="button" data-action="claim-settlement">Accept surrender &amp; claim</button>' : "") +
           (here && item.surrenderOffered ? '<button class="action" type="button" data-action="decline-surrender">Decline and keep fighting</button>' : "") +
           (here && item.factionId && item.factionId !== c.factionId && !item.surrenderOffered && !item.battleInProgress && !(world.combat && world.combat.commandedBattle) ? '<button class="action danger" type="button" data-action="raid">Commit attack</button>' : "") +

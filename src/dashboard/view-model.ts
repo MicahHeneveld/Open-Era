@@ -4,8 +4,11 @@ import { COMMAND_LIMITS, commandCapabilities } from "../sim/commands.ts";
 import {
   cargoCapacity,
   cargoLoad,
+  PASSAGE_COST_PER_TICK,
+  passageCost,
   provisionRunway,
   sellableProvisions,
+  priceDriftPerTick,
   tradeQuote,
   travelDuration,
   type ProvisionRunway,
@@ -599,14 +602,67 @@ function travelEstimate(
   world: WorldState,
   commander: Character,
   settlementId: string,
-): { travelTicks: number | null; travelDays: number | null } {
+): {
+  travelTicks: number | null;
+  travelDays: number | null;
+  /** Money the quoted voyage will charge. Null when no voyage can start. */
+  passageCost: number | null;
+  /** The per-tick rate, which is public even when the commander cannot sail. */
+  passageCostPerTick: number;
+} {
+  const rate = PASSAGE_COST_PER_TICK;
   const canSail = commander.locationId !== null &&
     commander.locationId !== settlementId &&
     commander.travel === null &&
     commander.captivity === null;
-  if (!canSail) return { travelTicks: null, travelDays: null };
+  if (!canSail) return { travelTicks: null, travelDays: null, passageCost: null, passageCostPerTick: rate };
   const ticks = travelDuration(world, commander, settlementId);
-  return { travelTicks: ticks, travelDays: round(ticks / world.ticksPerDay, 2) };
+  return {
+    travelTicks: ticks,
+    travelDays: round(ticks / world.ticksPerDay, 2),
+    passageCost: passageCost(ticks),
+    passageCostPerTick: rate,
+  };
+}
+
+function settlementTaxRate(world: WorldState, factionId: string | null): number {
+  return factionId ? world.factions[factionId].taxRate : 0;
+}
+
+/**
+ * How fresh a price figure is.
+ *
+ * A live board is recomputed from stock every tick, so a number read now is
+ * good for this tick and expires on the next one. An estimate is a report:
+ * it has an age on `intelligence` and no expiry, because it was never a quote.
+ * `live` is false and `expiresTick` is null in that case — unknown freshness
+ * is not a one-tick promise.
+ */
+/**
+ * Per-good change a live board would make in one quiet tick.
+ *
+ * Published beside `prices`, not inside them. A remote estimate has no slope
+ * worth stating, and that absence is null rather than a drift of zero.
+ */
+function projectPriceDrift(
+  world: WorldState,
+  live: boolean,
+  settlementId: string,
+): Record<string, number> | null {
+  if (!live) return null;
+  return Object.fromEntries(
+    RESOURCE_KEYS.map((resource) => [resource, priceDriftPerTick(world, settlementId, resource)]),
+  );
+}
+
+function projectPriceQuote(
+  world: WorldState,
+  live: boolean,
+  knowledge: SettlementKnowledge | undefined,
+): { asOfTick: number; expiresTick: number | null; live: boolean } | null {
+  if (live) return { asOfTick: world.tick, expiresTick: world.tick + 1, live: true };
+  if (!knowledge) return null;
+  return { asOfTick: Math.max(0, knowledge.observedTick), expiresTick: null, live: false };
 }
 
 function projectCommandedBattle(world: WorldState, battle: ActiveBattle): Record<string, unknown> {
@@ -647,6 +703,15 @@ function projectMarket(world: WorldState, commander: Character, settlementId: st
     settlementId,
     /** Fraction of a sale the local faction takes. Zero with no faction. */
     taxRate,
+    /** Which side of the board pays `taxRate`. A purchase is not taxed. */
+    taxAppliesTo: "sell" as const,
+    /**
+     * The board was read this tick. Production and trade recompute every price
+     * on the next tick, so the figure expires then — `exact` knowledge of the
+     * island is not a promise that the price will still be there on arrival.
+     */
+    quotedTick: world.tick,
+    expiresTick: world.tick + 1,
     resources: Object.fromEntries(RESOURCE_KEYS.map((resource) => {
       const buy = tradeQuote(world, commander, resource, "buy", COMMAND_LIMITS.tradeQuantity.max);
       const sell = tradeQuote(world, commander, resource, "sell", COMMAND_LIMITS.tradeQuantity.max);
@@ -661,10 +726,13 @@ function projectMarket(world: WorldState, commander: Character, settlementId: st
         price: buy.unitPrice,
         stock: round(settlement.stocks[resource], 3),
         targetStock: settlement.targetStocks[resource],
-        /** Largest single buy the market, the hold and the purse allow. */
-        maxBuy: buy.maxQuantity,
-        /** Largest single sale the hold and the reserve allow. */
-        maxSell: sell.maxQuantity,
+        /**
+         * Largest whole-unit buy the market, the depth, the hold and the purse
+         * allow. Orders are whole units, so a depth of 14.4 is an order of 14.
+         */
+        maxBuy: Math.floor(buy.maxQuantity),
+        /** Largest whole-unit sale the hold, the reserve and the depth allow. */
+        maxSell: Math.floor(sell.maxQuantity),
       }];
     })),
   };
@@ -719,7 +787,22 @@ export function dashboardState(
         money: commander.money,
         /** Provisions held back from sale, so a voyage cannot strand its own crew. */
         provisionsReserve: round(commander.cargo.provisions - sellableProvisions(commander), 3),
+        /**
+         * What is actually in the hold, by good. The totals above do not say
+         * which good a sale would move, and a trader who reads only this block
+         * otherwise has to find the same figures on the character.
+         */
+        cargo: {
+          provisions: round(commander.cargo.provisions, 3),
+          arms: round(commander.cargo.arms, 3),
+          medicine: round(commander.cargo.medicine, 3),
+          shipMaterials: round(commander.cargo.shipMaterials, 3),
+        },
       },
+      /** Money charged per tick while the party is underway. Provisions are separate and burn either way. */
+      passageCostPerTick: PASSAGE_COST_PER_TICK,
+      /** What the current voyage will still charge, or null while at anchor. */
+      passageCostRemaining: commander.travel ? passageCost(commander.travel.remainingTicks) : null,
       /** Where provisions could be bought, and whether the voyage fits the runway. */
       resupply: resupplyPlan,
     },
@@ -810,12 +893,20 @@ export function dashboardState(
           // garrison is: standing in it is direct observation, and showing an
           // estimate beside a quote taken from the real board is worse than
           // either. Away from it, nothing here is present-tense.
-          stocks: coLocated ? { ...settlement.stocks } : knowledge?.stocksEstimate ?? Object.fromEntries(RESOURCE_KEYS.map((resource) => [resource, 0])),
+          stocks: coLocated ? { ...settlement.stocks } : knowledge?.stocksEstimate ?? null,
           targetStocks: coLocated ? { ...settlement.targetStocks } : null,
           garrison: coLocated ? settlement.garrison : knowledge?.garrisonEstimate ?? null,
           fortification: coLocated ? settlement.fortification : null,
           stability: coLocated ? settlement.stability : null,
-          prices: coLocated ? currentPrices(world, settlement.id) : knowledge?.priceEstimate ?? Object.fromEntries(RESOURCE_KEYS.map((resource) => [resource, 0])),
+          prices: coLocated ? currentPrices(world, settlement.id) : knowledge?.priceEstimate ?? null,
+          /**
+           * Public, including from offshore and including a rival's ports.
+           * A price is a rumor until you are standing in the market; the tax
+           * on a sale there is not.
+           */
+          taxRate: settlementTaxRate(world, settlement.factionId),
+          priceQuote: projectPriceQuote(world, coLocated, knowledge),
+          priceDrift: projectPriceDrift(world, coLocated, settlement.id),
           market,
           partyCount: null,
           // Present in the owned branch as well, so the settlement object has the
@@ -826,6 +917,8 @@ export function dashboardState(
           combatForecast: forecast,
           travelTicks: voyage.travelTicks,
           travelDays: voyage.travelDays,
+          passageCost: voyage.passageCost,
+          passageCostPerTick: voyage.passageCostPerTick,
           intelligence: (knowledge || coLocated) ? {
             exact: false,
             /** True when these figures are what the commander can see right now. */
@@ -843,6 +936,13 @@ export function dashboardState(
       return {
         ...settlement,
         prices: currentPrices(world, settlement.id),
+        taxRate: settlementTaxRate(world, settlement.factionId),
+        // Owned records stay the live board, even from another of the faction's
+        // ports. They expire next tick. `priceDrift` is how far that live
+        // number moves on its own, so a voyage can see the slope instead of
+        // treating one tick of truth as a fare.
+        priceQuote: projectPriceQuote(world, true, knowledge),
+        priceDrift: projectPriceDrift(world, true, settlement.id),
         market,
         partyCount: Object.values(world.characters).filter((character) => character.locationId === settlement.id).length,
         battleInProgress: battleVisible,
@@ -850,6 +950,8 @@ export function dashboardState(
         combatForecast: forecast,
         travelTicks: voyage.travelTicks,
         travelDays: voyage.travelDays,
+        passageCost: voyage.passageCost,
+        passageCostPerTick: voyage.passageCostPerTick,
         intelligence: { exact: true, present: commander.locationId === settlement.id, source: "owned", confidence: 1, observedTick: world.tick, ageTicks: 0 },
       };
     }),

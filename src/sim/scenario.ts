@@ -300,7 +300,10 @@ export function createPrototypeWorld(seed = 1847, options: PrototypeWorldOptions
       population: 18_000,
       focus: "arms",
       production: resources(5.5, 6.5, 2.2, 3.4),
-      stocks: resources(220, 155, 82, 105),
+      // Medicine starts scarce: Glassport's focus, and Crown uses more of it
+      // than it makes. The opening price has to already say so, or the first
+      // voyage home is sailing into a glut that has not happened yet.
+      stocks: resources(220, 155, 30, 105),
       garrison: 260,
       fortification: 1.35,
       stability: 91,
@@ -339,7 +342,10 @@ export function createPrototypeWorld(seed = 1847, options: PrototypeWorldOptions
       population: 10_500,
       focus: "medicine",
       production: resources(4.1, 2.5, 7.7, 3.2),
-      stocks: resources(145, 76, 215, 91),
+      // Arms start scarce: Crown Harbor's focus, and Glassport uses more of
+      // them than it makes. Paired with Crown's medicine shortage, the same
+      // two ports pay in both directions.
+      stocks: resources(145, 36, 215, 91),
       garrison: 155,
       fortification: 1.22,
       stability: 86,

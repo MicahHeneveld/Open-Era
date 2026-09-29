@@ -129,6 +129,13 @@ test("every resource can be bought and sold, not only provisions", () => {  cons
 test("a purchase larger than the hold is refused and names the free capacity", () => {
   const { world, commander } = worldAt();
   commander.money = 10_000;
+  // Depth is tighter than a nearly empty hold, so the hold has to be the
+  // smallest ceiling or the refusal would correctly name the market instead.
+  const capacity = cargoCapacity(commander);
+  commander.cargo.provisions = capacity - 4;
+  commander.cargo.arms = 0;
+  commander.cargo.medicine = 0;
+  commander.cargo.shipMaterials = 0;
   const free = cargoCapacity(commander) - cargoLoad(commander);
   const tooMuch = Math.min(COMMAND_LIMIT_MAX, Math.floor(free) + 5);
   assert.ok(tooMuch > free, "the request must exceed the free hold for this to be a hold refusal");
@@ -274,7 +281,7 @@ test("the market block describes the market, not the commander standing in it", 
   // Nothing the commander owns may appear inside the market block.
   assert.deepEqual(
     Object.keys(here.market).sort(),
-    ["resources", "settlementId", "taxRate"],
+    ["expiresTick", "quotedTick", "resources", "settlementId", "taxAppliesTo", "taxRate"],
     "the market block must carry market facts only",
   );
   for (const ownerField of ["money", "load", "free", "capacity", "provisionsReserve"]) {
@@ -283,7 +290,22 @@ test("the market block describes the market, not the commander standing in it", 
 
   // The same figures live on the commander's own party, where they belong.
   const hold = state.party.hold;
+  assert.equal(here.market.taxAppliesTo, "sell", "a purchase is not taxed, and the quote has to say so");
+  for (const resource of RESOURCE_KEYS) {
+    const row = here.market.resources[resource];
+    assert.equal(Number.isInteger(row.maxBuy), true, `${resource} maxBuy must be a whole order`);
+    assert.equal(Number.isInteger(row.maxSell), true, `${resource} maxSell must be a whole order`);
+    assert.equal(row.maxBuy, Math.floor(tradeQuote(world, commander, resource, "buy", 10_000).maxQuantity));
+    assert.equal(row.maxSell, Math.floor(tradeQuote(world, commander, resource, "sell", 10_000).maxQuantity));
+  }
+
   assert.equal(hold.money, commander.money);
+  assert.deepEqual(hold.cargo, {
+    provisions: round3(commander.cargo.provisions),
+    arms: round3(commander.cargo.arms),
+    medicine: round3(commander.cargo.medicine),
+    shipMaterials: round3(commander.cargo.shipMaterials),
+  }, "the hold must itemize every good, not only the total load");
   assert.equal(hold.load, round3(cargoLoad(commander)), "the hold load must match the commander's actual cargo");
   assert.equal(hold.capacity, cargoCapacity(commander));
   assert.equal(hold.free, round3(cargoCapacity(commander) - cargoLoad(commander)));
@@ -336,14 +358,17 @@ test("a voyage is solvent: a hold bought cheap and sold dear grows the purse", (
 
   sail(best!.from);
   const price = marketPrice(world, best!.from, best!.resource);
-  const free = cargoCapacity(commander) - cargoLoad(commander);
-  const quantity = Math.min(Math.floor(free), Math.floor(commander.money / price), COMMAND_LIMIT_MAX);
+  const buyQuote = tradeQuote(world, commander, best!.resource, "buy", COMMAND_LIMIT_MAX);
+  const quantity = Math.floor(buyQuote.maxQuantity);
   assert.ok(quantity >= 1, "the commander must be able to afford a hold");
   assert.equal(trade(world, "buy-resource", best!.resource, quantity).ok, true);
   runTick(world);
 
   const ticks = sail(best!.to);
-  assert.equal(trade(world, "sell-resource", best!.resource, Math.floor(commander.cargo[best!.resource])).ok, true);
+  const sellQuote = tradeQuote(world, commander, best!.resource, "sell", COMMAND_LIMIT_MAX);
+  const selling = Math.floor(sellQuote.maxQuantity);
+  assert.ok(selling >= 1, "the destination must be able to clear some of the cargo");
+  assert.equal(trade(world, "sell-resource", best!.resource, selling).ok, true);
   runTick(world);
 
   const net = Number((commander.money - startMoney).toFixed(2));

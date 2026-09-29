@@ -172,6 +172,17 @@ These items need a joint decision with the economy-pacing work:
 - **Rumor and fact share one JSON shape.** Splitting estimates from quotes is projection-only but breaks the dashboard contract. It should be designed once, with the trade panel.
 - **Hash sequencing.** Pacing will move the golden hashes and this slice should not. Merge order decides who regenerates the fixture.
 
+## Recorded with M17
+
+The pacing milestone took the joint items above. The rest of this brief stays a proposal.
+
+- Own-faction remote prices stay a live feed. Each live board also publishes `priceDrift`, the change one quiet tick of production and local use would make. They were not turned into an aged faction report.
+- Remote `taxRate` is published, and the Crown Harbor ↔ Glassport route that beats `work` is scored after that 14% tax.
+- Prices decay on an 18-tick horizon. Garrison beliefs stay on 72. `believedPrice` uses the price horizon, so the golden hashes moved again inside M17.
+- Passage cost and the shared market-depth limit are in M17, ahead of any survey-cost tuning.
+- Price JSON is still one figure plus `priceQuote`. Rumor and quote are not split.
+- A settlement with no report projects `stocks` and `prices` as null.
+
 ## Open questions for the owner
 
 1. Should ground be recorded on every direct observation instead of requiring `survey`? It is simpler, but it moves the golden hashes.

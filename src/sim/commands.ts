@@ -1,5 +1,5 @@
 import { applyEvent, clamp, round, settlementClaimAvailableTo } from "./state.ts";
-import { tradeQuote } from "./engine.ts";
+import { MARKET_DEPTH_FRACTION, tradeQuote } from "./engine.ts";
 import type {
   OrderDirective,
   PlayerAction,
@@ -116,6 +116,7 @@ export const ACTION_CAPABILITIES: readonly ActionCapability[] = [
       `resource is one of ${RESOURCE_KEYS.join(", ")}`,
       `quantity is between ${COMMAND_LIMITS.tradeQuantity.min} and ${COMMAND_LIMITS.tradeQuantity.max}`,
       "the market holds that much stock",
+      `the quantity does not exceed ${Math.round(MARKET_DEPTH_FRACTION * 100)}% of the market's target stock`,
       "the character holds enough money at the quoted price",
       "the hold has that much free capacity",
     ],
@@ -128,6 +129,7 @@ export const ACTION_CAPABILITIES: readonly ActionCapability[] = [
       `quantity is between ${COMMAND_LIMITS.tradeQuantity.min} and ${COMMAND_LIMITS.tradeQuantity.max}`,
       "the hold carries that much of the resource",
       "provisions below the party reserve are not sellable",
+      `the quantity does not exceed ${Math.round(MARKET_DEPTH_FRACTION * 100)}% of the market's target stock`,
     ],
   },
   { action: "work", target: "none", requires: [] },
@@ -388,6 +390,13 @@ function validateCharacterAction(
     // the price paid cannot disagree about what the trade would have cost.
     const quote = tradeQuote(world, character, resource, direction, quantity);
     if (quote.quantity < quantity) {
+      if (quote.limitedBy === "depth") {
+        const whole = Math.floor(quote.maxQuantity);
+        return reject(
+          "market-depth",
+          `${settlement.name} will clear ${quote.maxQuantity} of ${resource} in one order, so the largest whole order is ${whole}; ${quantity} was requested`,
+        );
+      }
       if (direction === "sell" && quote.limitedBy === "reserve") {
         return reject("party-reserve", `Only ${quote.maxQuantity} of ${resource} may be sold; the rest is the party's own reserve`);
       }
