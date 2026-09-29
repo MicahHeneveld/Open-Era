@@ -7,6 +7,8 @@ These documents capture the decisions made during the initial design conversatio
 - [Autonomous characters](autonomous-characters.md) — decision architecture, knowledge, memory, relationships, communication, and the bounded role of language models
 - [UI and art direction](ui-art-direction.md) — map structure, information hierarchy, character treatment, screen inventory, and mockup status
 - [Reconnaissance](reconnaissance.md) — Open / investigation, except the survey slice, which M18 built and M18.1 made readable: earned, dated knowledge of rival strength, with provenance
+- [Raid floor](raid-floor.md) — Open / proposal: the slope-10 surrender slide, accepted as M19, so a battered port can change hands once
+- [Garrison recovery](garrison-recovery.md) — Open / proposal: peacetime regrowth so a claimed port can be raided again
 - [Generated mockups](../assets/mockups/README.md) — all 13 image concepts produced during the conversation
 - [Development and playtest pipeline](../development-pipeline.md) — branch roles, automated gates, adaptive player protocol, and promotion rules
 - [Roadmap](../roadmap.md) — documented systems that are not built, and whether their deferral is recorded anywhere
