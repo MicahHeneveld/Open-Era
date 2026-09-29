@@ -2365,6 +2365,71 @@ function expireStandingOrders(world: WorldState, events: SimEvent[]): void {
   }
 }
 
+/**
+ * Close a completion report the issuer has not signed.
+ *
+ * Runs after `expireStandingOrders`, which is after `processPlayerCommands`,
+ * so a confirm or a cancel queued for this tick still wins. No new RNG draw.
+ *
+ * A free autonomous issuer signs on the next tick. Anyone who cannot submit
+ * — an idle human, a captive issuer, a missing issuer — waits one day.
+ * A pressure order does not write the relationship: the victory that filed
+ * the report already did.
+ */
+function confirmUnansweredOrders(world: WorldState, events: SimEvent[]): void {
+  for (const holder of Object.values(world.characters).sort((left, right) => left.id.localeCompare(right.id))) {
+    for (const order of holder.standingOrders) {
+      if (order.status !== "awaiting-confirmation") continue;
+      const waited = world.tick - order.statusChangedTick;
+      if (waited < 1) continue;
+      const issuer = world.characters[order.issuerId];
+      const judges = issuer !== undefined && issuer.controller.kind === "autonomous" && issuer.captivity === null;
+      if (!judges && waited < world.ticksPerDay) continue;
+      const issuerName = issuer?.name ?? order.issuerId;
+      const reason = judges ? "issuer-judgment" : "issuer-silent";
+      const summary = judges
+        ? `${issuerName} confirmed ${holder.name}'s completion report.`
+        : `${issuerName} did not answer ${holder.name}'s completion report within a day, and the order closed.`;
+      emit(world, events, {
+        type: "standing-order-completed",
+        actorId: order.issuerId,
+        targetId: holder.id,
+        data: { orderId: order.id, reason, summary },
+      });
+      if (order.directive === "pressure") continue;
+      const prior = holder.relationships[order.issuerId] ?? {
+        characterId: order.issuerId,
+        trust: 0.28,
+        affinity: 0.25,
+        respect: 0.28,
+        fear: 0.08,
+        grievance: 0,
+        obligation: 0,
+        lastChangedTick: world.tick,
+      };
+      const relationship = {
+        ...prior,
+        trust: round(clamp(prior.trust + 0.012, 0, 1)),
+        respect: round(clamp(prior.respect + 0.028, 0, 1)),
+        fear: round(clamp(prior.fear - 0.005, 0, 1)),
+        grievance: round(clamp(prior.grievance - 0.006, 0, 1)),
+        obligation: round(clamp(prior.obligation - 0.01, 0, 1)),
+        lastChangedTick: world.tick,
+      };
+      emit(world, events, {
+        type: "relationship-changed",
+        actorId: holder.id,
+        targetId: order.issuerId,
+        data: {
+          characterId: order.issuerId,
+          trigger: "order confirmed",
+          relationship,
+        },
+      });
+    }
+  }
+}
+
 function recordOrderAssessment(
   world: WorldState,
   character: Character,
@@ -2780,6 +2845,7 @@ export function runTick(world: WorldState): TickResult {
   progressTroopRecoveries(world, events);
   const battleParticipants = progressActiveBattles(world, events, rng);
   expireStandingOrders(world, events);
+  confirmUnansweredOrders(world, events);
 
   for (const character of Object.values(world.characters).sort((a, b) => a.id.localeCompare(b.id))) {
     const inActiveBattle = Object.values(world.activeBattles).some((battle) => battle.attackerId === character.id);

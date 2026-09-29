@@ -47,16 +47,21 @@ export interface ContractAssessment {
   gate: "travel" | "purse" | "score" | null;
   /** Player-readable sentence when a hard gate refuses. Null when the score is the decision. */
   reason: string | null;
-  score: number;
+  /**
+   * Null when the carrier is already at sea. That refusal happens before any
+   * score, so a zero would be a placeholder, not a judgment.
+   */
+  score: number | null;
   threshold: number;
   factors: ContractFactors;
   travelTicks: number;
   ticksLeft: number;
   /**
    * Quantity times the provisions price where the carrier is standing.
-   * Zero only when they are not standing anywhere, and that path never scores.
+   * Null when they are not standing anywhere. That path never scores.
+   * A docked voyage that does not fit the deadline still has this price.
    */
-  costBasis: number;
+  costBasis: number | null;
 }
 
 /** Said on the refusal the player reads. A carrier underway has no market under them. */
@@ -118,12 +123,12 @@ export function assessSupplyContract(
       accepted: false,
       gate: "travel",
       reason: AT_SEA_REASON,
-      score: 0,
+      score: null,
       threshold,
       factors: UNSCORED_FACTORS,
       travelTicks: carrier.travel?.remainingTicks ?? 1,
       ticksLeft,
-      costBasis: 0,
+      costBasis: null,
     };
   }
 
