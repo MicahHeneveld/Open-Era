@@ -184,30 +184,242 @@ export function ransomPaidSentence(world: WorldState, event: SimEvent, chronicle
   return `${payerText} paid ${paid} ransom: ${credit.leaderShare} to ${leaderText}`;
 }
 
-export function captivityReleasedSentence(world: WorldState, event: SimEvent): string {
+/**
+ * The release, in short sentences.
+ *
+ * The feed may join them into one summary. `details` keeps each part. Every
+ * fact from the old single sentence stays: place, paid, debt, the loyalty
+ * line when debt is above 0, the ransom split, and the seat when she holds it.
+ * The ransom sentence names only the ransom.
+ */
+export function captivityReleasedParts(world: WorldState, event: SimEvent, chronicle = false): string[] {
   const actor = characterName(world, event.actorId, "Someone");
   const settlement = settlementName(world, event.settlementId, "captivity");
-  const terms = event.data.terms as { moneyPaid: number; debtValue: number };
-  let sentence = `${actor} was released from ${settlement}: ${terms.moneyPaid} paid and ${terms.debtValue} recorded as debt`;
-  if (typeof terms.debtValue === "number" && terms.debtValue > 0) sentence += ". Loyalty fell";
-  const paid = ransomPaidSentence(world, event, false);
-  if (paid) sentence += `. ${paid}`;
+  const actorText = chronicle ? `**${actor}**` : actor;
+  const settlementText = chronicle ? `**${settlement}**` : settlement;
+  const terms = event.data.terms as { moneyPaid?: number; debtValue?: number } | undefined;
+  const parts: string[] = [
+    chronicle
+      ? `${actorText} was released from ${settlementText} under mandatory terms.`
+      : `${actorText} was released from ${settlementText}.`,
+  ];
+  if (typeof terms?.moneyPaid === "number" && typeof terms.debtValue === "number") {
+    parts.push(`${terms.moneyPaid} was paid and ${terms.debtValue} was recorded as debt.`);
+  }
+  if (typeof terms?.debtValue === "number" && terms.debtValue > 0) parts.push("Loyalty fell.");
+  const paid = ransomPaidSentence(world, event, chronicle);
+  if (paid) {
+    parts.push(`${paid}.`);
+    parts.push("The ransom line covers only the ransom.");
+  }
   const seat = seatReturn(world, event.actorId);
-  if (seat) sentence += `. ${seatReturnSentence(seat)}`;
-  return sentence;
+  if (seat) {
+    parts.push(chronicle
+      ? `**${seat.name}** holds the seat of **${seat.faction}** again.`
+      : `${seatReturnSentence(seat)}.`);
+  }
+  return parts;
+}
+
+export function captivityReleasedSentence(world: WorldState, event: SimEvent): string {
+  return captivityReleasedParts(world, event, false).join(" ");
 }
 
 export function captivityReleasedChronicle(world: WorldState, event: SimEvent): string {
+  return captivityReleasedParts(world, event, true).join(" ");
+}
+
+/**
+ * Debt the release line already states, on the released character's card.
+ *
+ * The amount and the place are the same facts as that line. The stored debt
+ * row stays on the debtor's own card only.
+ */
+export function releaseDebtNote(world: WorldState, characterId: string, events: SimEvent[] | undefined): string | null {
+  if (!events) return null;
+  const notes: string[] = [];
+  for (const event of events) {
+    if (event.type !== "captivity-released" || event.actorId !== characterId) continue;
+    const debt = (event.data.terms as { debtValue?: number } | undefined)?.debtValue;
+    if (typeof debt !== "number" || debt <= 0) continue;
+    const place = settlementName(world, event.settlementId, "the port");
+    notes.push(`Owes ${debt} from the release at ${place}.`);
+  }
+  return notes.length > 0 ? notes.join(" ") : null;
+}
+
+/**
+ * The latest ransom credit the release line already names for this leader.
+ *
+ * It does not print the purse. A share of 0 is not income.
+ */
+export function ransomIncomeNote(world: WorldState, characterId: string, events: SimEvent[] | undefined): string | null {
+  if (!events) return null;
+  let latest: SimEvent | null = null;
+  let share = 0;
+  for (const event of events) {
+    if (event.type !== "captivity-released") continue;
+    const credit = ransomCredit(event);
+    if (!credit || credit.leaderId !== characterId || credit.leaderShare <= 0) continue;
+    if (latest && event.sequence < latest.sequence) continue;
+    latest = event;
+    share = credit.leaderShare;
+  }
+  if (!latest) return null;
+  const payer = characterName(world, latest.actorId, "Someone");
+  const place = settlementName(world, latest.settlementId, "the port");
+  return `Received ${share} from ${payer}'s ransom at ${place}.`;
+}
+
+/**
+ * A withheld feed row, using only the names already on the row.
+ *
+ * Actor, target, and settlement ids are copied even when `data` is null.
+ * Amounts, motives, and cargo stay off this sentence.
+ */
+export function publicFeedSentence(world: WorldState, event: SimEvent): string {
+  const actor = event.actorId ? characterName(world, event.actorId, event.actorId) : "The world";
+  const settlement = event.settlementId ? settlementName(world, event.settlementId, event.settlementId) : null;
+  const target = event.targetId
+    ? world.characters[event.targetId]?.name ?? world.settlements[event.targetId]?.name ?? world.factions[event.targetId]?.name ?? null
+    : null;
+  const at = settlement ? ` at ${settlement}` : "";
+  switch (event.type) {
+    case "standing-order-refused":
+      return `${actor} refused an order.`;
+    case "standing-order-accepted":
+      return `${actor} accepted an order.`;
+    case "standing-order-deviated":
+      return `${actor} left an order.`;
+    case "standing-order-resumed":
+      return `${actor} resumed an order.`;
+    case "standing-order-completed":
+      return `${actor} completed an order.`;
+    case "standing-order-expired":
+      return `${actor}'s order expired.`;
+    case "standing-order-issued":
+      return `${actor} issued an order.`;
+    case "standing-order-amended":
+      return `${actor} amended an order.`;
+    case "standing-order-cancelled":
+      return `${actor} cancelled an order.`;
+    case "standing-order-completion-reported":
+      return `${actor} reported an order complete.`;
+    case "travel-progressed":
+      return target ? `${actor} continued toward ${target}.` : `${actor} continued the voyage.`;
+    case "travel-started":
+      return target ? `${actor} departed for ${target}.` : `${actor} departed.`;
+    case "arrived":
+      return settlement ? `${actor} arrived at ${settlement}.` : `${actor} arrived.`;
+    case "settlement-upkeep":
+      return `${settlement ?? "A port"} kept its stores.`;
+    case "settlement-produced":
+      return `${settlement ?? "A port"} produced goods.`;
+    case "settlement-shortage":
+      return `${settlement ?? "A port"} is short of provisions.`;
+    case "worked":
+      return `${actor} worked${at}.`;
+    case "market-trade":
+      return `${actor} traded${at}.`;
+    case "recruited":
+      return `${actor} recruited${at}.`;
+    case "rested":
+      return `${actor} rested${at}.`;
+    case "character-upkeep":
+      return `${actor}'s upkeep was recorded.`;
+    case "decision-made":
+      return `${actor} made a decision.`;
+    case "plan-reconsidered":
+      return `${actor} reconsidered a plan.`;
+    case "goal-progressed":
+      return `${actor}'s ambition moved.`;
+    case "goal-evolved":
+      return `${actor}'s ambitions changed.`;
+    case "knowledge-updated":
+      return `${actor} updated what they know.`;
+    case "relationship-changed":
+      return `${actor}'s relationship changed.`;
+    case "battle-started":
+      return `${actor} started a battle${at}.`;
+    case "battle-phase-resolved":
+      return `${actor} finished a battle phase${at}.`;
+    case "battle-retreated":
+      return `${actor} retreated${at}.`;
+    case "battle-resolved":
+      return `${actor} finished a battle${at}.`;
+    case "post-defeat-withdrawal-started":
+      return `${actor} withdrew after a defeat${at}.`;
+    case "character-captured":
+      return `${actor} was taken${at}.`;
+    case "captivity-released":
+      return `${actor} was released${at}.`;
+    case "captivity-escaped":
+      return `${actor} escaped captivity${at}.`;
+    case "scattered-troops-returned":
+      return `Scattered troops returned to ${actor}.`;
+    case "settlement-claimed":
+      return settlement ? `${actor} claimed ${settlement}.` : `${actor} claimed a port.`;
+    case "settlement-surrender-declined":
+      return `${actor} declined a surrender${at}.`;
+    case "player-command-accepted":
+      return `A command was queued for ${actor}.`;
+    case "player-command-resolved":
+      return `${actor}'s command was resolved.`;
+    case "player-command-failed":
+      return `${actor}'s command failed.`;
+    case "player-action-executed":
+      return `${actor} carried out an action.`;
+    case "metrics-recorded":
+      return "The world recorded its figures.";
+    case "tick-advanced":
+      return "The day moved on.";
+    case "conversation-thread-created":
+      return `${actor} opened a conversation.`;
+    case "conversation-message-sent":
+      return `${actor} sent a message.`;
+    case "conversation-reply-scheduled":
+      return `${actor} will reply later.`;
+    case "conversation-reply-created":
+      return `${actor} replied.`;
+    case "briefing-item-acknowledged":
+      return `${actor} acknowledged a briefing item.`;
+    case "reporting-officer-assigned":
+      return "A reporting officer was assigned.";
+    case "contract-offered":
+      return `${actor} offered a contract.`;
+    case "contract-amended":
+      return `${actor} amended a contract.`;
+    case "contract-accepted":
+      return `${actor} accepted a contract.`;
+    case "contract-refused":
+      return `${actor} refused a contract.`;
+    case "contract-fulfilled":
+      return `${actor} fulfilled a contract.`;
+    case "contract-breached":
+      return `${actor} missed a contract.`;
+    case "contract-cancelled":
+      return `${actor} cancelled a contract.`;
+    default:
+      return `${actor} had a ${event.type.replaceAll("-", " ")} recorded.`;
+  }
+}
+
+/**
+ * Work or a sale at a port the reader already administers.
+ *
+ * The tax is the part that is not the ransom. Gross, the purse, and morale
+ * stay out. Null when this row has no tax, or the port is not theirs.
+ */
+export function ownedPortTaxSentence(world: WorldState, readerFactionId: string | null, event: SimEvent): string | null {
+  if (event.type !== "worked" && event.type !== "market-trade") return null;
+  const tax = event.data.tax;
+  if (typeof tax !== "number" || tax <= 0) return null;
+  if (!readerFactionId || !event.settlementId) return null;
+  if (world.settlements[event.settlementId]?.factionId !== readerFactionId) return null;
   const actor = characterName(world, event.actorId, "Someone");
-  const settlement = settlementName(world, event.settlementId, "captivity");
-  const terms = event.data.terms as { moneyPaid: number; debtValue: number };
-  let sentence = `**${actor}** was released from **${settlement}** under mandatory terms: ${terms.moneyPaid} paid and ${terms.debtValue} recorded as debt.`;
-  if (typeof terms.debtValue === "number" && terms.debtValue > 0) sentence += " Loyalty fell.";
-  const paid = ransomPaidSentence(world, event, true);
-  if (paid) sentence += ` ${paid}.`;
-  const seat = seatReturn(world, event.actorId);
-  if (seat) sentence += ` **${seat.name}** holds the seat of **${seat.faction}** again.`;
-  return sentence;
+  const place = settlementName(world, event.settlementId, "the port");
+  const verb = event.type === "worked" ? "worked" : "traded";
+  return `${actor} ${verb} at ${place}. Tax of ${tax} went to the treasury.`;
 }
 
 export function captivityEscapedSentence(world: WorldState, event: SimEvent): string {
@@ -246,7 +458,7 @@ export function seatSummaryFor(world: WorldState, faction: Faction): string | nu
  * not copied into this sentence.
  */
 export function loyaltyNoteFor(_character: Character, displayedLoyalty: number): string {
-  return `The seat reads ${displayedLoyalty}. personality.loyalty is the seed and is not the figure the seat reads.`;
+  return `The seat reads ${displayedLoyalty}. That rounded figure is the one the seat uses.`;
 }
 
 /**
@@ -272,15 +484,15 @@ export function eventBriefingTitle(type: string): string {
     case "standing-order-refused":
       return "An order was refused";
     case "standing-order-deviated":
-      return "An order deviated";
+      return "An order was not followed.";
     case "standing-order-resumed":
-      return "An order resumed";
+      return "An order was resumed.";
     case "standing-order-completed":
       return "An order was completed";
     case "standing-order-expired":
-      return "An order expired";
+      return "An order has expired.";
     case "scattered-troops-returned":
-      return "Scattered troops returned";
+      return "Scattered troops came back.";
     case "settlement-shortage":
       return "A port is short of provisions";
     case "settlement-claimed":

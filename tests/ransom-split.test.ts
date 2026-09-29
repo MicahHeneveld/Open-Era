@@ -92,7 +92,7 @@ test("a faction ransom splits in cents and the odd cent goes to the treasury", (
   assert.equal(snapshot.characters["character-04"].money, 0);
   assert.equal(
     captivityReleasedSentence(world, release),
-    "Sable Morrow was released from Crown Harbor: 58.13 paid and 315.38 recorded as debt. Loyalty fell. Sable Morrow paid 58.13 ransom: 29.07 to the World Government treasury and 29.06 to Mara Vane",
+    "Sable Morrow was released from Crown Harbor. 58.13 was paid and 315.38 was recorded as debt. Loyalty fell. Sable Morrow paid 58.13 ransom: 29.07 to the World Government treasury and 29.06 to Mara Vane. The ransom line covers only the ransom.",
   );
 });
 
@@ -111,7 +111,7 @@ test("a ransom of one cent pays the treasury and nothing to the leader", () => {
   assert.equal(snapshot.characters["character-01"].money, 108);
   assert.equal(
     captivityReleasedSentence(world, release),
-    "Sable Morrow was released from Crown Harbor: 0.01 paid and 373.5 recorded as debt. Loyalty fell. Sable Morrow paid 0.01 ransom: 0.01 to the World Government treasury and 0 to Mara Vane",
+    "Sable Morrow was released from Crown Harbor. 0.01 was paid and 373.5 was recorded as debt. Loyalty fell. Sable Morrow paid 0.01 ransom: 0.01 to the World Government treasury and 0 to Mara Vane. The ransom line covers only the ransom.",
   );
 });
 
@@ -131,7 +131,7 @@ test("a ransom of zero pays nothing and leaves both balances", () => {
   assert.equal(snapshot.characters["character-04"].money, 0);
   assert.equal(
     captivityReleasedSentence(world, release),
-    "Sable Morrow was released from Crown Harbor: 0 paid and 373.51 recorded as debt. Loyalty fell. Sable Morrow paid 0 ransom: 0 to the World Government treasury and 0 to Mara Vane",
+    "Sable Morrow was released from Crown Harbor. 0 was paid and 373.51 was recorded as debt. Loyalty fell. Sable Morrow paid 0 ransom: 0 to the World Government treasury and 0 to Mara Vane. The ransom line covers only the ransom.",
   );
 });
 
@@ -177,7 +177,7 @@ test("a captor with no faction pays the whole ransom to the party leader", () =>
   assert.equal(snapshot.factions["free-tide"].treasury, treasuryBefore["free-tide"]);
   assert.equal(
     captivityReleasedSentence(world, release),
-    "Sable Morrow was released from Verdant Cay: 40.01 paid and 333.5 recorded as debt. Loyalty fell. Sable Morrow paid 40.01 ransom: 40.01 to Niko Crow",
+    "Sable Morrow was released from Verdant Cay. 40.01 was paid and 333.5 was recorded as debt. Loyalty fell. Sable Morrow paid 40.01 ransom: 40.01 to Niko Crow. The ransom line covers only the ransom.",
   );
 });
 
@@ -225,8 +225,8 @@ test("Sable Morrow's release is visible to the prisoner and the captor", () => {
   assert.equal(round(ransom.treasuryShare + ransom.leaderShare, 2), 13.4);
   assert.equal(ransom.factionTreasury, round(tideBefore + 6.7, 2));
   assert.equal(ransom.leaderMoney, round(paxBefore + 6.7, 2));
-  const line = "Sable Morrow was released from Cinder Key: 13.4 paid and 103.21 recorded as debt. Loyalty fell. Sable Morrow paid 13.4 ransom: 6.7 to the Free Tide Compact treasury and 6.7 to Pax Ash";
-  const chronicle = "**Sable Morrow** was released from **Cinder Key** under mandatory terms: 13.4 paid and 103.21 recorded as debt. Loyalty fell. **Sable Morrow** paid 13.4 ransom: 6.7 to the **Free Tide Compact** treasury and 6.7 to **Pax Ash**.";
+  const line = "Sable Morrow was released from Cinder Key. 13.4 was paid and 103.21 was recorded as debt. Loyalty fell. Sable Morrow paid 13.4 ransom: 6.7 to the Free Tide Compact treasury and 6.7 to Pax Ash. The ransom line covers only the ransom.";
+  const chronicle = "**Sable Morrow** was released from **Cinder Key** under mandatory terms. 13.4 was paid and 103.21 was recorded as debt. Loyalty fell. **Sable Morrow** paid 13.4 ransom: 6.7 to the **Free Tide Compact** treasury and 6.7 to **Pax Ash**. The ransom line covers only the ransom.";
   assert.equal(captivityReleasedSentence(world, release), line);
   assert.equal(captivityReleasedChronicle(world, release), chronicle);
   for (const readerId of ["character-04", "character-14", "character-01"]) {
@@ -272,7 +272,7 @@ test("Dax Pike at state tick 276 is not released, and his tick 901 ransom is exa
   assert.equal(view.party.locationId, "crown-harbor");
   assert.equal(view.factions.find((faction) => faction.id === "world-government")?.treasury, 27132.81);
   assert.equal(view.factions.find((faction) => faction.id === "free-tide")?.treasury, null);
-  const sableLine = "Sable Morrow was released from Cinder Key: 13.4 paid and 103.21 recorded as debt. Loyalty fell. Sable Morrow paid 13.4 ransom: 6.7 to the Free Tide Compact treasury and 6.7 to Pax Ash";
+  const sableLine = "Sable Morrow was released from Cinder Key. 13.4 was paid and 103.21 was recorded as debt. Loyalty fell. Sable Morrow paid 13.4 ransom: 6.7 to the Free Tide Compact treasury and 6.7 to Pax Ash. The ransom line covers only the ransom.";
   const feedRelease = view.events.filter((event) => event.type === "captivity-released");
   assert.deepEqual(feedRelease.map((event) => event.sequence), [13680]);
   assert.equal(feedRelease[0]?.summary, sableLine);
@@ -317,11 +317,11 @@ test("Dax Pike at state tick 276 is not released, and his tick 901 ransom is exa
   assert.equal(world.characters["character-01"].money, 504.36);
   assert.equal(world.characters["character-20"].money, 0);
   assert.equal(world.characters["character-20"].debts[0]?.remainingValue, 380.67);
-  const line = "Dax Pike was released from Glassport: 62.69 paid and 380.67 recorded as debt. Loyalty fell. Dax Pike paid 62.69 ransom: 31.35 to the World Government treasury and 31.34 to Mara Vane";
+  const line = "Dax Pike was released from Glassport. 62.69 was paid and 380.67 was recorded as debt. Loyalty fell. Dax Pike paid 62.69 ransom: 31.35 to the World Government treasury and 31.34 to Mara Vane. The ransom line covers only the ransom.";
   assert.equal(captivityReleasedSentence(world, release), line);
   assert.equal(
     captivityReleasedChronicle(world, release),
-    "**Dax Pike** was released from **Glassport** under mandatory terms: 62.69 paid and 380.67 recorded as debt. Loyalty fell. **Dax Pike** paid 62.69 ransom: 31.35 to the **World Government** treasury and 31.34 to **Mara Vane**.",
+    "**Dax Pike** was released from **Glassport** under mandatory terms. 62.69 was paid and 380.67 was recorded as debt. Loyalty fell. **Dax Pike** paid 62.69 ransom: 31.35 to the **World Government** treasury and 31.34 to **Mara Vane**. The ransom line covers only the ransom.",
   );
   const [maraRow] = projectEventFeed(world, "character-01", [release]);
   const [daxRow] = projectEventFeed(world, "character-20", [release]);

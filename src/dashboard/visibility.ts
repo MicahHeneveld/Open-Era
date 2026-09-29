@@ -1,7 +1,7 @@
 import { assessStandingOrder, garrisonConfidenceLabel } from "../sim/agency.ts";
 import { commandHolderId, factionPower, partyPower, partyPowerFromTroops, round } from "../sim/state.ts";
 import type { Character, PartySighting, ReleaseSighting, SimEvent, StandingOrder, SupplyContract, TravelState, WorldState } from "../sim/types.ts";
-import { causeLabelFor, learnedInPortNote, loyaltyNoteFor, seatSummaryFor, skillsWithheldNote, summaryStaysWhenWithheld } from "./wording.ts";
+import { causeLabelFor, captivityReleasedParts, learnedInPortNote, loyaltyNoteFor, ownedPortTaxSentence, publicFeedSentence, releaseDebtNote, ransomIncomeNote, seatSummaryFor, skillsWithheldNote, summaryStaysWhenWithheld } from "./wording.ts";
 
 /**
  * Decides what a player may legitimately know about the rest of the world.
@@ -539,7 +539,7 @@ function heldTroopsNote(
 ): string {
   const captorId = character.captivity?.captorFactionId;
   const captor = captorId ? world.factions[captorId]?.name ?? captorId : "the captor";
-  return `${live} with ${character.name}; ${intel.troops} held by ${captor}.`;
+  return `${live} with ${character.name}; ${intel.troops} held by ${captor}. The experience and discipline are the troops now held by ${captor}.`;
 }
 
 function projectReleaseSighting(
@@ -629,10 +629,19 @@ function projectOneContract(
   };
 }
 
+function projectTroopFigures(troops: { count: number; experience: number; discipline: number }) {
+  return {
+    count: troops.count,
+    experience: round(troops.experience, 3),
+    discipline: round(troops.discipline, 3),
+  };
+}
+
 export function projectCharacter(
   world: WorldState,
   commander: Character,
   character: Character,
+  events?: SimEvent[],
 ): Record<string, unknown> {
   const intelligence = characterIntelligence(world, commander, character);
   const isSelf = intelligence.tier === "self";
@@ -683,10 +692,11 @@ export function projectCharacter(
     health: condition ? round(character.health, 1) : null,
     morale: condition ? round(character.morale, 1) : null,
     sailors: condition ? character.sailors : null,
-    troops: condition ? character.troops : null,
+    troops: condition ? projectTroopFigures(character.troops) : null,
     /**
      * Why live troops are 0 beside the captured count. Only on a captor's card,
      * and only when that card already shows the live count. The count stays 0.
+     * Experience and discipline on that line are the troops the captor holds.
      */
     troopsNote: condition && captiveIntel && character.captivity
       ? heldTroopsNote(world, character, captiveIntel, character.troops.count)
@@ -703,7 +713,11 @@ export function projectCharacter(
      */
     seaSighting,
     captivity: condition && character.captivity
-      ? { ...character.captivity, causeLabel: causeLabelFor(character.captivity.cause) }
+      ? {
+          ...character.captivity,
+          scatteredTroops: projectTroopFigures(character.captivity.scatteredTroops),
+          causeLabel: causeLabelFor(character.captivity.cause),
+        }
       : null,
     /**
      * The strength the captor took, beside the live count. Live troops stay 0
@@ -714,6 +728,16 @@ export function projectCharacter(
     troopRecovery: condition ? character.troopRecovery : null,
     scars: condition ? character.scars : null,
     debts: isSelf ? character.debts : null,
+    /**
+     * The debt the release line already states. On every card that line can
+     * be read from, including a rival. It is not the stored debt row.
+     */
+    releaseDebtNote: releaseDebtNote(world, character.id, events),
+    /**
+     * The latest ransom credit the release line already names for this person.
+     * It does not add the purse. Null when no line names them.
+     */
+    ransomIncomeNote: ransomIncomeNote(world, character.id, events),
     attributes: capability ? character.attributes : null,
     skills: capability ? character.skills : null,
     /**
@@ -870,6 +894,12 @@ export function projectEvent(
 ): Record<string, unknown> {
   const visible = eventPayloadVisible(world, commander, event);
   const actor = event.actorId ? world.characters[event.actorId]?.name ?? event.actorId : "World";
+  const raw = `${actor}: ${event.type.replaceAll("-", " ")}`;
+  let summary = richSummary === raw ? publicFeedSentence(world, event) : richSummary;
+  if (!visible && !summaryStaysWhenWithheld(event.type)) {
+    summary = ownedPortTaxSentence(world, commander.factionId, event) ?? publicFeedSentence(world, event);
+  }
+  const details = event.type === "captivity-released" ? captivityReleasedParts(world, event, false) : null;
   return {
     sequence: event.sequence,
     tick: event.tick,
@@ -878,7 +908,8 @@ export function projectEvent(
     actorId: event.actorId,
     targetId: event.targetId,
     settlementId: event.settlementId,
-    summary: visible || summaryStaysWhenWithheld(event.type) ? richSummary : `${actor}: ${event.type.replaceAll("-", " ")}`,
+    summary,
+    details,
     data: visible ? event.data : null,
     payloadWithheld: !visible,
   };

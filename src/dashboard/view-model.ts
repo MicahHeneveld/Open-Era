@@ -26,6 +26,7 @@ import {
   eventBriefingTitle,
   higherScoreClause,
   passageUpkeepSentence,
+  publicFeedSentence,
 } from "./wording.ts";
 
 /**
@@ -114,7 +115,7 @@ function eventSummary(world: WorldState, event: SimEvent, events?: SimEvent[]): 
     case "character-upkeep": {
       const passage = passageUpkeepSentence(world, event);
       if (passage) return passage;
-      return `${actor}: ${event.type.replaceAll("-", " ")}`;
+      return publicFeedSentence(world, event);
     }
     case "scattered-troops-returned":
       return `${event.data.returning} scattered troops returned to ${actor}`;
@@ -124,11 +125,18 @@ function eventSummary(world: WorldState, event: SimEvent, events?: SimEvent[]): 
       return `${actor} arrived at ${settlement}`;
     case "travel-started":
       return `${actor} departed for ${target}`;
-    case "market-trade":
+    case "market-trade": {
+      const tax = typeof event.data.tax === "number" && event.data.tax > 0 ? ` Tax of ${event.data.tax} went to the treasury.` : "";
       if (event.data.direction === "bought" && typeof event.data.gross === "number") {
-        return `${actor} bought ${event.data.quantity} ${event.data.resource} at ${settlement} for ${event.data.gross} (${event.data.unitPrice} each)`;
+        return `${actor} bought ${event.data.quantity} ${event.data.resource} at ${settlement} for ${event.data.gross} (${event.data.unitPrice} each).${tax}`;
       }
-      return `${actor} ${event.data.direction} ${event.data.quantity} ${event.data.resource} at ${settlement}`;
+      return `${actor} ${event.data.direction} ${event.data.quantity} ${event.data.resource} at ${settlement}.${tax}`;
+    }
+    case "worked": {
+      const place = settlement ? ` at ${settlement}` : "";
+      const tax = typeof event.data.tax === "number" && event.data.tax > 0 ? ` Tax of ${event.data.tax} went to the treasury.` : "";
+      return `${actor} worked${place}.${tax}`;
+    }
     case "contract-offered":
       return `${actor} offered ${event.data.price} to land ${event.data.quantity} provisions at ${destinationName(world, event)}.`;
     case "contract-amended":
@@ -161,9 +169,9 @@ function eventSummary(world: WorldState, event: SimEvent, events?: SimEvent[]): 
       if (event.data.reason === "explore-report" && event.data.alreadyPresent === true) {
         return `${actor} received a survey of ${settlement} from an officer already there`;
       }
-      return `${actor}: ${event.type.replaceAll("-", " ")}`;
+      return publicFeedSentence(world, event);
     default:
-      return `${actor}: ${event.type.replaceAll("-", " ")}`;
+      return publicFeedSentence(world, event);
   }
 }
 
@@ -338,7 +346,7 @@ function checkInBriefing(world: WorldState, commanderId: string, events: SimEven
       id: `battle:${activeBattle.id}:${activeBattle.phase}`,
       severity: "action",
       actionRequired: true,
-      title: `Battle phase ${activeBattle.phase} complete`,
+      title: `Battle phase ${activeBattle.phase} is complete.`,
       summary: `${activeBattle.lastPhase.outcome.replaceAll("-", " ")}; retreat risk is ${activeBattle.lastPhase.retreatRisk}. Continue or withdraw toward ${activeBattle.retreatDestinationId ? world.settlements[activeBattle.retreatDestinationId]?.name ?? "open waters" : "open waters"}.`,
       day: round(world.tick / world.ticksPerDay, 2),
       settlementId: activeBattle.settlementId,
@@ -356,7 +364,7 @@ function checkInBriefing(world: WorldState, commanderId: string, events: SimEven
       id: `captivity:${commander.captivity.capturedTick}`,
       severity: "action",
       actionRequired: true,
-      title: "Character held captive",
+      title: "A captain is held captive.",
       summary: `Held at ${world.settlements[commander.captivity.settlementId]?.name ?? commander.captivity.settlementId}. Escape always works, and it wounds you. The capture risk was ${commander.captivity.displayedRisk}. Mandatory release is in ${round(daysRemaining, 1)} days.`,
       day: round(world.tick / world.ticksPerDay, 2),
       settlementId: commander.captivity.settlementId,
@@ -371,7 +379,7 @@ function checkInBriefing(world: WorldState, commanderId: string, events: SimEven
         id: `confirm:${order.id}`,
         severity: "action",
         actionRequired: true,
-        title: "Completion needs confirmation",
+        title: "A completion report needs confirmation.",
         summary: order.lastReport?.summary ?? `${character.name} reports an order complete.`,
         day: round(order.statusChangedTick / world.ticksPerDay, 2),
         characterId: character.id,
@@ -389,7 +397,7 @@ function checkInBriefing(world: WorldState, commanderId: string, events: SimEven
       id: `surrender:${surrender.id}`,
       severity: "action",
       actionRequired: true,
-      title: "Surrender awaiting decision",
+      title: "A surrender is waiting for a decision.",
       summary: `${surrender.name} is offering surrender to ${commander.name}.`,
       day: round(world.tick / world.ticksPerDay, 2),
       settlementId: surrender.id,
@@ -596,14 +604,15 @@ function checkInBriefing(world: WorldState, commanderId: string, events: SimEven
     const details = [
       counts["standing-order-accepted"] ? `${counts["standing-order-accepted"]} accepted` : null,
       counts["standing-order-resumed"] ? `${counts["standing-order-resumed"]} resumed` : null,
-      counts["standing-order-completed"] ? `${counts["standing-order-completed"]} confirmed` : null,
+      counts["standing-order-completed"] ? `${counts["standing-order-completed"]} completed` : null,
     ].filter(Boolean).join(", ");
+    const updateWord = routineEvents.length === 1 ? "update" : "updates";
     addItem({
       id: `routine:${reportingOfficer.id}:${throughSequence}`,
       severity: "info",
       actionRequired: false,
-      title: `${reportingOfficer.name}'s routine digest`,
-      summary: `${routineEvents.length} routine order updates: ${details}. No command decision is required.`,
+      title: `${reportingOfficer.name} sent a routine digest.`,
+      summary: `${routineEvents.length} routine order ${updateWord}: ${details}. No command decision is required.`,
       day: round(Math.max(...routineEvents.map((event) => event.tick)) / world.ticksPerDay, 2),
       reportingOfficerId: reportingOfficer.id,
       throughSequence,
@@ -636,11 +645,12 @@ function checkInBriefing(world: WorldState, commanderId: string, events: SimEven
     // only up to what has been read; the next report reopens it.
     const newest = bucket.reduce((left, right) => (right.sequence > left.sequence ? right : left));
     const oldest = bucket.reduce((left, right) => (right.sequence < left.sequence ? right : left));
+    const recent = String(newest.summary).replace(/\.$/, "");
     addItem({
       ...newest,
       id: `event-group:${key}:${newest.sequence}`,
-      title: `${newest.title} ×${bucket.length}`,
-      summary: `${bucket.length} such reports, the most recent being: ${newest.summary}. The first was on day ${oldest.day}.`,
+      title: `${String(newest.title).replace(/\.$/, "")}, ${bucket.length} times.`,
+      summary: `${bucket.length} such reports, the most recent being: ${recent}. The first was on day ${oldest.day}.`,
       count: bucket.length,
       throughSequence: newest.sequence,
     });
@@ -659,7 +669,7 @@ function checkInBriefing(world: WorldState, commanderId: string, events: SimEven
         id: `sea:${row.characterId}:${world.tick}`,
         severity: "info",
         actionRequired: false,
-        title: "Sea sighting",
+        title: "A ship was sighted at sea.",
         summary: row.summary,
         day: round(world.tick / world.ticksPerDay, 2),
         characterId: row.characterId,
@@ -1233,7 +1243,7 @@ export function dashboardState(
     }),
     characters: Object.values(world.characters)
       .sort((left, right) => left.id.localeCompare(right.id))
-      .map((character) => projectCharacter(world, commander, character)),
+      .map((character) => projectCharacter(world, commander, character, briefingEvents)),
     contracts: projectSupplyContracts(world, commander),
     events: projectEventFeed(world, commander.id, feed.events).reverse(),
     /**

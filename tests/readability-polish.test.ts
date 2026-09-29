@@ -214,7 +214,7 @@ test("the commander's loyalty note shows only the rounded figure", () => {
   const plain = projectCharacter(world, commander, commander);
   assert.equal(
     plain.loyaltyNote,
-    `The seat reads ${round(seed, 3)}. personality.loyalty is the seed and is not the figure the seat reads.`,
+    `The seat reads ${round(seed, 3)}. That rounded figure is the one the seat uses.`,
   );
   assert.equal(/\d+\.\d{4,}/.test(String(plain.loyaltyNote)), false);
   assert.equal(String(plain.loyaltyNote).includes(String(seed)), false);
@@ -222,9 +222,9 @@ test("the commander's loyalty note shows only the rounded figure", () => {
   const scarred = projectCharacter(world, commander, commander);
   assert.equal(
     scarred.loyaltyNote,
-    `The seat reads ${round(seed - 0.04, 3)}. personality.loyalty is the seed and is not the figure the seat reads.`,
+    `The seat reads ${round(seed - 0.04, 3)}. That rounded figure is the one the seat uses.`,
   );
-  assert.equal(scarred.loyaltyNote, "The seat reads 0.768. personality.loyalty is the seed and is not the figure the seat reads.");
+  assert.equal(scarred.loyaltyNote, "The seat reads 0.768. That rounded figure is the one the seat uses.");
   assert.equal(/\d+\.\d{4,}/.test(String(scarred.loyaltyNote)), false);
   assert.equal(String(scarred.loyaltyNote).includes("0.767927391717676"), false);
   assert.equal(String(scarred.loyaltyNote).includes("0.807927391717676"), false);
@@ -315,7 +315,7 @@ test("seed 1847 at tick 679 shows only the rounded unscarred loyalty", () => {
   assert.equal(card.loyalty, 0.808);
   assert.equal(
     card.loyaltyNote,
-    "The seat reads 0.808. personality.loyalty is the seed and is not the figure the seat reads.",
+    "The seat reads 0.808. That rounded figure is the one the seat uses.",
   );
   assert.equal(/\d+\.\d{4,}/.test(String(card.loyaltyNote)), false);
   assert.equal(commander.personality.loyalty, 0.807927391717676);
@@ -340,7 +340,7 @@ test("Mina Vale at tick 72 says she named no ports, and 12 are held by World Gov
   assert.deepEqual(intel.ports, []);
   assert.equal(intel.portsNote, "Mina Vale named no ports. The list may be incomplete.");
   assert.equal((card.troops as { count: number }).count, 0);
-  assert.equal(card.troopsNote, "0 with Mina Vale; 12 held by World Government.");
+  assert.equal(card.troopsNote, "0 with Mina Vale; 12 held by World Government. The experience and discipline are the troops now held by World Government.");
   assert.equal(mina.troops.count, 0);
   assert.equal(projectCharacter(world, mina, mina).captiveIntel, null);
   assert.equal(projectCharacter(world, mina, mina).troopsNote, null);
