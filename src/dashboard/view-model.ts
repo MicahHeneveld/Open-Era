@@ -16,7 +16,16 @@ import {
 } from "../sim/engine.ts";
 import { marketPrice, round, settlementClaimAvailableTo } from "../sim/state.ts";
 import { RESOURCE_KEYS, type ActiveBattle, type Character, type CombatForecast, type SettlementKnowledge, type SimEvent, type WorldState } from "../sim/types.ts";
-import { projectCharacter, projectEvent, projectFactions, projectSupplyContracts } from "./visibility.ts";
+import { projectCharacter, projectEvent, projectFactions, projectSupplyContracts, seaSightingsFor } from "./visibility.ts";
+import {
+  attentionLabel,
+  captivityEscapedSentence,
+  captivityReleasedSentence,
+  causeLabelFor,
+  characterCapturedSentence,
+  higherScoreClause,
+  passageUpkeepSentence,
+} from "./wording.ts";
 
 /**
  * Whether a battle at this settlement is one the commander could actually know
@@ -39,7 +48,7 @@ function destinationName(world: WorldState, event: SimEvent): string {
   return world.settlements[id]?.name ?? id;
 }
 
-function eventSummary(world: WorldState, event: SimEvent): string {
+function eventSummary(world: WorldState, event: SimEvent, events?: SimEvent[]): string {
   const actor = event.actorId ? world.characters[event.actorId]?.name ?? event.actorId : "World";
   const target = event.targetId
     ? world.characters[event.targetId]?.name ?? world.settlements[event.targetId]?.name ?? world.factions[event.targetId]?.name ?? event.targetId
@@ -86,7 +95,7 @@ function eventSummary(world: WorldState, event: SimEvent): string {
     case "plan-reconsidered":
       return `${actor} reconsidered their plan: ${event.data.reason}`;
     case "battle-resolved":
-      return `${actor} ${event.data.outcome === "attacker-victory" ? "won" : "lost"} at ${settlement}`;
+      return `${actor} ${event.data.outcome === "attacker-victory" ? "won" : "lost"} at ${settlement}${higherScoreClause(event.data)}`;
     case "battle-started":
       return `${actor} committed to a major battle at ${settlement}`;
     case "battle-phase-resolved":
@@ -96,12 +105,15 @@ function eventSummary(world: WorldState, event: SimEvent): string {
     case "post-defeat-withdrawal-started":
       return `${actor} escaped defeat at ${settlement} and withdrew toward ${target ?? "open waters"}`;
     case "character-captured":
-      return `${actor} was captured at ${settlement} after ${String(event.data.cause).replaceAll("-", " ")}`;
+      return characterCapturedSentence(world, event, events);
     case "captivity-escaped":
-      return `${actor} escaped captivity at ${settlement} and suffered ${event.data.injury} health damage`;
-    case "captivity-released": {
-      const terms = event.data.terms as { moneyPaid: number; debtValue: number };
-      return `${actor} was released from ${settlement}: ${terms.moneyPaid} paid and ${terms.debtValue} recorded as debt`;
+      return captivityEscapedSentence(world, event);
+    case "captivity-released":
+      return captivityReleasedSentence(world, event);
+    case "character-upkeep": {
+      const passage = passageUpkeepSentence(world, event);
+      if (passage) return passage;
+      return `${actor}: ${event.type.replaceAll("-", " ")}`;
     }
     case "scattered-troops-returned":
       return `${event.data.returning} scattered troops returned to ${actor}`;
@@ -303,7 +315,7 @@ function checkInBriefing(world: WorldState, commanderId: string, events: SimEven
       severity: "action",
       actionRequired: true,
       title: "Character held captive",
-      summary: `Held at ${world.settlements[commander.captivity.settlementId]?.name ?? commander.captivity.settlementId}. Escape is guaranteed but dangerous; bounded release terms become mandatory in ${round(daysRemaining, 1)} days.`,
+      summary: `Held at ${world.settlements[commander.captivity.settlementId]?.name ?? commander.captivity.settlementId}. Escape always works, and it wounds you. The capture risk was ${commander.captivity.displayedRisk}. Mandatory release is in ${round(daysRemaining, 1)} days.`,
       day: round(world.tick / world.ticksPerDay, 2),
       settlementId: commander.captivity.settlementId,
       action: "review-captivity",
@@ -364,8 +376,12 @@ function checkInBriefing(world: WorldState, commanderId: string, events: SimEven
         }.`
     : "No settlement you know of has provisions to sell.";
   if (runway.shortage > 0) {
+    // At 0 the subtraction does not move the stored morale, so the line does not quote a cost that cannot land.
+    const moraleCost = commander.morale <= 0
+      ? `health ${runway.shortageHealthPerTick} per tick. Morale is already 0, so the shortage does not lower it`
+      : `health ${runway.shortageHealthPerTick} and morale ${runway.shortageMoralePerTick} per tick`;
     const cost = [
-      `health ${runway.shortageHealthPerTick} and morale ${runway.shortageMoralePerTick} per tick`,
+      moraleCost,
       runway.shortageTroopLossPerTick > 0 ? `${runway.shortageTroopLossPerTick} troops per tick` : null,
     ].filter(Boolean).join(", and ");
     addItem({
@@ -492,7 +508,7 @@ function checkInBriefing(world: WorldState, commanderId: string, events: SimEven
       severity: warning ? "warning" : "info",
       actionRequired: false,
       title: event.type.replaceAll("-", " "),
-      summary: eventSummary(world, event),
+      summary: eventSummary(world, event, events),
       day: round(event.tick / world.ticksPerDay, 2),
       characterId: event.targetId && world.characters[event.targetId] ? event.targetId : event.actorId,
       settlementId: event.settlementId,
@@ -564,6 +580,22 @@ function checkInBriefing(world: WorldState, commanderId: string, events: SimEven
   // needs attention is ever dropped; the count reports what was shown, and any
   // omitted background is stated rather than silently lost.
   const attention = [...actionItems, ...warningItems];
+  const seaSightings = seaSightingsFor(world, commander);
+  if (seaSightings) {
+    const seaItems = Object.values(seaSightings)
+      .sort((left, right) => left.characterId < right.characterId ? -1 : left.characterId > right.characterId ? 1 : 0)
+      .map((row) => ({
+        id: `sea:${row.characterId}:${world.tick}`,
+        severity: "info",
+        actionRequired: false,
+        title: "Sea sighting",
+        summary: row.summary,
+        day: round(world.tick / world.ticksPerDay, 2),
+        characterId: row.characterId,
+        acknowledgeable: true,
+      }));
+    infoItems.unshift(...seaItems);
+  }
   const infoBudget = Math.max(0, INFO_ITEM_BUDGET - attention.length);
   const info = infoItems.slice(0, infoBudget);
   const omittedInfoCount = infoItems.length - info.length;
@@ -584,6 +616,10 @@ function checkInBriefing(world: WorldState, commanderId: string, events: SimEven
      * items returned, because every one of them is returned.
      */
     attentionCount: attention.length,
+    /** Lines drawn: the decisions, plus the background rows that fit. */
+    shownCount: items.length,
+    /** The check-in title. The decision count stays `attentionCount`. */
+    attentionLabel: attentionLabel(attention.length, items.length),
     /** Background reports held back to keep the panel readable. */
     omittedInfoCount,
     reportingOfficer: reportingOfficer ? {
@@ -631,7 +667,7 @@ export function projectEventFeed(
   events: SimEvent[],
 ): Record<string, unknown>[] {
   const commander = world.characters[commanderId];
-  return events.map((event) => projectEvent(world, commander, event, eventSummary(world, event)));
+  return events.map((event) => projectEvent(world, commander, event, eventSummary(world, event, events)));
 }
 
 /** Builds a feed page holding every supplied event. Convenient when the caller already holds a full set. */
@@ -898,7 +934,11 @@ export function dashboardState(
     tick: world.tick,
     day: round(world.tick / world.ticksPerDay, 2),
     ticksPerDay: world.ticksPerDay,
-    player,
+    player: {
+      ...player,
+      // Derived on read. The stored string stays "Prototype Commander".
+      displayName: commander.name,
+    },
     commanderId: commander.id,
     /**
      * The commander's own party. Owned assets expose exact statistics, and these
@@ -967,6 +1007,7 @@ export function dashboardState(
     captivity: {
       active: captivity ? {
         ...captivity,
+        causeLabel: causeLabelFor(captivity.cause),
         settlementName: world.settlements[captivity.settlementId]?.name ?? captivity.settlementId,
         captorName: captivity.captorFactionId
           ? world.factions[captivity.captorFactionId]?.name ?? captivity.captorFactionId

@@ -811,7 +811,7 @@
             ? '<div class="stat"><span>Sighted troops</span><strong>' + item.partySighting.troops + ' <span class="subtle">' + item.partySighting.ageTicks + " ticks old</span></strong></div>"
             : "") +
           (item.troops == null && item.seaSighting
-            ? '<div class="stat"><span>Sighted troops</span><strong>' + item.seaSighting.troops + ' <span class="subtle">' + item.seaSighting.ageTicks + " ticks old</span></strong></div>"
+            ? '<div class="stat"><span>' + esc(item.seaSighting.kind) + '</span><strong>' + item.seaSighting.troops + ' <span class="subtle">' + item.seaSighting.ageTicks + " ticks old</span></strong></div>"
             : "") +
           stat("Strategy", item.skills ? item.skills.strategy : null) +
           stat("Leadership", item.skills ? item.skills.leadership : null) +
@@ -940,9 +940,11 @@
         if (oneTick) button.textContent = battle ? "Continue phase" : "+4 hours";
       });
       var briefing = world.briefing || { attentionCount: 0, items: [] };
-      byId("brief-title").textContent = briefing.attentionCount
-        ? "Check-in · " + briefing.attentionCount + " need attention"
-        : "Check-in · clear";
+      byId("brief-title").textContent = briefing.attentionLabel
+        ? briefing.attentionLabel
+        : briefing.attentionCount
+          ? "Check-in · " + briefing.attentionCount + " need attention"
+          : "Check-in · clear";
       // Background reports held back are stated, never silently dropped.
       byId("brief-omitted").textContent = briefing.omittedInfoCount
         ? briefing.omittedInfoCount + " older background report(s) not shown."

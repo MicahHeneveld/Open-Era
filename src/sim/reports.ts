@@ -1,5 +1,11 @@
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import {
+  captivityEscapedChronicle,
+  captivityReleasedChronicle,
+  characterCapturedChronicle,
+  higherScoreClause,
+} from "../dashboard/wording.ts";
 import { factionPower, marketPrice, partyPower, round, stateHash } from "./state.ts";
 import { RESOURCE_KEYS, type SimEvent, type WorldState } from "./types.ts";
 
@@ -193,12 +199,13 @@ function metricsCsv(events: SimEvent[]): string {
   return rows.join("\n") + "\n";
 }
 
-function eventStory(world: WorldState, event: SimEvent): string | null {
+function eventStory(world: WorldState, event: SimEvent, events: SimEvent[]): string | null {
   const actor = event.actorId ? world.characters[event.actorId]?.name ?? event.actorId : "Unknown";
   const settlement = event.settlementId ? world.settlements[event.settlementId]?.name ?? event.settlementId : "unknown waters";
   if (event.type === "battle-resolved") {
     const won = event.data.outcome === "attacker-victory";
-    return `- Day ${round(event.tick / world.ticksPerDay, 1)}: **${actor}** ${won ? "defeated" : "was repelled by"} the garrison at **${settlement}**. ${event.data.attackerLosses} attackers and ${event.data.defenderLosses} defenders were lost.`;
+    const score = won ? higherScoreClause(event.data) : "";
+    return `- Day ${round(event.tick / world.ticksPerDay, 1)}: **${actor}** ${won ? "defeated" : "was repelled by"} the garrison at **${settlement}**${score}. ${event.data.attackerLosses} attackers and ${event.data.defenderLosses} defenders were lost.`;
   }
   if (event.type === "battle-started") {
     const battle = event.data.battle as { totalPhases: number };
@@ -211,15 +218,14 @@ function eventStory(world: WorldState, event: SimEvent): string | null {
     return `- Day ${round(event.tick / world.ticksPerDay, 1)}: **${actor}** retreated from **${settlement}** toward **${destination}** during phase ${event.data.phase}, losing ${event.data.pursuitLosses} troops in withdrawal.`;
   }
   if (event.type === "character-captured") {
-    return `- Day ${round(event.tick / world.ticksPerDay, 1)}: **${actor}** was captured at **${settlement}** after ${String(event.data.cause).replaceAll("-", " ")}; their surviving troops scattered.`;
+    return `- Day ${round(event.tick / world.ticksPerDay, 1)}: ${characterCapturedChronicle(world, event, events)}`;
   }
   if (event.type === "captivity-escaped") {
     const scar = event.data.scar as { attribute: string; penalty: number } | null;
-    return `- Day ${round(event.tick / world.ticksPerDay, 1)}: **${actor}** escaped captivity at **${settlement}**, suffering ${event.data.injury} health damage${scar ? ` and a permanent -${scar.penalty} ${scar.attribute} scar` : ""}.`;
+    return `- Day ${round(event.tick / world.ticksPerDay, 1)}: ${captivityEscapedChronicle(world, event, scar)}`;
   }
   if (event.type === "captivity-released") {
-    const terms = event.data.terms as { moneyPaid: number; debtValue: number };
-    return `- Day ${round(event.tick / world.ticksPerDay, 1)}: **${actor}** was released from **${settlement}** under mandatory terms: ${terms.moneyPaid} paid and ${terms.debtValue} recorded as debt.`;
+    return `- Day ${round(event.tick / world.ticksPerDay, 1)}: ${captivityReleasedChronicle(world, event)}`;
   }
   if (event.type === "scattered-troops-returned") {
     return `- Day ${round(event.tick / world.ticksPerDay, 1)}: ${event.data.returning} scattered troops returned to **${actor}**${event.data.completed ? ", completing the recovery" : ""}.`;
@@ -304,13 +310,13 @@ function summaryMarkdown(world: WorldState, events: SimEvent[], snapshotCount: n
   ]);
   const majorStories = events
     .filter((event) => majorTypes.has(event.type))
-    .map((event) => eventStory(world, event))
+    .map((event) => eventStory(world, event, events))
     .filter(Boolean)
     .slice(-35)
     .join("\n");
   const recentStories = events
     .filter((event) => !majorTypes.has(event.type))
-    .map((event) => eventStory(world, event))
+    .map((event) => eventStory(world, event, events))
     .filter(Boolean)
     .slice(-30)
     .join("\n");
