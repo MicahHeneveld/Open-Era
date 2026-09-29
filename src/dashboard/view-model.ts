@@ -5,6 +5,7 @@ import {
   cargoCapacity,
   cargoLoad,
   PASSAGE_COST_PER_TICK,
+  marketDepth,
   passageCost,
   provisionRunway,
   sellableProvisions,
@@ -45,9 +46,20 @@ function eventSummary(world: WorldState, event: SimEvent): string {
     : null;
   const settlement = event.settlementId ? world.settlements[event.settlementId]?.name ?? event.settlementId : null;
   switch (event.type) {
-    case "player-command-accepted":
+    case "player-command-accepted": {
+      const command = event.data.command as { action?: string; quantity?: number; unitPrice?: number; gross?: number; capped?: boolean } | undefined;
+      if (command?.action === "buy-provisions" && typeof command.gross === "number") {
+        const cap = command.capped
+          ? ` (${settlement ?? "This market"} clears no more than ${command.quantity} in one order)`
+          : "";
+        return `Command queued for ${actor}: ${command.quantity} provisions at ${command.unitPrice} each, ${command.gross} total${cap}`;
+      }
       return `Command queued for ${actor}`;
+    }
     case "player-command-resolved":
+      if (event.data.action === "buy-provisions" && typeof event.data.gross === "number") {
+        return `${actor} bought ${event.data.quantity} provisions for ${event.data.gross} (${event.data.unitPrice} each)`;
+      }
       return `${actor}: ${String(event.data.outcome).replaceAll("-", " ")}`;
     case "player-command-failed":
       return `${actor}'s command failed: ${event.data.reason}`;
@@ -100,6 +112,9 @@ function eventSummary(world: WorldState, event: SimEvent): string {
     case "travel-started":
       return `${actor} departed for ${target}`;
     case "market-trade":
+      if (event.data.direction === "bought" && typeof event.data.gross === "number") {
+        return `${actor} bought ${event.data.quantity} ${event.data.resource} at ${settlement} for ${event.data.gross} (${event.data.unitPrice} each)`;
+      }
       return `${actor} ${event.data.direction} ${event.data.quantity} ${event.data.resource} at ${settlement}`;
     case "contract-offered":
       return `${actor} offered ${event.data.price} to land ${event.data.quantity} provisions at ${destinationName(world, event)}.`;
@@ -378,9 +393,21 @@ function checkInBriefing(world: WorldState, commanderId: string, events: SimEven
     if (runway.runwayTicks <= needed) {
       const ticks = runway.runwayTicks === 1 ? "1 tick" : `${runway.runwayTicks} ticks`;
       const days = runway.runwayDays === 1 ? "1 day" : `${runway.runwayDays} days`;
-      const target = runway.resupplyTarget > runway.provisions
+      const gap = round(Math.max(0, runway.resupplyTarget - runway.provisions), 3);
+      let target = runway.resupplyTarget > runway.provisions
         ? ` A full top-up would buy ${runway.resupplyTarget}, about ${Math.floor(runway.resupplyTarget / runway.demand)} ticks.`
         : " The hold is already at the amount a top-up would buy.";
+      // Alongside, one click cannot buy a gap past the depth. Name that order
+      // instead of the resupply target, which is the hold the click is aiming at.
+      if (resupply?.aboard && commander.locationId) {
+        const here = world.settlements[commander.locationId];
+        const depth = marketDepth(here, "provisions");
+        const stock = here.stocks.provisions;
+        if (stock >= 1 && round(Math.min(gap, stock), 3) > depth) {
+          const oneOrder = round(Math.min(gap, stock, depth), 3);
+          target = ` One order buys ${oneOrder} provisions; ${here.name} clears no more than ${depth} in one order.`;
+        }
+      }
       addItem({
         id: "provision:low",
         severity: "warning",

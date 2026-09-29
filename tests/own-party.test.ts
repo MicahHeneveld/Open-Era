@@ -5,6 +5,7 @@ import { round } from "../src/sim/state.ts";
 import { acknowledgeBriefingItem } from "../src/sim/briefing.ts";
 import { submitCommand } from "../src/sim/commands.ts";
 import {
+  marketDepth,
   provisionDemand,
   provisionResupplyTarget,
   provisionRunway,
@@ -182,6 +183,24 @@ test("the warning gives days of notice rather than firing once the fire is lit",
   );
 });
 
+test("a low hold alongside names the one-order amount, not the whole target", () => {
+  const world = createPrototypeWorld(1847);
+  const commander = commanderOf(world);
+  const settlement = world.settlements[commander.locationId!];
+  const depth = marketDepth(settlement, "provisions");
+  commander.cargo.provisions = 10;
+  assert.ok(provisionResupplyTarget(commander) - 10 > depth);
+  assert.ok(settlement.stocks.provisions >= 1);
+
+  const low = briefing(world, []).items.find((item) => item.id === "provision:low");
+  assert.ok(low);
+  assert.equal(
+    low.summary.includes(`One order buys ${depth} provisions; ${settlement.name} clears no more than ${depth} in one order.`),
+    true,
+  );
+  assert.equal(low.summary.includes(`would buy ${provisionResupplyTarget(commander)}`), false);
+});
+
 test("a one-tick runway is described in the singular", () => {
   const world = createPrototypeWorld(2718);
   const commander = commanderOf(world);
@@ -196,22 +215,34 @@ test("a one-tick runway is described in the singular", () => {
 test("the quoted top-up is the amount buy-provisions actually buys", () => {
   const world = createPrototypeWorld(1847);
   const commander = commanderOf(world);
+  const target = provisionResupplyTarget(commander);
+  const depth = marketDepth(world.settlements[commander.locationId!], "provisions");
+  assert.ok(target > depth);
+  // An empty hold asks for the whole target. One click buys the depth instead,
+  // and upkeep for the same tick lands after the purchase.
   commander.cargo.provisions = 0;
   commander.money = 10_000;
 
-  // The ceiling was invisible to the first playtest: the hold filled to a number
-  // the player was never shown, and buys at the cap silently debited fractions.
-  // Quoting it is only honest if it is the same number the command charges against.
   const quoted = provisionRunway(world, commander).resupplyTarget;
-  assert.equal(quoted, provisionResupplyTarget(commander));
+  assert.equal(quoted, target);
 
-  submitCommand(world, { playerId: "prototype-player", type: "character-action", action: "buy-provisions" });
-  const purchase = runTick(world).events.find((event) => event.type === "market-trade");
+  const accepted = submitCommand(world, { playerId: "prototype-player", type: "character-action", action: "buy-provisions" });
+  assert.equal(accepted.ok, true);
+  const purchase = runTick(world).events.find((event) => event.type === "market-trade" && event.actorId === commander.id);
   assert.ok(purchase);
-  assert.equal(purchase.data.quantity, quoted, "the market sells exactly the quoted ceiling");
-  // The hold then reads one tick lower, because upkeep for the same tick lands
-  // after the purchase. The first playtest mistook that for a capacity limit.
-  assert.equal(commander.cargo.provisions, round(quoted - provisionDemand(commander), 3));
+  assert.equal(purchase.data.quantity, depth, "an empty hold buys the depth, not the whole target");
+  assert.equal(commander.cargo.provisions, round(depth - provisionDemand(commander), 3));
+
+  const inside = createPrototypeWorld(1847);
+  const buyer = commanderOf(inside);
+  const gap = 10;
+  buyer.cargo.provisions = round(target - gap, 3);
+  buyer.money = 10_000;
+  submitCommand(inside, { playerId: "prototype-player", type: "character-action", action: "buy-provisions" });
+  const filled = runTick(inside).events.find((event) => event.type === "market-trade" && event.actorId === buyer.id);
+  assert.ok(filled);
+  assert.equal(filled.data.quantity, gap, "a gap inside the cap is still bought in full");
+  assert.equal(buyer.cargo.provisions, round(target - provisionDemand(buyer), 3));
 });
 
 test("a voyage that cannot be finished is flagged even with a full hold", () => {

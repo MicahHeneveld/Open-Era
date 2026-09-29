@@ -76,7 +76,7 @@ Prototype choices, made to make this evaluable rather than decided:
 
 The opening stocks at Crown Harbor and Glassport start in the imbalance those use rates sustain: Crown is short of medicine, Glassport is short of arms. On seed 1847 a round trip in those two goods out-earns the same number of ticks of `work`. The measurement is in [progress.md](../../progress.md).
 
-Open: whether a merchant should be able to learn a foreign price at all, or must sail to find out what a rival market pays. A foreign price stays an estimate with an age and no expiry. Also open: whether cargo can be lost, spoiled or taken rather than only bought and sold. The one-click provisions top-up is still not depth-capped and still has no cost preview. Splitting a rumor and a quote into two price fields is deferred until the trade panel is designed with it.
+Open: whether a merchant should be able to learn a foreign price at all, or must sail to find out what a rival market pays. A foreign price stays an estimate with an age and no expiry. Also open: whether cargo can be lost, spoiled or taken rather than only bought and sold. The player's one-click provisions top-up quotes its price and, past `marketDepth`, fills only that share and says so. A named `buy-resource` order is still refused at that ceiling. An autonomous captain's `buy-provisions` stays uncapped, per [autonomous provisioning](autonomous-provisioning.md). Splitting a rumor and a quote into two price fields is deferred until the trade panel is designed with it.
 
 ## Settlements, ownership, and secession
 

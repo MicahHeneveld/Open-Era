@@ -2368,12 +2368,23 @@ function processPlayerCommands(
       settlementId: commander.locationId,
       data: { commandId: command.id, action: command.action },
     });
+    const resolvedFrom = events.length;
     resolveDecision(world, commander, chosen, events, rng);
+    const paid = command.action === "buy-provisions"
+      ? events.slice(resolvedFrom).find((event) => event.type === "market-trade" && event.actorId === commander.id)
+      : undefined;
     emit(world, events, {
       type: "player-command-resolved",
       actorId: commander.id,
       targetId: command.targetId,
-      data: { commandId: command.id, outcome: "action-executed", action: command.action },
+      data: {
+        commandId: command.id,
+        outcome: "action-executed",
+        action: command.action,
+        ...(paid
+          ? { quantity: paid.data.quantity, unitPrice: paid.data.unitPrice, gross: paid.data.gross }
+          : {}),
+      },
     });
   }
 }
@@ -2603,14 +2614,48 @@ function resolveDecision(
       break;
     }
     case "buy-provisions": {
-      const price = marketPrice(world, settlementId, "provisions");
-      const desired = Math.max(0, provisionResupplyTarget(character) - character.cargo.provisions);
-      const quantity = round(Math.min(desired, settlement.stocks.provisions, character.money / price));
+      // A player order arrives with the price and quantity quoted at acceptance.
+      // Autonomous captains do not: their fill stays the uncapped top-up, and
+      // this branch must keep that formula. Capping it moves the fixture hashes.
+      if (typeof chosen.unitPrice !== "number") {
+        const price = marketPrice(world, settlementId, "provisions");
+        const desired = Math.max(0, provisionResupplyTarget(character) - character.cargo.provisions);
+        const quantity = round(Math.min(desired, settlement.stocks.provisions, character.money / price));
+        if (quantity > 0) {
+          const characterCargo = cloneResources(character.cargo);
+          const settlementStocks = cloneResources(settlement.stocks);
+          characterCargo.provisions = round(characterCargo.provisions + quantity);
+          settlementStocks.provisions = round(settlementStocks.provisions - quantity);
+          emit(world, events, {
+            type: "market-trade",
+            actorId: character.id,
+            settlementId,
+            data: {
+              direction: "bought",
+              resource: "provisions",
+              quantity,
+              unitPrice: price,
+              gross: round(quantity * price, 2),
+              tax: 0,
+              characterMoney: round(character.money - quantity * price, 2),
+              characterCargo,
+              settlementStocks,
+              factionTreasury: settlement.factionId ? world.factions[settlement.factionId].treasury : 0,
+            },
+          });
+        }
+        break;
+      }
+      const price = chosen.unitPrice;
+      const depth = marketDepth(settlement, "provisions");
+      const affordable = price > 0 ? character.money / price : 0;
+      const quantity = round(Math.max(0, Math.min(chosen.quantity ?? 0, settlement.stocks.provisions, affordable, depth)));
       if (quantity > 0) {
         const characterCargo = cloneResources(character.cargo);
         const settlementStocks = cloneResources(settlement.stocks);
         characterCargo.provisions = round(characterCargo.provisions + quantity);
         settlementStocks.provisions = round(settlementStocks.provisions - quantity);
+        const gross = round(quantity * price, 2);
         emit(world, events, {
           type: "market-trade",
           actorId: character.id,
@@ -2620,9 +2665,9 @@ function resolveDecision(
             resource: "provisions",
             quantity,
             unitPrice: price,
-            gross: round(quantity * price, 2),
+            gross,
             tax: 0,
-            characterMoney: round(character.money - quantity * price, 2),
+            characterMoney: round(character.money - gross, 2),
             characterCargo,
             settlementStocks,
             factionTreasury: settlement.factionId ? world.factions[settlement.factionId].treasury : 0,
