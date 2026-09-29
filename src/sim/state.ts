@@ -4,6 +4,7 @@ import type {
   ResourceKey,
   Resources,
   Settlement,
+  SettlementKnowledge,
   SimEvent,
   StandingOrder,
   WorldState,
@@ -48,6 +49,24 @@ export function normalizeWorldState(world: WorldState): WorldState {
 
 export function settlementClaimAvailableTo(settlement: Settlement, characterId: string): boolean {
   return settlement.surrender?.offeredToId === characterId;
+}
+
+/**
+ * Keep a ground record when a settlement report is replaced.
+ *
+ * The reducer stores the whole entry, so a refresh that forgets `ground` would
+ * erase a survey. A new record wins only when it brings its own ground dated
+ * at least as recently as the one already held. An older ground, or none, leaves
+ * the stored survey in place.
+ */
+export function retainGround(
+  previous: SettlementKnowledge | undefined,
+  next: SettlementKnowledge,
+): SettlementKnowledge {
+  const prior = previous?.ground;
+  if (!prior) return next;
+  if (next.ground && next.ground.observedTick >= prior.observedTick) return next;
+  return { ...next, ground: { ...prior } };
 }
 
 export function clamp(value: number, minimum: number, maximum: number): number {
@@ -341,10 +360,13 @@ export function applyEvent(world: WorldState, event: SimEvent): void {
       actor.currentGoal = event.data.goal as string;
       actor.lastDecisionTick = world.tick;
       break;
-    case "knowledge-updated":
+    case "knowledge-updated": {
       if (!actor) throw new Error("Knowledge event has no actor");
-      actor.knowledge[event.data.settlementId as string] = event.data.knowledge as Character["knowledge"][string];
+      const settlementId = event.data.settlementId as string;
+      const incoming = event.data.knowledge as SettlementKnowledge;
+      actor.knowledge[settlementId] = retainGround(actor.knowledge[settlementId], incoming);
       break;
+    }
     case "plan-reconsidered":
       if (!actor) throw new Error("Plan event has no actor");
       actor.activeGoalId = event.data.selectedGoalId as string;

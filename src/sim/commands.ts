@@ -1,5 +1,5 @@
 import { applyEvent, clamp, round, settlementClaimAvailableTo } from "./state.ts";
-import { MARKET_DEPTH_FRACTION, tradeQuote } from "./engine.ts";
+import { MARKET_DEPTH_FRACTION, passageCost, tradeQuote, travelDuration } from "./engine.ts";
 import type {
   OrderDirective,
   PlayerAction,
@@ -63,7 +63,7 @@ export type CommandRequest =
     };
 
 export type CommandSubmission =
-  | { ok: true; command: PlayerCommand; event: SimEvent }
+  | { ok: true; command: PlayerCommand; event: SimEvent; notice?: string }
   | { ok: false; code: string; error: string };
 
 /**
@@ -107,7 +107,7 @@ export const ACTION_PRECONDITIONS: readonly string[] = [
 ];
 
 export const ACTION_CAPABILITIES: readonly ActionCapability[] = [
-  { action: "travel", target: "settlement", requires: ["the destination is a known settlement", "the destination is not the current settlement"] },
+  { action: "travel", target: "settlement", requires: ["the destination is a known settlement", "the destination is not the current settlement", "the character's money covers the quoted passage"] },
   { action: "buy-provisions", target: "none", requires: ["at least 2 money", "at least 1 provision in local stock"] },
   {
     action: "buy-resource",
@@ -331,6 +331,15 @@ function validateCharacterAction(
     if (request.targetId === character.locationId) {
       return reject("already-there", "The character is already at that settlement");
     }
+    const ticks = travelDuration(world, character, request.targetId);
+    const cost = passageCost(ticks);
+    if (character.money < cost) {
+      const destination = world.settlements[request.targetId];
+      return reject(
+        "insufficient-passage",
+        `The passage to ${destination.name} costs ${cost}; the character holds ${character.money}`,
+      );
+    }
   }
   if (request.action === "raid") {
     if (!character.factionId || !settlement.factionId || character.factionId === settlement.factionId) {
@@ -537,7 +546,26 @@ function validateStandingOrder(
     priority: clamp(priority, 0.1, 1),
     expiresTick: duration === null ? null : world.tick + duration,
   };
-  return { ok: true, command, event: acceptedEvent(world, command) };
+  const notice = exploreAlreadyPresentNotice(world, recipient, request.directive, request.targetId);
+  return { ok: true, command, event: acceptedEvent(world, command), ...(notice ? { notice } : {}) };
+}
+
+/**
+ * An explore order whose officer is already standing on the target.
+ *
+ * The survey still completes on the issue tick. The notice is how the order
+ * response says the report did not come from a voyage. Autonomous travel is
+ * untouched: this runs only when a player issues the order.
+ */
+function exploreAlreadyPresentNotice(
+  world: WorldState,
+  recipient: WorldState["characters"][string],
+  directive: OrderDirective,
+  targetId: string | undefined,
+): string | undefined {
+  if (directive !== "explore" || !targetId || recipient.travel || recipient.locationId !== targetId) return undefined;
+  const place = world.settlements[targetId]?.name ?? targetId;
+  return `${recipient.name} is already at ${place}. The report will come from an officer already there.`;
 }
 
 function validOrderTarget(world: WorldState, directive: OrderDirective, targetId: string | undefined): string | null {

@@ -112,7 +112,11 @@ test("an estimated market is labelled with its age and approximate values", () =
     }
     // The statistics that come from a report rather than the ground follow the same rule.
     const garrisonIndex = html.indexOf("<span>Garrison</span>");
-    assert.match(html.slice(garrisonIndex, garrisonIndex + 120), /~/, `${settlement.id} must not present an estimated garrison as exact`);
+    const garrison = html.slice(garrisonIndex, garrisonIndex + 180);
+    assert.match(garrison, /~/, `${settlement.id} must not present an estimated garrison as exact`);
+    const garrisonAge = settlement.garrisonIntelligence.ageTicks;
+    assert.equal(garrisonAge, age, `${settlement.id} garrison age must match the report age`);
+    assert.match(garrison, new RegExp(`${garrisonAge} ticks old`), `${settlement.id} must say how old the garrison estimate is`);
   }
 });
 
@@ -131,6 +135,7 @@ test("standing on a foreign island shows its garrison and its market as direct o
   // same defect as marking an estimate exact, pointing the other way.
   assert.doesNotMatch(garrison, /~/, "a garrison read from the ground must not be marked approximate");
   assert.doesNotMatch(garrison, /unknown/, "standing on the island must reveal its garrison");
+  assert.doesNotMatch(garrison, /ticks old/, "a garrison read from the ground is present, not a dated estimate");
   // Stock and price are the same kind of perception: the figures on the board in
   // front of the commander, not a decaying report about them.
   const section = stockSection(html);

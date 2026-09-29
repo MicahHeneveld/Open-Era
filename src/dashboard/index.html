@@ -753,7 +753,7 @@
           // the market rows below are what is actually there, not a report about
           // it. Both stay marked approximate only when the commander is away and
           // working from someone else's accounts.
-          '<div class="stat"><span>Garrison</span><strong>' + (item.garrison == null ? '<span class="subtle">unknown</span>' : (here ? "" : approx) + item.garrison) + "</strong></div>" +
+          '<div class="stat"><span>Garrison</span><strong>' + (item.garrison == null ? '<span class="subtle">unknown</span>' : (here ? "" : approx) + item.garrison + (item.garrisonIntelligence && !owned && !present ? ' <span class="subtle">' + item.garrisonIntelligence.ageTicks + " ticks old</span>" : "")) + "</strong></div>" +
           '<div class="stat"><span>Fortification</span><strong>' + fmt(item.fortification, 2) + "×" + (item.groundIntelligence && !owned && !present ? ' <span class="subtle">' + item.groundIntelligence.ageTicks + " ticks old</span>" : "") + "</strong></div>" +
           '<div class="stat"><span>Stability</span><strong>' + fmt(item.stability) + "%</strong></div>" +
           '<div class="stat"><span>Production</span><strong>' + esc(item.focus || "Unknown") + "</strong></div>" +

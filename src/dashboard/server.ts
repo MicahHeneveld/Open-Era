@@ -190,7 +190,11 @@ export function createDashboardApp(options: DashboardOptions): DashboardApp {
           return;
         }
         store.appendTick([result.event], world);
-        json(response, 202, { ok: true, command: result.command });
+        json(response, 202, {
+          ok: true,
+          command: result.command,
+          ...(result.notice ? { notice: result.notice } : {}),
+        });
         return;
       }
       if (request.method === "POST" && url.pathname === "/api/briefing/acknowledge") {
