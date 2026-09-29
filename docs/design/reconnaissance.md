@@ -199,8 +199,9 @@ The pacing milestone took the joint items above. The rest of this brief stays a 
 1. Should ground be recorded on every direct observation instead of requiring `survey`? It is simpler, but it moves the golden hashes.
 2. Does a relayed report keep the observer's confidence, or lose some per hop?
 3. Should rivals standing in faction-held ports keep exact condition and capability (hazard 4)?
-4. Should movement stay a public global feed, or become observed behavior (hazard 5)?
-5. May a captive reveal only beliefs, or also their chain of command's orders? What does interrogation cost in relationships?
-6. May an informant sell another character's beliefs if anonymized, and at what price?
-7. Should seeded hearsay keep being generated from perturbed tick-0 truth?
-8. Should a foreign faction's strength appear as a labelled partial sum, or stay null until more channels exist?
+4. Should an offshore member of the holding faction keep reading that port's live garrison? `dashboardState` in `src/dashboard/view-model.ts` sets `exact` when `settlement.factionId === commander.factionId` and copies the live settlement, including garrison. `projectGarrisonIntelligence` then returns `source: "owned"`, `observedTick` equal to `world.tick`, and `ageTicks` 0, even when the commander is in another port. The owned branch says those records stay the live board from another of the faction's ports. [garrison-regrowth-001](../playtests/garrison-regrowth-001.md) read Cinder Key from Crown Harbor at tick 100 (garrison 14) and tick 139 (garrison 7) while World Government held it. Left as is for now.
+5. Should movement stay a public global feed, or become observed behavior (hazard 5)?
+6. May a captive reveal only beliefs, or also their chain of command's orders? What does interrogation cost in relationships?
+7. May an informant sell another character's beliefs if anonymized, and at what price?
+8. Should seeded hearsay keep being generated from perturbed tick-0 truth?
+9. Should a foreign faction's strength appear as a labelled partial sum, or stay null until more channels exist?
