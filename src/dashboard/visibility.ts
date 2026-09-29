@@ -1,6 +1,6 @@
 import { assessStandingOrder } from "../sim/agency.ts";
 import { factionPower, partyPower, round } from "../sim/state.ts";
-import type { Character, SimEvent, StandingOrder, WorldState } from "../sim/types.ts";
+import type { Character, PartySighting, SimEvent, StandingOrder, WorldState } from "../sim/types.ts";
 
 /**
  * Decides what a player may legitimately know about the rest of the world.
@@ -141,6 +141,35 @@ export function visibleStandingOrders(commander: Character, character: Character
  * player should be shown, so the projection floors it at 0. The internal copy is
  * untouched, and every consumer that cares already floors it itself.
  */
+function projectPartySighting(
+  world: WorldState,
+  sighting: PartySighting,
+): PartySighting & { ageTicks: number } {
+  return {
+    ...sighting,
+    ageTicks: Math.max(0, world.tick - sighting.observedTick),
+  };
+}
+
+/**
+ * The commander's sightings, with the age the panel prints.
+ *
+ * The stored count is not pulled toward a prior. No record is null, not a
+ * zero, and it is not copied into `troops`.
+ */
+function projectPartySightings(
+  world: WorldState,
+  sightings: Character["partySightings"],
+): Record<string, PartySighting & { ageTicks: number }> | null {
+  if (!sightings) return null;
+  return Object.fromEntries(
+    Object.entries(sightings).map(([characterId, sighting]) => [
+      characterId,
+      projectPartySighting(world, sighting),
+    ]),
+  );
+}
+
 function projectKnowledge(knowledge: Character["knowledge"]): Character["knowledge"] {
   return Object.fromEntries(
     Object.entries(knowledge).map(([settlementId, entry]) => [
@@ -161,6 +190,7 @@ export function projectCharacter(
   const capability = intelligence.capabilityExact;
 
   const standingOrders = visibleStandingOrders(commander, character);
+  const storedSighting = isSelf ? undefined : commander.partySightings?.[character.id];
   const activeOrder =
     standingOrders
       .filter(
@@ -184,6 +214,12 @@ export function projectCharacter(
     morale: condition ? round(character.morale, 1) : null,
     sailors: condition ? character.sailors : null,
     troops: condition ? character.troops : null,
+    /**
+     * The dated record, beside troops. Co-located troops stay live. Away, troops
+     * stay null and this is the record, or null when the commander has not seen
+     * this party. It is never copied into `troops`.
+     */
+    partySighting: storedSighting ? projectPartySighting(world, storedSighting) : null,
     captivity: condition ? character.captivity : null,
     troopRecovery: condition ? character.troopRecovery : null,
     scars: condition ? character.scars : null,
@@ -200,6 +236,8 @@ export function projectCharacter(
     standingOrders,
     activeOrderAssessment: activeOrder ? assessStandingOrder(character, activeOrder) : null,
     knowledge: isSelf ? projectKnowledge(character.knowledge) : null,
+    /** The commander's own map. On anyone else it is null, the same as knowledge. */
+    partySightings: isSelf ? projectPartySightings(world, character.partySightings) : null,
     victories: character.victories,
     defeats: character.defeats,
     intelligence,

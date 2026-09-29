@@ -49,6 +49,7 @@ import {
   type DebtObligation,
   type DecisionCandidate,
   type EventDraft,
+  type PartySighting,
   type ResourceKey,
   type Resources,
   type SettlementKnowledge,
@@ -2133,6 +2134,9 @@ function resolveDecision(
     case "survey": {
       // The action slot is the cost. Passive presence still refreshes garrison,
       // stocks and prices without recording the ground; only this verb does.
+      // The same action records who is anchored here. A party underway, and a
+      // party in another port, are left out. The commander is not a sighting
+      // of herself.
       const observed = directObservation(world, character);
       if (!observed) break;
       const surveyed: SettlementKnowledge = {
@@ -2152,6 +2156,7 @@ function resolveDecision(
           settlementId,
           knowledge: retainGround(character.knowledge[settlementId], surveyed),
           reason: "survey",
+          partySightings: partySightingsAt(world, settlementId, character.id, "direct"),
         },
       });
       break;
@@ -2206,9 +2211,44 @@ function deliverTargetedExploreReport(
       settlementId: targetId,
       knowledge: retainGround(issuer.knowledge[targetId], reported),
       reason: "explore-report",
+      // The officer's own map does not gain the list. The issuer receives who
+      // was anchored, other than the officer, at the report tick.
+      partySightings: partySightingsAt(world, targetId, officer.id, "faction-report"),
       ...(alreadyPresent ? { alreadyPresent: true } : {}),
     },
   });
+}
+
+/**
+ * Parties anchored in a port, other than the person looking.
+ *
+ * A captive is included, at the troop count they have. Captivity itself is not
+ * copied. `partyPower()` is taken now and stored; a later skill change must not
+ * rewrite it. The key stays absent when this list is empty.
+ */
+function partySightingsAt(
+  world: WorldState,
+  settlementId: string,
+  observerId: string,
+  source: PartySighting["source"],
+): PartySighting[] {
+  return Object.values(world.characters)
+    .filter((candidate) =>
+      candidate.id !== observerId &&
+      candidate.locationId === settlementId &&
+      candidate.travel === null
+    )
+    .sort((left, right) => left.id.localeCompare(right.id))
+    .map((candidate) => ({
+      characterId: candidate.id,
+      locationId: settlementId,
+      travel: null,
+      troops: candidate.troops.count,
+      partyPower: partyPower(candidate),
+      observedTick: world.tick,
+      source,
+      confidence: 1 as const,
+    }));
 }
 
 function progressTravel(world: WorldState, character: Character, events: SimEvent[]): void {

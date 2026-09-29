@@ -807,6 +807,9 @@
         '<div class="stat-grid">' +
           stat("Party power", item.partyPower) +
           stat("Troops", item.troops ? item.troops.count : null) +
+          (item.troops == null && item.partySighting
+            ? '<div class="stat"><span>Sighted troops</span><strong>' + item.partySighting.troops + ' <span class="subtle">' + item.partySighting.ageTicks + " ticks old</span></strong></div>"
+            : "") +
           stat("Strategy", item.skills ? item.skills.strategy : null) +
           stat("Leadership", item.skills ? item.skills.leadership : null) +
         "</div>" +

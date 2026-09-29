@@ -450,3 +450,59 @@ test("a shortage gains no garrison, and a settlement at its population ceiling g
   assert.equal(heldLedger?.data.shortage, 0);
   assert.equal(heldLedger?.data.garrison, ceiling);
 });
+
+test("a foreign port's tax follows the holder the viewer last knew", () => {
+  const world = createPrototypeWorld(1847);
+  const commander = commanderOf(world);
+  commander.locationId = "crown-harbor";
+  commander.travel = null;
+  const glassport = world.settlements.glassport;
+  const reportFaction = commander.knowledge.glassport.factionId;
+  assert.equal(reportFaction, "world-government");
+  assert.notEqual(world.factions["world-government"].taxRate, world.factions["free-tide"].taxRate);
+  glassport.factionId = "free-tide";
+
+  const offshore = projected(world).settlements.find((settlement) => settlement.id === "glassport")!;
+  assert.equal(offshore.taxRate, world.factions["world-government"].taxRate);
+  assert.notEqual(offshore.taxRate, world.factions["free-tide"].taxRate);
+
+  commander.locationId = "glassport";
+  const beach = projected(world).settlements.find((settlement) => settlement.id === "glassport")!;
+  assert.equal(beach.taxRate, world.factions["free-tide"].taxRate);
+});
+
+test("an offshore faction label stays on the report after the holder changes", () => {
+  const world = createPrototypeWorld(1847);
+  const commander = commanderOf(world);
+  commander.locationId = "crown-harbor";
+  commander.travel = null;
+  const glassport = world.settlements.glassport;
+  glassport.factionId = "free-tide";
+  glassport.ownerId = "character-17";
+  assert.equal(commander.knowledge.glassport.factionId, "world-government");
+
+  const offshore = projected(world).settlements.find((settlement) => settlement.id === "glassport")!;
+  assert.equal(offshore.factionId, "world-government");
+
+  commander.locationId = "glassport";
+  const beach = projected(world).settlements.find((settlement) => settlement.id === "glassport")!;
+  assert.equal(beach.factionId, "free-tide");
+});
+
+test("a foreign beach names the owner, and an offshore port does not", () => {
+  const world = createPrototypeWorld(1847);
+  const commander = commanderOf(world);
+  commander.locationId = "crown-harbor";
+  commander.travel = null;
+  const cinder = world.settlements["cinder-key"];
+  assert.notEqual(cinder.factionId, commander.factionId);
+  cinder.ownerId = "character-19";
+
+  const offshore = projected(world).settlements.find((settlement) => settlement.id === "cinder-key")!;
+  assert.equal(offshore.ownerId, null);
+
+  commander.locationId = "cinder-key";
+  const beach = projected(world).settlements.find((settlement) => settlement.id === "cinder-key")!;
+  assert.equal(beach.ownerId, "character-19");
+  assert.equal(beach.factionId, cinder.factionId);
+});

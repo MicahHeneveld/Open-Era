@@ -130,7 +130,21 @@ export function combatForecast(
   const fortificationEstimate = 1 + (knownFortification - 1) * (0.35 + skill * 0.65);
   const populationDefenseEstimate = knownPopulation * 0.002 * (0.25 + skill * 0.75);
   const attackerCenter = partyPower(attacker);
-  const defenderCenter = belief.estimate * fortificationEstimate + populationDefenseEstimate;
+  // Remote only. Standing there already sees the parties, and the local branch
+  // is what a battle stores. Adding live troops here would move the golden
+  // hashes; the stored sighting does not, because the golden run never surveys.
+  // A sighting older than 72 stays in the sum. The line names that age.
+  let sightedPower = 0;
+  let sightedAge: number | null = null;
+  if (!locallyObserved && attacker.partySightings) {
+    for (const sighting of Object.values(attacker.partySightings)) {
+      if (sighting.locationId !== settlementId) continue;
+      sightedPower += sighting.partyPower;
+      const age = Math.max(0, world.tick - sighting.observedTick);
+      if (sightedAge === null || age > sightedAge) sightedAge = age;
+    }
+  }
+  const defenderCenter = belief.estimate * fortificationEstimate + populationDefenseEstimate + sightedPower;
   const attackerPower = range(attackerCenter, attackerWidth, 1);
   const defenderPower = range(defenderCenter, defenderWidth, 1);
   const winChance = chanceRange(attackerPower.low, attackerPower.high, defenderPower.low, defenderPower.high);
@@ -182,6 +196,9 @@ export function combatForecast(
     } else {
       // No stored ground. Naming the live fortification here would publish it.
       revealedFactors.push("defensive ground remains poorly understood");
+    }
+    if (sightedAge !== null) {
+      revealedFactors.push(`sighted parties at this port are ${sightedAge} ticks old`);
     }
   } else if (strategy >= 70) {
     // Stored this way so an active battle's forecast does not change the

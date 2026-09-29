@@ -980,8 +980,15 @@ export function dashboardState(
           id: settlement.id,
           name: settlement.name,
           position: settlement.position,
-          factionId: knowledge?.factionId ?? null,
-          ownerId: null,
+          // Offshore, the faction on the viewer's report. A claim they have not
+          // been told about does not change the label; substituting the live
+          // holder would announce that change while the stored garrison stayed
+          // put. Standing on the island, the faction that is actually there,
+          // the same split the garrison already uses.
+          factionId: knownFactionId,
+          // Standing on a foreign island, the person who holds it is visible.
+          // Offshore, a personal owner is not part of the report.
+          ownerId: coLocated ? settlement.ownerId : null,
           population: coLocated ? settlement.population : recordedGround?.population ?? null,
           workers: null,
           focus: null,
@@ -997,11 +1004,17 @@ export function dashboardState(
           stability: coLocated ? settlement.stability : null,
           prices: coLocated ? currentPrices(world, settlement.id) : knowledge?.priceEstimate ?? null,
           /**
-           * Public, including from offshore and including a rival's ports.
-           * A price is a rumor until you are standing in the market; the tax
-           * on a sale there is not.
+           * The rate of the faction the viewer last recorded as the holder.
+           * Standing on the island, that is the faction actually collecting it.
+           * With no report at all the live rate is still published: a missing
+           * entry must not hide the tax the way it hides a price. The rate is
+           * not copied onto the knowledge record. Faction rates do not change,
+           * and writing a new field through observation would move the hashes.
            */
-          taxRate: settlementTaxRate(world, settlement.factionId),
+          taxRate: settlementTaxRate(
+            world,
+            coLocated || !knowledge ? settlement.factionId : knowledge.factionId,
+          ),
           priceQuote: projectPriceQuote(world, coLocated, knowledge),
           priceDrift: projectPriceDrift(world, coLocated, settlement.id),
           market,
