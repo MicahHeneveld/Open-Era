@@ -484,6 +484,78 @@ Answer by number, for example "4: yes" or "4: keep the default." The default is 
 
 **Source:** [Loyalty drift](loyalty-drift.md#questions-for-micah) question 4
 
+## Autonomous orders
+
+### 47. Should captains start giving new orders on their own?
+
+**Default:** No. The four-day version rewrites the first 72 ticks. The versions that wait until after that still change who holds the ports by tick 1200. This is the same question as 46, now measured after M27.
+
+**If you pick the other way:** Captains would give new orders on their own. The four-day version rewrites the first 72 ticks. The versions that wait until after that still change who holds the ports by tick 1200.
+
+**Status:** Default: not yet (re-measure after M29)
+
+**Source:** [Autonomous orders](autonomous-orders.md#questions-for-micah) question 1
+
+### 48. If a later version does it, when is the first order?
+
+**Default:** After the first 72 ticks. The runs that wait keep today's fixture. They are not quiet after that.
+
+**If you pick the other way:** The first order would come inside the first 72 ticks. The four-day version does that, and it rewrites the first 72 ticks.
+
+**Status:** Default: not yet (re-measure after M29)
+
+**Source:** [Autonomous orders](autonomous-orders.md#questions-for-micah) question 2
+
+### 49. How often, once it starts?
+
+**Default:** Every four days, and only while that captain is free and their faction holds a port. Giving a new order on the same tick a report closes ran to 77 orders on seed 1847 and 138 orders on seed 4096.
+
+**If you pick the other way:** A new order would go out on the same tick a report closes. That ran to 77 orders on seed 1847 and 138 orders on seed 4096.
+
+**Status:** Default: not yet (re-measure after M29)
+
+**Source:** [Autonomous orders](autonomous-orders.md#questions-for-micah) question 3
+
+### 50. Who receives the order?
+
+**Default:** The free faction mate with the lowest id, skipping anyone who already has an open order from that captain, and skipping anyone who already refused this protect on that port. These runs did that. The same two or three people received most of the orders.
+
+**If you pick the other way:** The job would go back to the mate who just finished, instead of to the lowest id.
+
+**Status:** Default: not yet (re-measure after M29)
+
+**Source:** [Autonomous orders](autonomous-orders.md#questions-for-micah) question 4
+
+### 51. Does your own commander do this too?
+
+**Default:** No. She is the human, and these runs gave her no commands. Skipping her on all 49 marks left the same history as Free Tide alone.
+
+**If you pick the other way:** Your own commander would give orders too. These runs gave her no commands. Skipping her on all 49 marks left the same history as Free Tide alone.
+
+**Status:** Default: not yet (re-measure after M29)
+
+**Source:** [Autonomous orders](autonomous-orders.md#questions-for-micah) question 5
+
+### 52. While the commander is in prison, does the person covering the seat give the order?
+
+**Default:** No. The cover still does not issue. The four-day sketch skipped 9, 0, and 9 marks because Pax was in prison.
+
+**If you pick the other way:** The person covering the seat would give the order. Those skipped marks would become issues by someone else. That was not run.
+
+**Status:** Default: not yet (re-measure after M29)
+
+**Source:** [Autonomous orders](autonomous-orders.md#questions-for-micah) question 6
+
+### 53. A report has just closed, so the slot is free. Does the same job go straight back out?
+
+**Default:** No. A free slot is not itself an order to give another one. On the four-day clock the next order was usually accepted. On the same-tick version it was given again immediately.
+
+**If you pick the other way:** The same job would go straight back out when the report closes. On the same-tick version it was given again immediately.
+
+**Status:** Default: not yet (re-measure after M29)
+
+**Source:** [Autonomous orders](autonomous-orders.md#questions-for-micah) question 7
+
 ## Already settled
 
 The [progress log](../../progress.md) (reconnaissance brief, 2026-09-29) answered reconnaissance questions 1–8. Reconnaissance question 1 is no: a survey or an officer's look stores population, walls, and who was anchored. Reconnaissance question 2 keeps confidence and the original date on that handoff. Reconnaissance questions 3–8 stay put: public sea courses, a live garrison from your other ports, no captives or informants. [Party sightings](party-sightings.md#left-open) repeats those. A foreign price is that dated report, not a live quote ([World simulation](world-simulation.md#player-trade)). An idle player with money still starves if they give no orders ([Port provisions](port-provisions.md#the-idle-commander)). Unpaid ransom is questions 22–29 ([Captivity debts](captivity-debts.md#questions-for-micah)). A landless raid once a town has 8 soldiers, and no troops left behind on the claim, is questions 30–32 ([Portless recovery](portless-recovery.md#questions-for-micah)). A higher score is the attacker's victory when morale is 12 or under, a close fight included and the short retake accepted, rest does not refill the hold, and the capture die is still rolled, is questions 33–37 ([Battle morale](battle-morale.md#questions-for-micah)). Someone else covers the seat while the commander is in prison and hands it back on release, the cover is the highest leadership plus loyalty with the lower id winning a tie and trust is not used, you cannot name someone else or keep the cover after release, everyone including a rival sees who holds the seat, and if that cover is captured the next person steps up for the whole 14 days, is questions 38–42 ([Political layer](political-layer.md#questions-for-micah)). A character released still owing ransom loses 0.04 loyalty once, a paid release changes nothing, orders, plans and work keep using the starting loyalty, and you see loyalty only for your own faction, is questions 43–45 ([Loyalty drift](loyalty-drift.md#questions-for-micah)). Battered-port surrender, fed garrisons, and refusing an unpaid voyage are built. The first hour is a test, not a choice. The one-click food buy is a known bug queued for engineering: the button will show the cost, apply the share-of-stock cap, and its refusal text will be fixed ([World simulation](world-simulation.md#player-trade); [progress log](../../progress.md#open-items)).
