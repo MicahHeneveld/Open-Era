@@ -18,6 +18,7 @@ interface ProjectedIntelligence {
   source: string;
   conditionExact: boolean;
   capabilityExact: boolean;
+  observedTick: number | null;
 }
 
 type ProjectedCharacter = Record<string, unknown> & {
@@ -29,6 +30,9 @@ type ProjectedCharacter = Record<string, unknown> & {
   locationId: string | null;
   money: number | null;
   health: number | null;
+  troops: unknown;
+  skills: unknown;
+  activeGoal: unknown;
   partyPower: number | null;
   victories: number;
   defeats: number;
@@ -179,6 +183,37 @@ test("a character outside the commander's observation exposes identity only", ()
   // and it must not be copied into troops.
   assert.equal(projected.troops, null);
   assert.equal(projected.partySighting, null);
+});
+
+test("a landless mate at Verdant Cay is distant and a rival faction hides its purse", () => {
+  const { world, commander } = fixture();
+  assert.equal(commander.locationId, "crown-harbor");
+  world.settlements["cinder-key"].factionId = "world-government";
+  assert.equal(
+    Object.values(world.settlements).some((settlement) => settlement.factionId === "free-tide"),
+    false,
+  );
+
+  const mate = world.characters["character-18"];
+  assert.equal(mate.factionId, "free-tide");
+  mate.locationId = "verdant-cay";
+  mate.travel = null;
+
+  const projected = project(world, commander, mate);
+  assert.equal(projected.intelligence.tier, "distant");
+  assert.equal(projected.factionId, "free-tide");
+  assert.equal(projected.locationId, "verdant-cay");
+  assert.equal(projected.money, null);
+  assert.equal(projected.troops, null);
+  assert.equal(projected.skills, null);
+  assert.equal(projected.activeGoal, null);
+  assert.equal(projected.intelligence.observedTick, null);
+
+  const rival = (projectFactions(world, commander) as unknown as ProjectedFaction[])
+    .find((faction) => faction.id === "free-tide");
+  assert.ok(rival, "a faction with no ports is still listed");
+  assert.equal(rival.treasury, null);
+  assert.equal(rival.power, null);
 });
 
 test("a faction peer is known by record without exposing condition or motive", () => {

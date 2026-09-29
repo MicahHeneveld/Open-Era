@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { assessStandingOrder } from "../src/sim/agency.ts";
+import { assessStandingOrder, judgeOrderCompletion, reviewPlan } from "../src/sim/agency.ts";
 import { runTick, runTicks } from "../src/sim/engine.ts";
+import { DeterministicRng } from "../src/sim/rng.ts";
 import { createPrototypeWorld } from "../src/sim/scenario.ts";
 
 test("characters begin with rooted goals, beliefs, relationships, and faction orders", () => {
@@ -309,4 +310,49 @@ test("accepted orders report temporary deviations, resumptions, and completion j
       (order.status === "awaiting-confirmation" || order.status === "completed")
     );
   }));
+});
+
+test("an active protect order does not complete once the target's faction has changed", () => {
+  const world = createPrototypeWorld(1847);
+  const character = world.characters["character-16"];
+  assert.equal(character.name, "Corin Hale");
+  const order = character.standingOrders.find((candidate) => candidate.directive === "protect");
+  assert.ok(order);
+  assert.equal(order.targetId, "cinder-key");
+  order.status = "active";
+  order.adherence = "following";
+  // One day of evidence, with this rng, scores under the threshold. Two days
+  // is long enough for a faction that still holds the port to complete.
+  order.statusChangedTick = world.tick - world.ticksPerDay * 2;
+  character.locationId = order.targetId;
+  character.travel = null;
+
+  const held = judgeOrderCompletion(world, character, order, "rest", [], new DeterministicRng(1));
+  assert.ok(held);
+  assert.equal(held.score >= held.threshold, true);
+  assert.match(held.summary, /Corin Hale reports that Cinder Key is secure/);
+
+  world.settlements["cinder-key"].factionId = "world-government";
+  assert.equal(character.locationId, "cinder-key");
+  assert.equal(
+    judgeOrderCompletion(world, character, order, "rest", [], new DeterministicRng(1)),
+    null,
+    "standing on a port another faction holds is not a completed protection",
+  );
+
+  // Equality, including null. An unaligned officer on an unowned port can still finish.
+  character.factionId = null;
+  world.settlements["cinder-key"].factionId = null;
+  const unowned = judgeOrderCompletion(world, character, order, "rest", [], new DeterministicRng(1));
+  assert.ok(unowned);
+  assert.match(unowned.summary, /Cinder Key is secure/);
+
+  world.settlements["cinder-key"].factionId = "world-government";
+  const esme = world.characters["character-19"];
+  assert.equal(esme.factionId, "free-tide");
+  assert.ok(esme.goals.some((goal) => goal.status === "active"));
+  const review = reviewPlan(world, esme, new DeterministicRng(1));
+  assert.ok(review, "losing the last port does not leave the character with no goal");
+  assert.equal(review.selectedGoalId, "character-19:serve-faction");
+  assert.equal(review.goalScores[0]?.kind, "serve-faction");
 });

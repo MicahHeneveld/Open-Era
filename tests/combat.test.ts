@@ -46,6 +46,18 @@ test("retreat routing prefers the nearest settlement controlled by the attacker'
   assert.equal(selectRetreatDestination(world, "character-01", "cinder-key"), "glassport");
 });
 
+test("with no friendly port, retreat goes to Verdant Cay", () => {
+  const freeTide = createPrototypeWorld(1847);
+  assert.equal(selectRetreatDestination(freeTide, "character-19", "glassport"), "cinder-key");
+  freeTide.settlements["cinder-key"].factionId = "world-government";
+  assert.equal(selectRetreatDestination(freeTide, "character-19", "glassport"), "verdant-cay");
+
+  const worldGovernment = createPrototypeWorld(1847);
+  worldGovernment.settlements["crown-harbor"].factionId = "free-tide";
+  worldGovernment.settlements["glassport"].factionId = "free-tide";
+  assert.equal(selectRetreatDestination(worldGovernment, "character-01", "glassport"), "verdant-cay");
+});
+
 test("a major player attack resolves one phase and refreshes local intelligence", () => {
   const { world, commander, settlement } = prepareMajorBattle();
   const submission = submitCommand(world, {
