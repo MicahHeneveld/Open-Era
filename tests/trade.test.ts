@@ -281,7 +281,7 @@ test("the market block describes the market, not the commander standing in it", 
   // Nothing the commander owns may appear inside the market block.
   assert.deepEqual(
     Object.keys(here.market).sort(),
-    ["expiresTick", "quotedTick", "resources", "settlementId", "taxRate"],
+    ["expiresTick", "quotedTick", "resources", "settlementId", "taxAppliesTo", "taxRate"],
     "the market block must carry market facts only",
   );
   for (const ownerField of ["money", "load", "free", "capacity", "provisionsReserve"]) {
@@ -290,7 +290,22 @@ test("the market block describes the market, not the commander standing in it", 
 
   // The same figures live on the commander's own party, where they belong.
   const hold = state.party.hold;
+  assert.equal(here.market.taxAppliesTo, "sell", "a purchase is not taxed, and the quote has to say so");
+  for (const resource of RESOURCE_KEYS) {
+    const row = here.market.resources[resource];
+    assert.equal(Number.isInteger(row.maxBuy), true, `${resource} maxBuy must be a whole order`);
+    assert.equal(Number.isInteger(row.maxSell), true, `${resource} maxSell must be a whole order`);
+    assert.equal(row.maxBuy, Math.floor(tradeQuote(world, commander, resource, "buy", 10_000).maxQuantity));
+    assert.equal(row.maxSell, Math.floor(tradeQuote(world, commander, resource, "sell", 10_000).maxQuantity));
+  }
+
   assert.equal(hold.money, commander.money);
+  assert.deepEqual(hold.cargo, {
+    provisions: round3(commander.cargo.provisions),
+    arms: round3(commander.cargo.arms),
+    medicine: round3(commander.cargo.medicine),
+    shipMaterials: round3(commander.cargo.shipMaterials),
+  }, "the hold must itemize every good, not only the total load");
   assert.equal(hold.load, round3(cargoLoad(commander)), "the hold load must match the commander's actual cargo");
   assert.equal(hold.capacity, cargoCapacity(commander));
   assert.equal(hold.free, round3(cargoCapacity(commander) - cargoLoad(commander)));

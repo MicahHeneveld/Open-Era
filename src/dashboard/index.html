@@ -681,7 +681,7 @@
       }).join("");
       return '<h3>Trade here</h3><div class="market">' +
         '<div class="subtle">' + fmt(hold.load, 1) + ' of ' + fmt(hold.capacity, 0) + ' hold used · ' + fmt(hold.money, 2) + ' money · ' +
-          (market.taxRate > 0 ? fmt(market.taxRate * 100, 0) + "% tax on sales" : "no tax on sales") +
+          (market.taxAppliesTo === "sell" && market.taxRate > 0 ? fmt(market.taxRate * 100, 0) + "% tax on sales, not on purchases" : market.taxRate > 0 ? fmt(market.taxRate * 100, 0) + "% tax on sales" : "no tax on sales") +
           (market.expiresTick != null ? " · prices quoted tick " + market.quotedTick + ", expire tick " + market.expiresTick : "") +
           (hold.provisionsReserve > 0 ? " · " + fmt(hold.provisionsReserve, 1) + " provisions reserved for the crew" : "") +
         '</div>' + rows + '</div>';

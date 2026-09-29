@@ -391,7 +391,11 @@ function validateCharacterAction(
     const quote = tradeQuote(world, character, resource, direction, quantity);
     if (quote.quantity < quantity) {
       if (quote.limitedBy === "depth") {
-        return reject("market-depth", `${settlement.name} will clear ${quote.maxQuantity} of ${resource} in one order; ${quantity} was requested`);
+        const whole = Math.floor(quote.maxQuantity);
+        return reject(
+          "market-depth",
+          `${settlement.name} will clear ${quote.maxQuantity} of ${resource} in one order, so the largest whole order is ${whole}; ${quantity} was requested`,
+        );
       }
       if (direction === "sell" && quote.limitedBy === "reserve") {
         return reject("party-reserve", `Only ${quote.maxQuantity} of ${resource} may be sold; the rest is the party's own reserve`);

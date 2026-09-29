@@ -53,6 +53,7 @@ test("a player order cannot clear more than the market's depth", () => {
   assert.equal(refused.ok, false);
   assert.equal(refused.ok === false ? refused.code : null, "market-depth");
   assert.match(refused.ok === false ? refused.error : "", /will clear/);
+  assert.match(refused.ok === false ? refused.error : "", /largest whole order is 14/);
 
   const accepted = Math.max(1, Math.floor(quote.maxQuantity));
   assert.equal(submitCommand(world, {

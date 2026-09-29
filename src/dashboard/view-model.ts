@@ -685,6 +685,8 @@ function projectMarket(world: WorldState, commander: Character, settlementId: st
     settlementId,
     /** Fraction of a sale the local faction takes. Zero with no faction. */
     taxRate,
+    /** Which side of the board pays `taxRate`. A purchase is not taxed. */
+    taxAppliesTo: "sell" as const,
     /**
      * The board was read this tick. Production and trade recompute every price
      * on the next tick, so the figure expires then — `exact` knowledge of the
@@ -706,10 +708,13 @@ function projectMarket(world: WorldState, commander: Character, settlementId: st
         price: buy.unitPrice,
         stock: round(settlement.stocks[resource], 3),
         targetStock: settlement.targetStocks[resource],
-        /** Largest single buy the market, the hold and the purse allow. */
-        maxBuy: buy.maxQuantity,
-        /** Largest single sale the hold and the reserve allow. */
-        maxSell: sell.maxQuantity,
+        /**
+         * Largest whole-unit buy the market, the depth, the hold and the purse
+         * allow. Orders are whole units, so a depth of 14.4 is an order of 14.
+         */
+        maxBuy: Math.floor(buy.maxQuantity),
+        /** Largest whole-unit sale the hold, the reserve and the depth allow. */
+        maxSell: Math.floor(sell.maxQuantity),
       }];
     })),
   };
@@ -764,6 +769,17 @@ export function dashboardState(
         money: commander.money,
         /** Provisions held back from sale, so a voyage cannot strand its own crew. */
         provisionsReserve: round(commander.cargo.provisions - sellableProvisions(commander), 3),
+        /**
+         * What is actually in the hold, by good. The totals above do not say
+         * which good a sale would move, and a trader who reads only this block
+         * otherwise has to find the same figures on the character.
+         */
+        cargo: {
+          provisions: round(commander.cargo.provisions, 3),
+          arms: round(commander.cargo.arms, 3),
+          medicine: round(commander.cargo.medicine, 3),
+          shipMaterials: round(commander.cargo.shipMaterials, 3),
+        },
       },
       /** Money charged per tick while the party is underway. Provisions are separate and burn either way. */
       passageCostPerTick: PASSAGE_COST_PER_TICK,
