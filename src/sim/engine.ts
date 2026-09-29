@@ -86,6 +86,26 @@ export function passageCost(ticks: number): number {
 }
 
 /**
+ * Whether the purse can cover the quoted passage to `destinationId` before leaving.
+ *
+ * The quote is `passageCost(travelDuration)` and nothing else. The money is
+ * spent at sea, not paid to the destination, so a destination tax is not part
+ * of it. Player commands and autonomous planning both ask this function, so
+ * the two cannot drift. Equality is enough: the player refusal is
+ * `money < cost`. A voyage already underway is not re-quoted here; each sea
+ * tick still charges `min(money, PASSAGE_COST_PER_TICK)`.
+ */
+export function quotedPassage(
+  world: WorldState,
+  character: Character,
+  destinationId: string,
+): { ticks: number; cost: number; affordable: boolean } {
+  const ticks = travelDuration(world, character, destinationId);
+  const cost = passageCost(ticks);
+  return { ticks, cost, affordable: character.money >= cost };
+}
+
+/**
  * Units one order may move before the board is asked to clear more than a
  * tick of trade should.
  *
@@ -790,6 +810,13 @@ function buildCandidates(
       candidate.score = -1_000;
     }
     if (candidate.action === "recruit" && (character.money < 30 || settlement.stocks.arms < 2)) {
+      candidate.score = -1_000;
+    }
+    if (
+      candidate.action === "travel" &&
+      candidate.targetId &&
+      !quotedPassage(world, character, candidate.targetId).affordable
+    ) {
       candidate.score = -1_000;
     }
   }
@@ -1975,9 +2002,11 @@ function resolveDecision(
 
   switch (chosen.action) {
     case "travel": {
-      // The purse check lives on the player command, not here. An autonomous
-      // party still sails and pays what it has each sea tick. Refusing that
-      // path would change histories the golden hashes record.
+      // Affordability is `quotedPassage`, applied when the voyage is chosen:
+      // the player command refuses a short purse, and `buildCandidates` scores
+      // an unaffordable autonomous voyage at -1000. A voyage that has already
+      // started is not sent back. Each sea tick still charges what the purse
+      // can pay, down to zero.
       const destinationId = chosen.targetId!;
       const totalTicks = travelDuration(world, character, destinationId);
       emit(world, events, {
