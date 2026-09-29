@@ -859,7 +859,7 @@ function validateOfferContract(
     command.characterId === carrier.id &&
     world.players[command.playerId]?.characterId === buyer.id
   )) {
-    return reject("contract-already-queued", "Another command already queued will act on that contract");
+    return reject("contract-already-queued", "An offer to this carrier is already queued");
   }
   if (round(buyer.money, 2) < price) {
     return reject("insufficient-money", `The contract price is ${price}; the character holds ${round(buyer.money, 2)}`);

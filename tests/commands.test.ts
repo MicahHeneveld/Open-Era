@@ -899,7 +899,7 @@ test("an offer across factions queues once, and a second offer from the same buy
   assert.deepEqual(second, {
     ok: false,
     code: "contract-already-queued",
-    error: "Another command already queued will act on that contract",
+    error: "An offer to this carrier is already queued",
   });
   assert.equal(world.pendingCommands.length, 1);
 });

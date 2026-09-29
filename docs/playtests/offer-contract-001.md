@@ -64,7 +64,7 @@ HTTP 202. `command.id` is `command-00002`. `command.price` is 18. `command.expir
 
 The same Zara body a second time, still before any advance:
 
-HTTP 400. `code` `contract-already-queued`. `error` `Another command already queued will act on that contract`.
+HTTP 400. `code` `contract-already-queued`. `error` `An offer to this carrier is already queued`. The session recorded below was played before that sentence, and its checkpoint quotes the previous one.
 
 `GET /api/state?limit=200` is still `tick` 0. `party.hold.money` is still 108. `contracts` is still `[]`. `pendingCommands` length 2, ids `command-00001` and `command-00002`. The log has two `player-command-accepted` events, both summary `Command queued for Mara Vane`, sequences 1 and 2. Escrow has not moved.
 
@@ -220,7 +220,7 @@ None observed against the plan. Every named reading matched.
 - Zara was already at Crown Harbor with 32 provisions aboard, so the kept haul never left the dock. A player who wanted to watch a voyage did not get one. That is why Part 2 exists. It does not miss the success signal.
 - The contract card jumps from `offered` at state tick 1 to `fulfilled` at state tick 2. Status `accepted` is on the event only. A player who reads state once per tick never sees it.
 - Once Zara and Orin sail, `money` and `cargo` on their cards are null. The 118.15 she was paid, and the 27 he still held, exist on the events and then drop out of the roster.
-- The duplicate-queue error says `Another command already queued will act on that contract` while `contracts` is still `[]`. The command is queued. A contract id does not exist yet.
+- The duplicate-queue error said `Another command already queued will act on that contract` while `contracts` was still `[]`. The command was queued, and a contract id did not exist yet. That pending-offer case now says `An offer to this carrier is already queued`. The code is still `contract-already-queued`. A mutation queued against a contract that already exists keeps the older sentence.
 - `expiresInTicks` 11 against a deadline already stored as tick 12 is `The offer does not change the contract`. The relative field changed. The absolute deadline did not.
 - Orin's order card, on tick 0, already says he refused a protect order: `Orin Rill refused the protect order after weighing loyalty, risk, and ambition.` The provisions refusal is a different sentence, one tick later. The two are easy to mix up, and only the provisions refusal moves the escrow.
 
