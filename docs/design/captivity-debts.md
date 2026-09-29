@@ -2,6 +2,8 @@
 
 **Status: Open.** Proposal for the owner to accept, change, or reject. This tree is `2918554`, the merge of PR #27, which includes M23. The headless runs below are that unmodified tree. The collection rule was patched in locally to measure it, then reverted. This note is not decided until it moves into [world simulation](world-simulation.md). It follows the last paragraph of [order confirmation](order-confirmation.md): a debt is owed to a faction, and the order-confirmation hook is the wrong place to collect it.
 
+**Correction (M34.2).** The release-day coins no longer arrive nowhere. [Ransom split](ransom-split.md) is the rule. Half of what was paid goes to the captor faction's treasury and half to that faction's party leader. The odd cent goes to the treasury. When the captor has no faction, the leader receives every cent. The debt is still the unpaid remainder. The tables below were measured on `2918554`, before that split, and they are not rewritten.
+
 Runs are `createPrototypeWorld` plus `runTick`, no player commands, seeds 1847 / 2718 / 4096, Node v24.21.0, ICU 78.3. Tick numbers on events are the `tick` field. `npm test` on this tree passes, 170 tests. The 72-tick hashes match `tests/fixtures/golden-hashes.json` (`d7eb02eb…`, `d0b4b449…`, `d5d9da8b…`; 8275, 8489, 8003 events). M23 did not change that fixture. The same three seeds at tick 1200 also match `6d7badb`, the tree before M23, including every release row and debt id below. Long runs are 1200 ticks. Median is the average of the two central values when the count is even.
 
 M18 through M23 are in this tree. M24 (ration floor), M25 (one open order per issuer and recipient), M26 (a paid provisions delivery, with the price held outside both purses), and M27 (an unanswered completion report closes itself) are accepted and not built. M24 and M25 do not read a debt.
@@ -24,7 +26,7 @@ debtValue       = round(demandedValue - moneyPaid, 2)
 
 `round` to 2 digits is the money helper. The system maximum sits between 75 and 600, so the demand sits between 41.25 and 600. Measured demands on the debt rows run from 71.58 to 537.44.
 
-If `debtValue > 0`, the function builds a `DebtObligation` and puts it on the `captivity-released` event. `applyEvent` (`src/sim/state.ts`) sets `actor.money` to `characterMoney` and pushes the object onto `actor.debts`. It does not write a treasury. The coins in `moneyPaid` leave the purse and arrive nowhere. Escapes write no debt: `escapeCaptivity` emits `captivity-escaped` and never builds one. These runs have 0 escapes.
+If `debtValue > 0`, the function builds a `DebtObligation` and puts it on the `captivity-released` event. `applyEvent` (`src/sim/state.ts`) sets `actor.money` to `characterMoney` and pushes the object onto `actor.debts`. On this measured tree it did not write a treasury, so the coins in `moneyPaid` left the purse and arrived nowhere. That is no longer the rule: see the correction above and [ransom split](ransom-split.md). Escapes write no debt: `escapeCaptivity` emits `captivity-escaped` and never builds one. These runs have 0 escapes.
 
 The id is `debt-` plus `nextEventSequence` padded to 6 digits, read before `emit`. That sequence is the release event's own sequence.
 
@@ -129,7 +131,7 @@ factionTreasury = round(faction.treasury + paid, 2)
 
 Skip when `paid` is 0. A day the purse is empty emits nothing, and that day is not added on later. A day spent captive is the same: the next free world day pays one installment, not the backlog.
 
-Emit `debt-repaid`. `actorId` is the debtor. `targetId` is the creditor faction. No `settlementId`. The data is `debtId`, `paid`, `remainingValue`, `originalValue`, `characterMoney`, `factionTreasury`, and `closed` (true when `remainingValue` is 0). `applyEvent` sets the purse and the treasury. While `closed` is false it writes `remainingValue`. When `closed` is true it removes the row. A paid debt is not kept at zero. No `relationship-changed`. No goal event. The release-day `moneyPaid` is unchanged: it still leaves the purse and still does not enter the treasury.
+Emit `debt-repaid`. `actorId` is the debtor. `targetId` is the creditor faction. No `settlementId`. The data is `debtId`, `paid`, `remainingValue`, `originalValue`, `characterMoney`, `factionTreasury`, and `closed` (true when `remainingValue` is 0). `applyEvent` sets the purse and the treasury. While `closed` is false it writes `remainingValue`. When `closed` is true it removes the row. A paid debt is not kept at zero. No `relationship-changed`. No goal event. The release-day `moneyPaid` on this measured tree left the purse and did not enter the treasury. That sentence is stale. The current rule splits those coins: half to the captor treasury and half to the party leader, the odd cent to the treasury, and the whole payment to the leader when the captor has no faction. [Ransom split](ransom-split.md).
 
 A second capture does not clear an open row. Payments pause while `captivity` is set. A later release can push another `prisoner-release` row. The older one is first in the sort. Losing the last port does not close the debt and does not stop the credit. The landless faction still has its treasury, and the payment adds to it.
 

@@ -210,7 +210,7 @@ test("a held card names the captor beside live troops 0 and an empty port list",
     id: "mina-card",
     name: "Mina Vale",
     troops: { count: 0, experience: 1, discipline: 1 },
-    troopsNote: "0 with Mina Vale; 12 held by World Government.",
+    troopsNote: "0 with Mina Vale; 12 held by World Government. The experience and discipline are the troops now held by World Government.",
     partySighting: null,
     seaSighting: null,
     skills: null,
@@ -232,7 +232,7 @@ test("a held card names the captor beside live troops 0 and an empty port list",
     controller: { kind: "autonomous" },
   };
   const html = renderer.characterInspector(card);
-  assert.match(html, /0 with Mina Vale; 12 held by World Government\./);
+  assert.match(html, /0 with Mina Vale; 12 held by World Government\. The experience and discipline are the troops now held by World Government\./);
   assert.match(html, /Mina Vale named no ports\. The list may be incomplete\./);
   assert.doesNotMatch(html, /No port report from this prisoner/);
 });

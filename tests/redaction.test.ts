@@ -151,7 +151,11 @@ test("proximity reveals condition but never motive", () => {
 
   // Observable condition crosses the boundary.
   assert.equal(projected.health, round(companion.health, 1));
-  assert.deepEqual(projected.troops, companion.troops);
+  const troops = projected.troops as { count: number; experience: number; discipline: number };
+  assert.equal(troops.count, companion.troops.count);
+  assert.equal(troops.experience, round(companion.troops.experience, 3));
+  assert.equal(troops.discipline, round(companion.troops.discipline, 3));
+  assert.equal(companion.troops.experience, 0.14849378322251142);
   assert.deepEqual(projected.skills, companion.skills);
 
   // Motive does not, even at arm's length.
@@ -378,7 +382,11 @@ test("territory the commander's faction controls counts as observed", () => {
 
   const projected = project(world, commander, outsider);
   assert.equal(projected.intelligence.tier, "co-located");
-  assert.deepEqual(projected.troops, outsider.troops);
+  const troops = projected.troops as { count: number; experience: number; discipline: number };
+  assert.equal(troops.count, 0);
+  assert.equal(troops.experience, round(outsider.troops.experience, 3));
+  assert.equal(troops.discipline, round(outsider.troops.discipline, 3));
+  assert.equal(outsider.troops.experience, 0.6677598488284275);
   assert.equal((projected.troops as { count: number }).count, 0);
   assert.equal(projected.partyPower, 0);
   assert.equal(projected.plan, null, "territory reveals presence, not motive");
@@ -774,7 +782,7 @@ test("a contract's price is visible only to the two parties", () => {
   );
   assert.equal(withheld.payloadWithheld, true);
   assert.equal(withheld.data, null);
-  assert.equal(withheld.summary, `${commander.name}: contract offered`);
+  assert.equal(withheld.summary, `${commander.name} offered a contract.`);
   assert.equal(String(withheld.summary).includes(String(price)), false);
 
   const view = dashboardState(world, [], fullEventFeed([])) as { contracts: Array<{ price: number | null }> };
