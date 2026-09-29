@@ -12,7 +12,28 @@ import type {
 
 export const SURRENDER_GARRISON_THRESHOLD = 15;
 export const SURRENDER_STABILITY_THRESHOLD = 30;
+/** Each soldier under the garrison line raises the stability limit by this much. */
+export const SURRENDER_STABILITY_SLOPE = 10;
+/** The sliding stability limit never rises above this. */
+export const SURRENDER_STABILITY_CAP = 80;
 export const CLAIM_STABILITY_FLOOR = 55;
+
+/**
+ * Stability at or below which an attacker victory offers surrender.
+ *
+ * The garrison test stays at 15. Each soldier under that line raises the
+ * stability limit by 10, and the limit stops at 80. At garrison 14 the limit
+ * is 40, which contains the blow that used to stall a port at 39.55. At
+ * garrison 10 and below the limit is the cap. The battle just fought is the
+ * only input. A survey, a rumor, and a motive are not.
+ */
+export function surrenderStabilityLimit(garrison: number): number {
+  const shortfall = Math.max(0, SURRENDER_GARRISON_THRESHOLD - garrison);
+  return Math.min(
+    SURRENDER_STABILITY_CAP,
+    SURRENDER_STABILITY_THRESHOLD + SURRENDER_STABILITY_SLOPE * shortfall,
+  );
+}
 
 export function normalizeStandingOrder(order: StandingOrder): StandingOrder {
   return {

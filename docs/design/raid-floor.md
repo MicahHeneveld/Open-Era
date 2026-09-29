@@ -1,6 +1,10 @@
 # The raid floor
 
-**Status: Open.** Proposal for the owner to accept, change, or reject. Current behavior is `main` at `2d8d048`. It is not decided until it moves into [world simulation](world-simulation.md).
+**Status: Built (M19).** The slope-10 slide in the recommendation is the rule. `surrenderStabilityLimit` in `src/sim/state.ts` is `min(80, 30 + 10 × max(0, 15 − garrison))`. Both `resolveImmediateBattle` and `completeMajorBattle` use it, and only after an attacker victory, and only while garrison is still at most 15. The raid gate (`garrison >= 15` in `buildCandidates`), the player raid check, and peacetime upkeep are unchanged. The sentence in [world simulation](world-simulation.md) now states this rule.
+
+Tick-72 event counts after this change, Node v24.21.0, ICU 78.3, before any later purse change: **8338 / 8417 / 8298** (seeds 1847 / 2718 / 4096). Those are the slope-10 counts in the table below. Seed 1847 stays at the fixture's 8338 events because the new claim replaces other events inside the window; the hash still moves. The playtest is [raid-floor-001](../playtests/raid-floor-001.md).
+
+The sections under this status are the proposal as it was measured. They are the record of why slope 10 was chosen, not a second rule.
 
 Runs are `createPrototypeWorld` plus `runTick`, 400 ticks, no player commands, seeds 1847 / 2718 / 4096, Node v22.14.0, ICU 76.1. The 72-tick hashes matched `tests/fixtures/golden-hashes.json` (`02f1aa2a…`, `76445c58…`, `12e04439…`; 8338, 8428, 8361 events). Patches were reverted.
 
@@ -70,9 +74,9 @@ Pressure alone: Glassport is claimed on 1847 at tick 95 (Mina Vale, `character-1
 
 An offer to the strongest present hostile party (own `partyPower`, ties on id, co-located troops) does resolve Glassport on 2718, at tick 43. It also reopens taken ports. Second claims: 1847 Cinder Key 287 and Glassport 311; 2718 Cinder Key 247 and Glassport 257; 4096 Glassport 266 and Crown Harbor 319. On 4096 the capital changes hands twice.
 
-## Recommendation (proposal)
+## Recommendation (built)
 
-Take the slope-10 slide in B. Leave the raid gate, the player raid check, and peacetime upkeep alone.
+Take the slope-10 slide in B. Leave the raid gate, the player raid check, and peacetime upkeep alone. M19 did that.
 
 It is the measured rule that gives Glassport one owner on all three seeds and keeps that owner through tick 400. A keeps handing the port on. C misses 2718, or fights the port again once an offer exists outside battle. The slide reads the garrison and stability that battle just wrote, where the victor is standing. It does not read `knowledge`, a survey's `ground`, or a motive. The claim stays the existing candidate, addressed to `offeredToId`. Slope 2 leaves seed 1847 on the baseline stall.
 

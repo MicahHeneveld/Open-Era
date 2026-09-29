@@ -33,8 +33,8 @@ import {
   retainGround,
   round,
   settlementClaimAvailableTo,
+  surrenderStabilityLimit,
   SURRENDER_GARRISON_THRESHOLD,
-  SURRENDER_STABILITY_THRESHOLD,
 } from "./state.ts";
 import {
   RESOURCE_KEYS,
@@ -954,7 +954,7 @@ function resolveImmediateBattle(
   const settlementStability = round(clamp(settlement.stability - (attackerWon ? 12 : 3), 0, 100));
   const surrender = attackerWon &&
       defenderGarrison <= SURRENDER_GARRISON_THRESHOLD &&
-      settlementStability <= SURRENDER_STABILITY_THRESHOLD &&
+      settlementStability <= surrenderStabilityLimit(defenderGarrison) &&
       settlement.factionId !== null
     ? {
         offeredToId: character.id,
@@ -1011,7 +1011,7 @@ function completeMajorBattle(
   settlementStocks.arms = round(settlementStocks.arms - lootArms);
   const surrender = attackerWon &&
       settlement.garrison <= SURRENDER_GARRISON_THRESHOLD &&
-      settlement.stability <= SURRENDER_STABILITY_THRESHOLD &&
+      settlement.stability <= surrenderStabilityLimit(settlement.garrison) &&
       settlement.factionId !== null
     ? {
         offeredToId: character.id,

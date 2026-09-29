@@ -424,6 +424,58 @@ test("a remote forecast reads the stored ground and ignores later truth", () => 
   assert.notDeepEqual(shifted.defenderPower, before.defenderPower, "the forecast must follow the stored record");
 });
 
+test("the surrender predicate does not read a survey", () => {
+  const fight = (plantSurvey: boolean) => {
+    const world = createPrototypeWorld(1847);
+    const commander = commanderOf(world);
+    const port = foreignPort(world, commander);
+    for (const character of Object.values(world.characters)) {
+      if (character.id !== commander.id) character.lastBattleTick = world.tick;
+    }
+    place(commander, port.id);
+    commander.skills.strategy = 125;
+    commander.troops.count = 40;
+    commander.health = 100;
+    commander.morale = 100;
+    port.population = 0;
+    port.fortification = 1;
+    port.garrison = 39;
+    port.stability = 51.52;
+    port.surrender = null;
+    if (plantSurvey) {
+      commander.knowledge[port.id] = {
+        ...commander.knowledge[port.id],
+        ground: { population: 999_999, fortification: 9.9, observedTick: 0, source: "direct" },
+      };
+    } else if (commander.knowledge[port.id]) {
+      delete commander.knowledge[port.id].ground;
+    }
+    assert.equal(submitCommand(world, {
+      playerId: "prototype-player",
+      type: "character-action",
+      action: "raid",
+    }).ok, true);
+    const battle = runTick(world).events.find((event) =>
+      event.type === "battle-resolved" && event.actorId === commander.id
+    );
+    assert.ok(battle);
+    assert.equal(JSON.stringify(battle.data).includes("999999"), false);
+    const surrender = battle.data.surrender as { offeredToId?: string } | null;
+    return {
+      defenderGarrison: battle.data.defenderGarrison,
+      settlementStability: battle.data.settlementStability,
+      offeredToId: surrender?.offeredToId ?? null,
+    };
+  };
+
+  const withSurvey = fight(true);
+  const withoutSurvey = fight(false);
+  assert.deepEqual(withSurvey, withoutSurvey);
+  assert.equal(withSurvey.defenderGarrison, 14);
+  assert.equal(withSurvey.settlementStability, 39.55);
+  assert.equal(withSurvey.offeredToId, "character-01");
+});
+
 test("forecast availability follows the report's owner, not the true owner", () => {
   const world = createPrototypeWorld(1847);
   const commander = commanderOf(world);

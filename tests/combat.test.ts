@@ -180,3 +180,138 @@ test("an active battle survives snapshot and event recovery", () => {
     rmSync(directory, { recursive: true, force: true });
   }
 });
+
+/**
+ * Other characters at the port can raid on the same tick. The cases below
+ * assert one battle's garrison and stability, so everyone else is put on the
+ * raid cooldown first.
+ */
+function holdOtherRaiders(world: ReturnType<typeof createPrototypeWorld>, attackerId: string): void {
+  for (const character of Object.values(world.characters)) {
+    if (character.id !== attackerId) character.lastBattleTick = world.tick;
+  }
+}
+
+function prepareImmediateSurrender(garrison: number, stability: number) {
+  const world = createPrototypeWorld(1847);
+  const commander = world.characters[world.players["prototype-player"].characterId];
+  const settlement = world.settlements["cinder-key"];
+  holdOtherRaiders(world, commander.id);
+  commander.locationId = settlement.id;
+  commander.travel = null;
+  commander.skills.strategy = 125;
+  commander.troops.count = 40;
+  commander.health = 100;
+  commander.morale = 100;
+  // Walls and population are flattened so the loss rate is the attacker's
+  // power against the garrison alone, and the post-battle figures are exact.
+  settlement.population = 0;
+  settlement.fortification = 1;
+  settlement.garrison = garrison;
+  settlement.stability = stability;
+  settlement.surrender = null;
+  return { world, commander, settlement };
+}
+
+function immediateVictory(garrison: number, stability: number) {
+  const prepared = prepareImmediateSurrender(garrison, stability);
+  assert.equal(submitCommand(prepared.world, {
+    playerId: "prototype-player",
+    type: "character-action",
+    action: "raid",
+  }).ok, true);
+  const result = runTick(prepared.world);
+  const battle = result.events.find((event) =>
+    event.type === "battle-resolved" && event.actorId === prepared.commander.id
+  );
+  assert.ok(battle);
+  assert.equal(battle.data.phases, 1);
+  assert.equal(battle.data.outcome, "attacker-victory");
+  return { ...prepared, battle };
+}
+
+test("an immediate victory at garrison 14 and stability 39.55 offers surrender", () => {
+  const { commander, settlement, battle } = immediateVictory(39, 51.52);
+  assert.equal(battle.data.defenderGarrison, 14);
+  assert.equal(battle.data.settlementStability, 39.55);
+  assert.deepEqual(settlement.surrender, {
+    offeredToId: commander.id,
+    offeredTick: 0,
+    previousFactionId: "free-tide",
+  });
+});
+
+test("an immediate victory at garrison 14 and stability 50 does not offer surrender", () => {
+  const { settlement, battle } = immediateVictory(39, 61.97);
+  assert.equal(battle.data.defenderGarrison, 14);
+  assert.equal(battle.data.settlementStability, 50);
+  assert.equal(settlement.surrender, null);
+  assert.equal(battle.data.surrender, null);
+});
+
+test("an immediate victory at garrison 16 and stability 20 does not offer surrender", () => {
+  const { settlement, battle } = immediateVictory(44, 31.97);
+  assert.equal(battle.data.defenderGarrison, 16);
+  assert.equal(battle.data.settlementStability, 20);
+  assert.equal(settlement.surrender, null);
+  assert.equal(battle.data.surrender, null);
+});
+
+function majorVictoryAt(garrison: number, stability: number) {
+  const world = createPrototypeWorld(1847);
+  const commander = world.characters[world.players["prototype-player"].characterId];
+  const settlement = world.settlements["cinder-key"];
+  holdOtherRaiders(world, commander.id);
+  commander.locationId = settlement.id;
+  commander.travel = null;
+  commander.skills.strategy = 125;
+  commander.troops.count = 80;
+  commander.health = 100;
+  commander.morale = 100;
+  settlement.population = 0;
+  settlement.fortification = 1;
+  settlement.garrison = 40;
+  settlement.stability = 80;
+  settlement.surrender = null;
+  assert.equal(submitCommand(world, {
+    playerId: "prototype-player",
+    type: "character-action",
+    action: "raid",
+  }).ok, true);
+  runTick(world);
+  runTick(world);
+  assert.equal(Object.keys(world.activeBattles).length, 1);
+  settlement.garrison = garrison;
+  settlement.stability = stability;
+  settlement.population = 0;
+  settlement.fortification = 1;
+  const result = runTick(world);
+  const battle = result.events.find((event) =>
+    event.type === "battle-resolved" && event.actorId === commander.id
+  );
+  assert.ok(battle);
+  assert.equal(battle.data.phases, 3);
+  assert.equal(battle.data.outcome, "attacker-victory");
+  return { commander, settlement, battle };
+}
+
+test("a completed major battle uses the same surrender limit", () => {
+  const offered = majorVictoryAt(21, 43.55);
+  assert.equal(offered.battle.data.defenderGarrison, 14);
+  assert.equal(offered.battle.data.settlementStability, 39.55);
+  assert.deepEqual(offered.settlement.surrender, {
+    offeredToId: offered.commander.id,
+    offeredTick: 2,
+    previousFactionId: "free-tide",
+  });
+
+  const stable = majorVictoryAt(21, 54);
+  assert.equal(stable.battle.data.defenderGarrison, 14);
+  assert.equal(stable.battle.data.settlementStability, 50);
+  assert.equal(stable.settlement.surrender, null);
+
+  const garrisoned = majorVictoryAt(24, 24);
+  assert.equal(garrisoned.battle.data.defenderGarrison, 16);
+  assert.equal(garrisoned.battle.data.settlementStability, 20);
+  assert.equal(garrisoned.settlement.surrender, null);
+});
