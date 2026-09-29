@@ -428,6 +428,11 @@ export type PlayerCommand =
        * will pay. The resolution event's `gross` is what was actually paid.
        */
       gross?: number;
+      /**
+       * Set on `buy-provisions` when the gap up to the resupply target was larger
+       * than one order may clear. `quantity` is then `marketDepth`, not the gap.
+       */
+      capped?: boolean;
     }
   | {
       id: string;

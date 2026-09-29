@@ -20,9 +20,9 @@ A refusal writes no event. The checkpoint is the HTTP body and the unchanged pur
 
 ## Hypothesis and ambition
 
-**Hypothesis.** A provisions top-up tells Mara the price before she pays and the price after she pays. A top-up past 28.8 provisions is refused and names 28.8. A purse that cannot cover the bill is refused with that bill. An empty shelf is refused with the stock.
+**Hypothesis.** A provisions top-up tells Mara the price before she pays and the price after she pays. A top-up past 28.8 provisions buys 28.8 and says so. A purse that cannot cover that bill is refused with that bill. An empty shelf is refused with the stock.
 
-**Ambition.** Buy food at Crown Harbor, then on fresh worlds refuse the too-large top-up, the short purse, and the empty shelf.
+**Ambition.** Buy food at Crown Harbor, including a top-up the depth shortens to 28.8, then on fresh worlds refuse the short purse and the empty shelf.
 
 **What you can see.** Mara's purse, hold, and the Crown Harbor board. Her own command and trade payloads. Not another captain's purse, and not a withheld decision payload.
 
@@ -120,8 +120,12 @@ Reset. Do not send Beat A's command.
 
 - `party.hold.money` 108. `party.provisions` 18.72. `party.resupplyTarget` 48. `party.demand` 0.576. `party.locationId` `crown-harbor`.
 - Crown Harbor `stocks.provisions` 210.416. `market.resources.provisions.price` 1.54.
-- `eventPage.total` 3458, oldest 3259, newest 3458, `hasMore` true. This beat's checkpoint is not an event.
+- `eventPage.total` 3458, oldest 3259, newest 3458, `hasMore` true.
 - `briefing.items` has no `provision:low` and no `provision:critical`. The first item is `confirm:character-01:order:character-11`, summary `Rook Tern reports that Crown Harbor is secure and asks the issuer to close the protection order.` Leave it unsigned. The rest of that list is stale-intelligence and order warnings. None of them is a provisions purchase.
+
+The gap from 18.72 up to 48 is 29.28, past 28.8. The click buys 28.8.
+
+### Accept
 
 `POST /api/commands`
 
@@ -129,13 +133,54 @@ Reset. Do not send Beat A's command.
 {"playerId":"prototype-player","type":"character-action","action":"buy-provisions"}
 ```
 
-HTTP 400. Body, punctuation exact:
+HTTP 202. Body, punctuation exact:
 
 ```json
-{"ok":false,"code":"market-depth","error":"Crown Harbor will clear 28.8 provisions in one order; this top-up would buy 29.28"}
+{"ok":true,"command":{"id":"command-00001","playerId":"prototype-player","issuedTick":30,"type":"character-action","action":"buy-provisions","resource":"provisions","quantity":28.8,"unitPrice":1.54,"gross":44.35,"capped":true}}
 ```
 
-`GET /api/state?limit=200` again. Tick still 30. Money still 108. Provisions still 18.72. Shelf still 210.416. `eventPage.newestSequence` still 3458. No new event.
+State stays `tick` 30. Purse stays 108. Provisions stay 18.72. Shelf stays 210.416.
+
+`GET /api/state?limit=200`. `eventPage.total` 3459, oldest 3260, newest 3459, `hasMore` true. Sequence 3459 is on this page.
+
+- sequence 3459, `tick` 30, `player-command-accepted`, `actorId` `character-01`, `settlementId` `crown-harbor`, `payloadWithheld` false, summary `Command queued for Mara Vane: 28.8 provisions at 1.54 each, 44.35 total (Crown Harbor clears no more than 28.8 in one order)`
+  - `data.command.quantity` 28.8
+  - `data.command.unitPrice` 1.54
+  - `data.command.gross` 44.35
+  - `data.command.capped` true
+  - `data.command.id` `command-00001`
+
+### Resolve
+
+`POST /api/advance` `{"ticks":1}`. HTTP 200. `tick` 31. `ticksAdvanced` 1.
+
+`GET /api/state?limit=200`. `eventPage.total` 3573, oldest 3374, newest 3573, `hasMore` true. Sequences 3459, 3468, 3469, and 3470 are on this first page. No `beforeSequence` fallback.
+
+- sequence 3468, `tick` 30, `player-action-executed`, summary `Mara Vane: player action executed`. `data.commandId` `command-00001`. `data.action` `buy-provisions`. `settlementId` `crown-harbor`.
+- sequence 3469, `tick` 30, `market-trade`, `settlementId` `crown-harbor`, summary `Mara Vane bought 28.8 provisions at Crown Harbor for 44.35 (1.54 each)`
+  - `data.direction` `bought`
+  - `data.resource` `provisions`
+  - `data.quantity` 28.8
+  - `data.unitPrice` 1.54
+  - `data.gross` 44.35
+  - `data.tax` 0
+  - `data.characterMoney` 63.65
+  - `data.characterCargo.provisions` 47.52
+  - `data.characterCargo.arms` 3, `medicine` 4, `shipMaterials` 5
+  - `data.settlementStocks.provisions` 181.965
+- sequence 3470, `tick` 30, `player-command-resolved`, summary `Mara Vane bought 28.8 provisions for 44.35 (1.54 each)`
+  - `data.commandId` `command-00001`
+  - `data.outcome` `action-executed`
+  - `data.action` `buy-provisions`
+  - `data.quantity` 28.8
+  - `data.unitPrice` 1.54
+  - `data.gross` 44.35
+
+State tick 31:
+
+- `party.hold.money` 63.65. `party.provisions` 46.944. `party.resupplyTarget` 48.
+- Crown Harbor `stocks.provisions` 181.965. `market.resources.provisions.price` 1.78.
+- The purse moved by 44.35, from 108 to 63.65. The trade's hold is 47.52, which is 18.72 plus 28.8, and the same tick's upkeep leaves 46.944. The trade payload's shelf is 181.965. That is the state-tick-30 shelf of 210.416 after this tick's production and then minus 28.8. The state-tick-31 shelf is the same 181.965. Do not treat 181.965 as a charge of more than 28.8.
 
 ## Beat C — purse shortfall
 
@@ -217,10 +262,10 @@ A shelf of 0.4 was not on this run. State tick 134 still has Crown Harbor `stock
 
 - Beat A accept is HTTP 202 with quantity 12, unit price 1.47, and gross 17.64, and sequences 1, 11, and 12 name that same price and total.
 - Beat A purse goes from 108 to 90.36, the trade hold is 48 provisions, and state tick 1 reads 47.424 provisions.
-- Beat B is HTTP 400 `market-depth` with the error string above, and money, provisions, and the shelf do not move.
+- Beat B accept is HTTP 202 with quantity 28.8, unit price 1.54, gross 44.35, and `capped` true. Sequence 3459 names the 28.8 ceiling. Sequences 3469 and 3470 show 28.8 at 1.54 for 44.35. The purse goes from 108 to 63.65, the trade hold is 47.52, and state tick 31 reads 46.944 provisions.
 - Beat C is HTTP 400 `insufficient-money` with the error string above, and money stays 12.
 - Beat D, if run, is HTTP 400 `no-provisions` with the error string above, and the shelf stays 0.
 
-`REVISE` if a beat accepts a top-up larger than 28.8, if a refusal quotes `costs 2 money`, if the accept body or sequence 11 omits the price or the total, or if the purse or the shelf moves on a 400.
+`REVISE` if an over-cap top-up buys more than 28.8, or the cap isn't mentioned, if a refusal quotes `costs 2 money`, if an accept body or a resolution omits the price or the total, or if the purse or the shelf moves on a 400.
 
 `ABANDON` if `buy-provisions` is `unknown-action`, or if Beat A's first page does not contain sequence 1 after the accept and sequences 11 and 12 after the advance.

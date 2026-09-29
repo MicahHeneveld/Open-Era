@@ -131,7 +131,7 @@ export const ACTION_CAPABILITIES: readonly ActionCapability[] = [
     requires: [
       "at least 2 money",
       "at least 1 provision in local stock",
-      `the top-up does not exceed ${Math.round(MARKET_DEPTH_FRACTION * 100)}% of the market's target stock`,
+      `a top-up past ${Math.round(MARKET_DEPTH_FRACTION * 100)}% of the market's target stock is filled only up to that share`,
       "the character holds enough money at the quoted price",
     ],
   },
@@ -316,6 +316,7 @@ function reject(code: string, error: string): CommandSubmission {
 
 function acceptedEvent(world: WorldState, command: PlayerCommand): SimEvent {
   const player = world.players[command.playerId];
+  const character = world.characters[player.characterId];
   const targetId = command.type === "character-action"
     ? command.targetId
     : command.type === "retreat-battle"
@@ -329,6 +330,9 @@ function acceptedEvent(world: WorldState, command: PlayerCommand): SimEvent {
     type: "player-command-accepted",
     actorId: player.characterId,
     targetId,
+    ...(command.type === "character-action" && command.action === "buy-provisions" && character?.locationId
+      ? { settlementId: character.locationId }
+      : {}),
     data: {
       command,
       nextCommandSequence: world.nextCommandSequence + 1,
@@ -416,6 +420,7 @@ function validateCharacterAction(
   let acceptedUnitPrice: number | undefined;
   let acceptedQuantity: number | undefined;
   let acceptedGross: number | undefined;
+  let acceptedCapped = false;
 
   if (request.action === "buy-provisions") {
     const price = marketPrice(world, settlement.id, "provisions");
@@ -431,18 +436,13 @@ function validateCharacterAction(
         `${settlement.name} holds ${round(stock, 3)} provisions; a purchase needs at least 1`,
       );
     }
-    // What this command would take. The player does not name a quantity; the
-    // top-up is the gap up to the resupply target, and it cannot exceed the
-    // shelf. The depth cap is that figure against `marketDepth`. An order past
-    // the cap is refused, not shortened: a player who asks for more than the
-    // board will clear is told the ceiling.
-    const quantity = round(Math.min(desired, stock), 3);
-    if (quantity > depth) {
-      return reject(
-        "market-depth",
-        `${settlement.name} will clear ${depth} provisions in one order; this top-up would buy ${quantity}`,
-      );
-    }
+    // The player does not name a quantity. The top-up is the gap up to the
+    // resupply target, and it cannot exceed the shelf. Past `marketDepth` the
+    // order is shortened to that share and the accept says so. Refusing it
+    // left an empty hold with no way to buy food.
+    const uncapped = round(Math.min(desired, stock), 3);
+    const quantity = round(Math.min(uncapped, depth), 3);
+    acceptedCapped = uncapped > depth;
     const gross = tradeAmounts(quantity, price, 0, "buy").gross;
     const held = round(character.money, 2);
     if (character.money < gross) {
@@ -521,7 +521,13 @@ function validateCharacterAction(
       ? { resource: request.resource, quantity: request.quantity, unitPrice: acceptedUnitPrice }
       : {}),
     ...(request.action === "buy-provisions"
-      ? { resource: "provisions" as const, quantity: acceptedQuantity, unitPrice: acceptedUnitPrice, gross: acceptedGross }
+      ? {
+          resource: "provisions" as const,
+          quantity: acceptedQuantity,
+          unitPrice: acceptedUnitPrice,
+          gross: acceptedGross,
+          ...(acceptedCapped ? { capped: true } : {}),
+        }
       : {}),
   };
   return { ok: true, command, event: acceptedEvent(world, command) };

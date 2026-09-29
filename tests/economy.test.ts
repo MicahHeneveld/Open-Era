@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { dashboardState, fullEventFeed } from "../src/dashboard/view-model.ts";
+import { dashboardState, fullEventFeed, projectEventFeed } from "../src/dashboard/view-model.ts";
 import {
   believedGarrison,
   believedPrice,
@@ -83,7 +83,7 @@ test("a player order cannot clear more than the market's depth", () => {
   assert.ok(accepted <= depth + 1e-9);
 });
 
-test("buy-provisions refuses a player top-up past the depth and quotes the cost inside it", () => {
+test("buy-provisions clamps a player top-up to the depth and quotes that cost", () => {
   const world = createPrototypeWorld(1847);
   const commander = commanderOf(world);
   const settlement = world.settlements[commander.locationId!];
@@ -93,40 +93,52 @@ test("buy-provisions refuses a player top-up past the depth and quotes the cost 
   const depth = marketDepth(settlement, "provisions");
   assert.equal(depth, 28.8);
   const target = provisionResupplyTarget(commander);
-  assert.ok(target > depth, "the resupply target has to sit past the cap, or the refusal proves nothing");
-
-  commander.cargo.provisions = 0;
-  commander.money = 10_000;
-  const moneyBefore = commander.money;
-  const stockBefore = settlement.stocks.provisions;
-  const over = submitCommand(world, { playerId: PLAYER, type: "character-action", action: "buy-provisions" });
-  assert.equal(over.ok, false);
-  assert.equal(over.ok === false ? over.code : null, "market-depth");
-  assert.equal(
-    over.ok === false ? over.error : "",
-    `${settlement.name} will clear ${depth} provisions in one order; this top-up would buy ${target}`,
-  );
-  assert.equal(commander.money, moneyBefore);
-  assert.equal(settlement.stocks.provisions, stockBefore);
-  assert.equal(commander.cargo.provisions, 0);
-  assert.equal(world.pendingCommands.length, 0);
-
-  commander.cargo.provisions = round(target - depth, 3);
+  assert.ok(target > depth, "the resupply target has to sit past the cap, or the clamp proves nothing");
   const price = marketPrice(world, settlement.id, "provisions");
   const gross = tradeAmounts(depth, price, 0, "buy").gross;
-  const accepted = submitCommand(world, { playerId: PLAYER, type: "character-action", action: "buy-provisions" });
-  assert.equal(accepted.ok, true);
-  if (!accepted.ok) return;
-  assert.equal(accepted.command.type, "character-action");
-  if (accepted.command.type !== "character-action") return;
-  assert.equal(accepted.command.quantity, depth);
-  assert.equal(accepted.command.unitPrice, price);
-  assert.equal(accepted.command.gross, gross);
-  assert.equal(accepted.command.resource, "provisions");
 
-  const cargoBefore = commander.cargo.provisions;
+  commander.cargo.provisions = round(target - depth, 3);
+  commander.money = 10_000;
+  const atCap = submitCommand(world, { playerId: PLAYER, type: "character-action", action: "buy-provisions" });
+  assert.equal(atCap.ok, true);
+  if (!atCap.ok || atCap.command.type !== "character-action") return;
+  assert.equal(atCap.command.quantity, depth);
+  assert.equal(atCap.command.unitPrice, price);
+  assert.equal(atCap.command.gross, gross);
+  assert.equal(atCap.command.capped, undefined);
+  world.pendingCommands = [];
+
+  commander.cargo.provisions = 0;
+  const held = round(gross - 0.01, 2);
+  commander.money = held;
+  const short = submitCommand(world, { playerId: PLAYER, type: "character-action", action: "buy-provisions" });
+  assert.equal(short.ok, false);
+  assert.equal(short.ok === false ? short.code : null, "insufficient-money");
+  assert.equal(
+    short.ok === false ? short.error : "",
+    `${depth} provisions costs ${gross} at ${price} each; the character holds ${held}`,
+  );
+  assert.equal(commander.money, held);
+  assert.equal(settlement.stocks.provisions, 500);
+  assert.equal(commander.cargo.provisions, 0);
+
+  commander.money = 10_000;
   const purseBefore = commander.money;
   const shelfBefore = settlement.stocks.provisions;
+  const over = submitCommand(world, { playerId: PLAYER, type: "character-action", action: "buy-provisions" });
+  assert.equal(over.ok, true);
+  if (!over.ok || over.command.type !== "character-action") return;
+  assert.equal(over.command.quantity, depth);
+  assert.equal(over.command.unitPrice, price);
+  assert.equal(over.command.gross, gross);
+  assert.equal(over.command.capped, true);
+  assert.equal(over.command.resource, "provisions");
+  const queued = projectEventFeed(world, commander.id, [over.event]);
+  assert.equal(
+    queued[0]?.summary,
+    `Command queued for ${commander.name}: ${depth} provisions at ${price} each, ${gross} total (${settlement.name} clears no more than ${depth} in one order)`,
+  );
+
   const result = runTick(world);
   const purchase = result.events.find((event) => event.type === "market-trade" && event.actorId === commander.id);
   const resolved = result.events.find((event) => event.type === "player-command-resolved" && event.actorId === commander.id);
@@ -137,7 +149,7 @@ test("buy-provisions refuses a player top-up past the depth and quotes the cost 
   assert.equal(purchase.data.gross, gross);
   assert.equal(purchase.data.tax, 0);
   assert.equal(purchase.data.characterMoney, round(purseBefore - gross, 2));
-  assert.equal((purchase.data.characterCargo as { provisions: number }).provisions, round(cargoBefore + depth, 3));
+  assert.equal((purchase.data.characterCargo as { provisions: number }).provisions, round(depth, 3));
   assert.equal((purchase.data.settlementStocks as { provisions: number }).provisions, round(shelfBefore - depth, 3));
   assert.equal(commander.money, round(purseBefore - gross, 2));
   assert.equal(resolved.data.quantity, depth);
