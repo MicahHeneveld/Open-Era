@@ -7,6 +7,17 @@ import { submitCommand } from "../src/sim/commands.ts";
 import { runTick } from "../src/sim/engine.ts";
 import { WorldStore } from "../src/sim/persistence.ts";
 import { createPrototypeWorld } from "../src/sim/scenario.ts";
+import type { Character } from "../src/sim/types.ts";
+
+/** These checks mint a fresh order id. The seeded order is closed first so the
+ * identity rule does not amend it. */
+function retireOpenOrders(character: Character): void {
+  for (const order of character.standingOrders) {
+    if (order.status === "pending" || order.status === "active" || order.status === "awaiting-confirmation") {
+      order.status = "completed";
+    }
+  }
+}
 
 test("the human-controlled character never receives autonomous decisions", () => {
   const world = createPrototypeWorld(1847);
@@ -218,15 +229,180 @@ test("a delivered standing order immediately enters autonomous plan review", () 
   assert.equal(submission.ok, true);
 
   const result = runTick(world);
-  const issued = result.events.find((event) => event.type === "standing-order-issued" && event.targetId === recipient.id);
+  const seededId = "character-01:order:character-04";
+  const amended = result.events.find((event) => event.type === "standing-order-amended" && event.targetId === recipient.id);
   const review = result.events.find((event) => event.type === "plan-reconsidered" && event.actorId === recipient.id);
-  assert.ok(issued);
-  assert.equal((issued.data.order as { targetId: string }).targetId, "glassport");
-  assert.equal((review?.data.orderAssessment as { orderId: string }).orderId, "command-00001:standing-order");
-  const order = recipient.standingOrders.find((candidate) => candidate.id === "command-00001:standing-order");
+  assert.ok(amended);
+  assert.equal(amended.data.orderId, seededId);
+  assert.equal((amended.data.order as { targetId: string }).targetId, "glassport");
+  assert.equal((review?.data.orderAssessment as { orderId: string }).orderId, seededId);
+  const order = recipient.standingOrders.find((candidate) => candidate.id === seededId);
   assert.equal(order?.status, "active");
   assert.equal(order?.adherence, "following");
-  assert.ok(result.events.some((event) => event.type === "standing-order-accepted" && event.actorId === recipient.id));
+  assert.ok(result.events.some((event) => event.type === "standing-order-accepted" && event.data.orderId === seededId));
+  assert.equal(result.events.some((event) => event.type === "standing-order-issued"), false);
+});
+
+test("a further issue-order amends the one open order, and identical terms are no-change", () => {
+  const world = createPrototypeWorld(1847);
+  const recipient = world.characters["character-04"];
+  const seededId = "character-01:order:character-04";
+  const seeded = recipient.standingOrders.find((order) => order.id === seededId);
+  assert.ok(seeded);
+  assert.equal(seeded.status, "pending");
+  assert.equal(seeded.directive, "protect");
+  assert.equal(seeded.targetId, "crown-harbor");
+
+  const unchanged = submitCommand(world, {
+    playerId: "prototype-player",
+    type: "issue-order",
+    characterId: recipient.id,
+    directive: "protect",
+    targetId: "crown-harbor",
+  });
+  assert.equal(unchanged.ok, false);
+  assert.equal(unchanged.ok === false ? unchanged.code : null, "no-change");
+  assert.equal(world.pendingCommands.length, 0);
+
+  const glassport = submitCommand(world, {
+    playerId: "prototype-player",
+    type: "issue-order",
+    characterId: recipient.id,
+    directive: "protect",
+    targetId: "glassport",
+    priority: 0.97,
+    expiresInTicks: 72,
+  });
+  assert.equal(glassport.ok, true);
+  if (glassport.ok) {
+    assert.equal(glassport.command.type, "amend-order");
+    assert.equal(glassport.command.type === "amend-order" ? glassport.command.orderId : null, seededId);
+    assert.equal(glassport.command.type === "amend-order" ? glassport.command.majorChange : null, true);
+  }
+  runTick(world);
+
+  const open = recipient.standingOrders.filter((order) =>
+    order.issuerId === "character-01" &&
+    (order.status === "pending" || order.status === "active" || order.status === "awaiting-confirmation")
+  );
+  assert.equal(open.length, 1);
+  assert.equal(open[0].id, seededId);
+  assert.equal(open[0].revision, 2);
+  assert.equal(open[0].targetId, "glassport");
+  assert.equal(open[0].directive, "protect");
+  assert.equal(recipient.standingOrders.some((order) => order.id === "command-00001:standing-order"), false);
+
+  const repeated = submitCommand(world, {
+    playerId: "prototype-player",
+    type: "issue-order",
+    characterId: recipient.id,
+    directive: "protect",
+    targetId: "glassport",
+    priority: open[0].priority,
+    expiresInTicks: open[0].expiresTick === null ? null : open[0].expiresTick - world.tick,
+  });
+  assert.equal(repeated.ok, false);
+  assert.equal(repeated.ok === false ? repeated.code : null, "no-change");
+});
+
+test("a refused, completed, expired, or cancelled order frees the pair and the next issue mints a new id", () => {
+  for (const status of ["refused", "completed", "expired", "cancelled"] as const) {
+    const world = createPrototypeWorld(1847);
+    const recipient = world.characters["character-04"];
+    const seeded = recipient.standingOrders.find((order) => order.id === "character-01:order:character-04");
+    assert.ok(seeded);
+    seeded.status = status;
+    const submission = submitCommand(world, {
+      playerId: "prototype-player",
+      type: "issue-order",
+      characterId: recipient.id,
+      directive: "protect",
+      targetId: "glassport",
+      priority: 0.97,
+    });
+    assert.equal(submission.ok, true, status);
+    if (submission.ok) assert.equal(submission.command.type, "issue-order", status);
+    runTick(world);
+    const minted = recipient.standingOrders.find((order) => order.id === "command-00001:standing-order");
+    assert.ok(minted, status);
+    assert.equal(minted.revision, 1);
+    assert.equal(seeded.status, status);
+    const open = recipient.standingOrders.filter((order) =>
+      order.issuerId === "character-01" &&
+      (order.status === "pending" || order.status === "active" || order.status === "awaiting-confirmation")
+    );
+    assert.equal(open.length, 1, status);
+    assert.equal(open[0].id, minted.id);
+  }
+});
+
+test("an order awaiting confirmation stays the open order, and a further issue amends it", () => {
+  const world = createPrototypeWorld(1847);
+  const recipient = world.characters["character-04"];
+  const seededId = "character-01:order:character-04";
+  const seeded = recipient.standingOrders.find((order) => order.id === seededId);
+  assert.ok(seeded);
+  seeded.status = "awaiting-confirmation";
+
+  const explicit = submitCommand(world, {
+    playerId: "prototype-player",
+    type: "amend-order",
+    characterId: recipient.id,
+    orderId: seededId,
+    priority: 0.9,
+  });
+  assert.equal(explicit.ok, false);
+  assert.equal(explicit.ok === false ? explicit.code : null, "order-not-amendable");
+
+  const issued = submitCommand(world, {
+    playerId: "prototype-player",
+    type: "issue-order",
+    characterId: recipient.id,
+    directive: "explore",
+    targetId: "verdant-cay",
+    priority: 0.97,
+  });
+  assert.equal(issued.ok, true);
+  if (issued.ok) {
+    assert.equal(issued.command.type, "amend-order");
+    assert.equal(issued.command.type === "amend-order" ? issued.command.orderId : null, seededId);
+    assert.equal(issued.command.type === "amend-order" ? issued.command.majorChange : null, true);
+  }
+  runTick(world);
+  const amended = recipient.standingOrders.find((order) => order.id === seededId);
+  assert.ok(amended);
+  assert.equal(amended.revision, 2);
+  assert.equal(amended.directive, "explore");
+  assert.equal(amended.targetId, "verdant-cay");
+  assert.ok(amended.status === "pending" || amended.status === "active");
+  assert.equal(recipient.standingOrders.some((order) => order.id === "command-00001:standing-order"), false);
+
+  const kept = createPrototypeWorld(1847);
+  const officer = kept.characters["character-04"];
+  const order = officer.standingOrders.find((candidate) => candidate.id === seededId)!;
+  order.status = "active";
+  order.adherence = "following";
+  const priorityOnly = submitCommand(kept, {
+    playerId: "prototype-player",
+    type: "issue-order",
+    characterId: officer.id,
+    directive: order.directive,
+    targetId: order.targetId,
+    priority: 0.88,
+  });
+  assert.equal(priorityOnly.ok, true);
+  if (priorityOnly.ok && priorityOnly.command.type === "amend-order") {
+    assert.equal(priorityOnly.command.majorChange, false);
+    assert.equal(priorityOnly.command.orderId, seededId);
+  }
+  runTick(kept);
+  const keptOrder = officer.standingOrders.find((candidate) => candidate.id === seededId);
+  assert.ok(keptOrder);
+  assert.equal(keptOrder.revision, 2);
+  assert.equal(keptOrder.priority, 0.88);
+  assert.equal(keptOrder.status, "active");
+  assert.equal(keptOrder.targetId, "crown-harbor");
+  assert.equal(officer.standingOrders.some((candidate) => candidate.id === "command-00001:standing-order"), false);
 });
 
 test("the issuer confirms a character's completion report before an order closes", () => {
@@ -258,6 +434,7 @@ test("the issuer confirms a character's completion report before an order closes
 test("an uncompleted timed order expires and no longer drives the character's plan", () => {
   const world = createPrototypeWorld(1847);
   const recipient = world.characters["character-04"];
+  retireOpenOrders(recipient);
   const submission = submitCommand(world, {
     playerId: "prototype-player",
     type: "issue-order",
@@ -279,6 +456,7 @@ test("an uncompleted timed order expires and no longer drives the character's pl
 test("a major amendment creates a new revision and requires fresh acceptance", () => {
   const world = createPrototypeWorld(1847);
   const recipient = world.characters["character-04"];
+  retireOpenOrders(recipient);
   assert.equal(submitCommand(world, {
     playerId: "prototype-player",
     type: "issue-order",
@@ -316,6 +494,7 @@ test("a major amendment creates a new revision and requires fresh acceptance", (
 test("a deadline or priority amendment preserves an accepted objective", () => {
   const world = createPrototypeWorld(1847);
   const recipient = world.characters["character-04"];
+  retireOpenOrders(recipient);
   submitCommand(world, {
     playerId: "prototype-player",
     type: "issue-order",
@@ -350,6 +529,7 @@ test("a deadline or priority amendment preserves an accepted objective", () => {
 test("an issuer may cancel an open order but cannot modify another character's order", () => {
   const world = createPrototypeWorld(1847);
   const recipient = world.characters["character-04"];
+  retireOpenOrders(recipient);
   submitCommand(world, {
     playerId: "prototype-player",
     type: "issue-order",
@@ -503,27 +683,22 @@ test("a second command against one standing order is refused while the first is 
 
 test("two different standing orders may still be changed in the same tick", () => {
   const world = createPrototypeWorld(1847);
-  // Two open orders held by one character, so the guard cannot pass by refusing
-  // every second mutation regardless of which order it names.
-  const recipient = world.characters["character-04"];
-  for (const targetId of ["glassport", "cinder-key"]) {
-    assert.equal(submitCommand(world, {
-      playerId: "prototype-player",
-      type: "issue-order",
-      characterId: recipient.id,
-      directive: "protect",
-      targetId,
-      priority: 0.9,
-    }).ok, true);
-  }
-  runTick(world);
-  const orders = recipient.standingOrders.filter((order) => order.status !== "cancelled" && order.status !== "completed");
-  assert.ok(orders.length >= 2, "the character must hold two live orders for this check to mean anything");
+  // Two recipients, each with one open order. A second issue to the same
+  // recipient would amend that order, so the pair has to be two people.
+  const recipients = ["character-04", "character-05"].map((id) => world.characters[id]);
+  const orders = recipients.map((recipient) => {
+    const order = recipient.standingOrders.find((candidate) =>
+      candidate.issuerId === "character-01" &&
+      (candidate.status === "pending" || candidate.status === "active" || candidate.status === "awaiting-confirmation")
+    );
+    assert.ok(order, `${recipient.id} must already hold an open order`);
+    return order;
+  });
 
-  const cancellations = orders.slice(0, 2).map((order) => submitCommand(world, {
+  const cancellations = orders.map((order, index) => submitCommand(world, {
     playerId: "prototype-player",
     type: "cancel-order",
-    characterId: recipient.id,
+    characterId: recipients[index].id,
     orderId: order.id,
   }));
   assert.deepEqual(cancellations.map((result) => result.ok), [true, true]);

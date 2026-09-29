@@ -154,6 +154,23 @@ export function activeStandingOrder(character: Character, tick: number): Standin
     .sort((left, right) => right.priority - left.priority || left.id.localeCompare(right.id))[0] ?? null;
 }
 
+/**
+ * The open order from one issuer to one recipient.
+ *
+ * Open means pending, active, or awaiting confirmation. Refused, completed,
+ * expired, and cancelled orders do not hold the slot, so a later issue may
+ * mint a new id. When more than one open order is already stored, the highest
+ * priority wins and then the id, matching `activeStandingOrder`.
+ */
+export function openStandingOrder(character: Character, issuerId: string): StandingOrder | null {
+  return character.standingOrders
+    .filter((order) =>
+      order.issuerId === issuerId &&
+      (order.status === "pending" || order.status === "active" || order.status === "awaiting-confirmation")
+    )
+    .sort((left, right) => right.priority - left.priority || left.id.localeCompare(right.id))[0] ?? null;
+}
+
 export function assessStandingOrder(character: Character, order: StandingOrder | null): OrderAssessment | null {
   if (!order) return null;
   const relationship = character.relationships[order.issuerId];
