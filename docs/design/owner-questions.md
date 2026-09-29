@@ -938,6 +938,42 @@ Answer by number, for example "4: yes" or "4: keep the default." The default is 
 
 **Source:** [Loyalty scar, remeasured](loyalty-scar-remeasure.md#questions-for-micah) question 4
 
+## Capture wording
+
+Accepted, not built (M34, after M33).
+
+### 91. What should the player's display name show?
+
+The character's name, Mara Vane, is derived when the state is read. The stored string stays Prototype Commander, and the hash does not move.
+
+**Status:** Default: "Mara Vane", derived on read. The stored string stays "Prototype Commander".
+
+**Source:** [Capture wording](capture-wording.md#questions-for-micah) question 1
+
+### 92. Should the player see the word "outscore"?
+
+The sentence says the other side won on a higher score. The stored cause stays outscore-loss, and the card can show the plain cause label beside it.
+
+**Status:** Default: no. The text says the other side won on a higher score, and the stored cause stays outscore-loss.
+
+**Source:** [Capture wording](capture-wording.md#questions-for-micah) question 2
+
+### 93. Should a ship on the same leg but outside her stretch of water be named?
+
+The sentence names her and the ticks left. It does not add a troop count, and her course is already on the character.
+
+**Status:** Default: yes, with no troop count.
+
+**Source:** [Capture wording](capture-wording.md#questions-for-micah) question 3
+
+### 94. What should the sea count be called when a port record is on the same card?
+
+The sea count takes the row's kind: sharing, overtaking, passing, or arriving. The port record keeps Sighted troops.
+
+**Status:** Default: the row's kind (for example "sharing"). The port record keeps "Sighted troops".
+
+**Source:** [Capture wording](capture-wording.md#questions-for-micah) question 4
+
 ## Already settled
 
 The [progress log](../../progress.md) (reconnaissance brief, 2026-09-29) answered reconnaissance questions 1–8. Reconnaissance question 1 is no: a survey or an officer's look stores population, walls, and who was anchored. Reconnaissance question 2 keeps confidence and the original date on that handoff. Reconnaissance questions 3–8 stay put: public sea courses, a live garrison from your other ports, no captives or informants. [Party sightings](party-sightings.md#left-open) repeats those. A foreign price is that dated report, not a live quote ([World simulation](world-simulation.md#player-trade)). An idle player with money still starves if they give no orders ([Port provisions](port-provisions.md#the-idle-commander)). Unpaid ransom is questions 22–29 ([Captivity debts](captivity-debts.md#questions-for-micah)). A landless raid once a town has 8 soldiers, and no troops left behind on the claim, is questions 30–32 ([Portless recovery](portless-recovery.md#questions-for-micah)). A higher score is the attacker's victory when morale is 12 or under, a close fight included and the short retake accepted, rest does not refill the hold, and the capture die is still rolled, is questions 33–37 ([Battle morale](battle-morale.md#questions-for-micah)). Someone else covers the seat while the commander is in prison and hands it back on release, the cover is the highest leadership plus loyalty with the lower id winning a tie and trust is not used, you cannot name someone else or keep the cover after release, everyone including a rival sees who holds the seat, and if that cover is captured the next person steps up for the whole 14 days, is questions 38–42 ([Political layer](political-layer.md#questions-for-micah)). A character released still owing ransom loses 0.04 loyalty once, a paid release changes nothing, orders, plans and work keep using the starting loyalty, and you see loyalty only for your own faction, is questions 43–45 ([Loyalty drift](loyalty-drift.md#questions-for-micah)). Battered-port surrender, fed garrisons, and refusing an unpaid voyage are built. The first hour is a test, not a choice. The one-click food buy is a known bug queued for engineering: the button will show the cost, apply the share-of-stock cap, and its refusal text will be fixed ([World simulation](world-simulation.md#player-trade); [progress log](../../progress.md#open-items)).
