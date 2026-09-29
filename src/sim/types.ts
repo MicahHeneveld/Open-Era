@@ -276,7 +276,7 @@ export type StandingOrderAdherence = "unassessed" | "following" | "deviating";
 
 export interface StandingOrderReport {
   tick: number;
-  kind: "accepted" | "refused" | "deviation" | "resumed" | "completion" | "confirmed" | "expired" | "amended" | "cancelled";
+  kind: "accepted" | "refused" | "deviation" | "resumed" | "completion" | "confirmed" | "closed-unanswered" | "expired" | "amended" | "cancelled";
   summary: string;
 }
 

@@ -416,6 +416,7 @@ test("a free autonomous issuer confirms the report on the next tick without draw
   assert.equal(completion.data.commandId, undefined);
   assert.equal(closed.events.some((event) => event.type === "player-command-resolved" && event.data.orderId === order.id), false);
   assert.equal(order.status, "completed");
+  assert.equal(order.lastReport?.kind, "confirmed");
   assert.equal(world.rngState, held.rngState);
 });
 
@@ -433,6 +434,7 @@ test("a pressure completion writes no relationship, and a protect completion wri
   pressure.statusChangedTick = -1;
   const pressureTick = runTick(pressureWorld);
   assert.equal(pressure.status, "completed");
+  assert.equal(pressure.lastReport?.kind, "confirmed");
   assert.equal(pressureTick.events.some((event) =>
     event.type === "standing-order-completed" &&
     event.data.orderId === pressure.id &&

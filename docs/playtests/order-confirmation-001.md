@@ -174,6 +174,8 @@ State tick 7:
 
 ## Session / Findings
 
+Later builds set `lastReport.kind` to `closed-unanswered` when an order closes with `issuer-silent`. This session was recorded while that card still said `confirmed`. The readings below are unchanged.
+
 Blind session on `feature/confirm-unanswered-orders` at `9fc9477`, Node v24.21.0, `npm ci`, then `npm run dashboard -- --reset --seed 1847` at `http://127.0.0.1:4317`. Player `prototype-player`. Every advance body was `{"ticks":1}`. The plan text above was not changed.
 
 **Verdict: PROMOTE.** All three promotion readings held. Toma's order was still `awaiting-confirmation` at state tick 6, and Ada's signature completed `character-01:order:character-13` without `issuer-silent`. The paged log contains Pax Ash's completion of Zara Gale.

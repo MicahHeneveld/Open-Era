@@ -2375,6 +2375,9 @@ function expireStandingOrders(world: WorldState, events: SimEvent[]): void {
  * — an idle human, a captive issuer, a missing issuer — waits one day.
  * A pressure order does not write the relationship: the victory that filed
  * the report already did.
+ *
+ * `issuer-judgment` and a player's `confirm-order` leave `lastReport.kind`
+ * as `confirmed`. `issuer-silent` is applied as `closed-unanswered`.
  */
 function confirmUnansweredOrders(world: WorldState, events: SimEvent[]): void {
   for (const holder of Object.values(world.characters).sort((left, right) => left.id.localeCompare(right.id))) {
