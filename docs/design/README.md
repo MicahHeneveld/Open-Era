@@ -20,6 +20,7 @@ These documents capture the decisions made during the initial design conversatio
 - [Captivity debts](captivity-debts.md) — Open / proposal: the unpaid ransom comes out of the prisoner's purse, up to one day's wages, on each world day
 - [Political layer](political-layer.md) — Open / proposal: the person who already issues a faction's orders is named in command, and a captive commander's seat is covered until release
 - [Loyalty drift](loyalty-drift.md) — Open / proposal: loyalty falls by 0.04 when a release leaves the ransom unpaid, and nothing else reads that change except who covers the seat
+- [Autonomous orders](autonomous-orders.md) — Open / proposal: Free Tide does not mint protect orders after tick 0; once a report has closed, the four-day sketch accepts the next one and rewrites the first 72 ticks
 - [Owner questions](owner-questions.md) — Open: the decisions still waiting on Micah, each with the default the game runs on or is planned to run on
 - [Generated mockups](../assets/mockups/README.md) — all 13 image concepts produced during the conversation
 - [Development and playtest pipeline](../development-pipeline.md) — branch roles, automated gates, adaptive player protocol, and promotion rules
