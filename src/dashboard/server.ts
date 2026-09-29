@@ -23,7 +23,7 @@ import { round } from "../sim/state.ts";
 import { WorldStore, EVENT_FEED_PAGE_DEFAULT, EVENT_FEED_PAGE_LIMIT } from "../sim/persistence.ts";
 import { createPrototypeWorld } from "../sim/scenario.ts";
 import type { SimEvent, WorldState } from "../sim/types.ts";
-import { dashboardState, projectEventFeed } from "./view-model.ts";
+import { CHECK_IN_EVENT_CAP, CHECK_IN_TICKS, dashboardState, projectEventFeed } from "./view-model.ts";
 
 const moduleDirectory = dirname(fileURLToPath(import.meta.url));
 const page = readFileSync(resolve(moduleDirectory, "index.html"), "utf8");
@@ -117,10 +117,12 @@ export function createDashboardApp(options: DashboardOptions): DashboardApp {
           json(response, 400, { ok: false, code: "invalid-limit", error: `limit must be an integer between 1 and ${EVENT_FEED_PAGE_LIMIT}` });
           return;
         }
-        // Roughly one busy in-world week is scanned for exceptional events, while
-        // the feed itself is returned one explicit page at a time.
+        // The check-in looks back CHECK_IN_TICKS world ticks, not the newest
+        // 5,000 events. The read is capped at CHECK_IN_EVENT_CAP. The feed
+        // itself is still one explicit page.
         const feedEvents = store.eventsPage(beforeSequence, limit);
-        json(response, 200, dashboardState(world, store.recentEvents(5_000), {
+        const checkInMinTick = Math.max(0, world.tick - CHECK_IN_TICKS);
+        json(response, 200, dashboardState(world, store.eventsSinceTick(checkInMinTick, CHECK_IN_EVENT_CAP), {
           events: feedEvents,
           hasMore: feedEvents.length > 0 && store.countEventsBefore(feedEvents[0].sequence) > 0,
           limit,

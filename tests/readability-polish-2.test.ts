@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { dashboardState, fullEventFeed, projectEventFeed } from "../src/dashboard/view-model.ts";
+import { checkInEvents, dashboardState, fullEventFeed, projectEventFeed } from "../src/dashboard/view-model.ts";
 import { projectCharacter } from "../src/dashboard/visibility.ts";
 import { captivityReleasedParts } from "../src/dashboard/wording.ts";
 import { runTicks } from "../src/sim/engine.ts";
@@ -25,10 +25,10 @@ test("seed 1847 withholds standing-order refusals as sentences, and no feed row 
   const [bramRow] = projectEventFeed(early.state, "character-01", [bram]);
   assert.equal(finnRow?.payloadWithheld, true);
   assert.equal(finnRow?.data, null);
-  assert.equal(finnRow?.summary, "Finn Frost refused an order.");
+  assert.equal(finnRow?.summary, "Finn Frost refused a standing order. Finn Frost is sailing from Crown Harbor to Verdant Cay.");
   assert.equal(String(finnRow?.summary).includes("explore"), false);
   assert.equal(bramRow?.payloadWithheld, true);
-  assert.equal(bramRow?.summary, "Bram Tern refused an order.");
+  assert.equal(bramRow?.summary, "Bram Tern refused a standing order. Bram Tern is at Verdant Cay.");
   assert.equal(String(bramRow?.summary).includes("trade supplies"), false);
 
   const feed = projectEventFeed(early.state, "character-01", early.events);
@@ -93,11 +93,16 @@ test("seed 2718 Mina Vale at tick 72 rounds the held troop figures", () => {
 
 test("briefing titles on a held captain and on returned troops are sentences", () => {
   const scattered = runTicks(createPrototypeWorld(2718), 168);
-  // GET /api/state builds the check-in from the newest 5,000 events, the same
-  // window as store.recentEvents(5_000). The full log still holds older order
-  // warnings, and those are not what the dashboard shows.
-  const windowed = scattered.events.slice(-5_000);
-  assert.equal(windowed.length, 5_000);
+  // GET /api/state builds the check-in from the last 180 ticks, capped at
+  // 40,000 events. The newest 5,000 events still drop the opening warnings.
+  const counted = scattered.events.slice(-5_000);
+  const countedView = dashboardState(scattered.state, counted, fullEventFeed(counted)) as {
+    briefing: { attentionCount: number; omittedInfoCount: number };
+  };
+  assert.equal(counted.length, 5_000);
+  assert.equal(countedView.briefing.attentionCount, 4);
+  assert.equal(countedView.briefing.omittedInfoCount, 0);
+  const windowed = checkInEvents(scattered.events, scattered.state.tick);
   const full = dashboardState(scattered.state, windowed, fullEventFeed(windowed)) as {
     briefing: { items: Array<{ title: string; summary: string }>; attentionCount: number; omittedInfoCount: number };
   };
@@ -106,15 +111,27 @@ test("briefing titles on a held captain and on returned troops are sentences", (
     "Intelligence is stale",
     "Intelligence is stale",
     "A captain was released",
-    "Scattered troops came back, 2 times.",
+    "A captain was taken",
+    "A battle was decided",
+    "An order was not followed, 2 times.",
+    "An order was refused",
+    "An order was refused",
+    "An order was not followed.",
+    "An order was refused",
+    "An order was refused",
   ]);
-  assert.equal(full.briefing.attentionCount, 4);
-  assert.equal(full.briefing.omittedInfoCount, 0);
-  const returned = full.briefing.items.find((item) => item.title.startsWith("Scattered troops came back"));
+  assert.equal(full.briefing.attentionCount, 12);
+  assert.equal(full.briefing.omittedInfoCount, 8);
+  const returnsOnly = dashboardState(
+    scattered.state,
+    scattered.events.filter((event) => event.type === "scattered-troops-returned"),
+    fullEventFeed([]),
+  ) as { briefing: { items: Array<{ title: string; summary: string }> } };
+  const returned = returnsOnly.briefing.items.find((item) => item.title.startsWith("Scattered troops came back"));
   assert.ok(returned);
   assert.equal(returned.title, "Scattered troops came back, 2 times.");
   assert.equal(returned.summary.includes(".."), false);
-  assert.equal(full.briefing.items.some((item) => item.title.startsWith("An order was not followed")), false);
+  assert.equal(full.briefing.items.some((item) => item.title.startsWith("An order was not followed")), true);
   const returns = scattered.events.filter((event) => event.type === "scattered-troops-returned");
   assert.deepEqual(returns.map((event) => event.tick), [161, 167]);
 

@@ -1,7 +1,7 @@
 import { assessStandingOrder, garrisonConfidenceLabel } from "../sim/agency.ts";
 import { commandHolderId, factionPower, partyPower, partyPowerFromTroops, round } from "../sim/state.ts";
 import type { Character, PartySighting, ReleaseSighting, SimEvent, StandingOrder, SupplyContract, TravelState, WorldState } from "../sim/types.ts";
-import { causeLabelFor, captivityReleasedParts, learnedInPortNote, loyaltyNoteFor, ownedPortTaxSentence, publicFeedSentence, releaseDebtNote, ransomIncomeNote, seatSummaryFor, skillsWithheldNote, summaryStaysWhenWithheld } from "./wording.ts";
+import { causeLabelFor, captivityReleasedParts, characterName, learnedInPortNote, loyaltyNoteFor, ownedPortTaxSentence, publicFeedSentence, releaseDebtNote, ransomIncomeNote, seatSummaryFor, skillsWithheldNote, summaryStaysWhenWithheld } from "./wording.ts";
 
 /**
  * Decides what a player may legitimately know about the rest of the world.
@@ -338,7 +338,7 @@ function seaSummary(
   const from = world.settlements[travel.fromId]?.name ?? travel.fromId;
   const to = world.settlements[travel.toId]?.name ?? travel.toId;
   const dock = arriving ? ` Docks at ${to} on this tick.` : "";
-  return `${subject.name} is ${seaRelation(kind)}, ${from} to ${to}.${dock} ${troops} troops, ${ageTicks} ticks old.`;
+  return `${characterName(world, subject.id, subject.name)} is ${seaRelation(kind)}, ${from} to ${to}.${dock} ${troops} troops, ${ageTicks} ticks old.`;
 }
 
 /** Plain sentence for a sea kind. The stored kind value is unchanged. */
@@ -383,7 +383,7 @@ export function outOfStretchFor(world: WorldState, observer: Character): OutOfSt
       toId: subject.travel.toId,
       remainingTicks: subject.travel.remainingTicks,
       totalTicks: subject.travel.totalTicks,
-      summary: `${subject.name} is on ${from} to ${to}, ${subject.travel.remainingTicks} of ${subject.travel.totalTicks} ticks left, and is not in the same stretch of water.`,
+      summary: `${characterName(world, subject.id, subject.name)} is on ${from} to ${to}, ${subject.travel.remainingTicks} of ${subject.travel.totalTicks} ticks left, and is not in the same stretch of water.`,
     });
   }
   return rows;
@@ -674,6 +674,8 @@ export function projectCharacter(
   return {
     id: character.id,
     name: character.name,
+    /** Qualified where Toma Reef and Toma Hale would otherwise read as the same captain. The stored name is `name`. */
+    displayName: characterName(world, character.id, character.name),
     archetype: character.archetype,
     controller: character.controller,
     factionId: character.factionId,
