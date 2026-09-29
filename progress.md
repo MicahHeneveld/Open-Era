@@ -30,9 +30,10 @@ Git remains the complete history. This file exists for three things git does not
 
 ## Current state
 
-- **Baseline:** `main` at `ce8fc73` (PR #50). This branch is `feature/commander-seat`. No pull request.
-- **Last verified:** buy-provisions on main. [buy-provisions-001](docs/playtests/buy-provisions-001.md) is `PROMOTE`. Tick-72 hashes `cb04ba5d…` / `bd7d8cc4…` / `20975bf4…` (8301, 8513, 8031). Recovery 572.
-- **Headline risk:** the UI/readability queue. A witnessed battle-resolved reason is first.
+- **Baseline:** `origin/main` at `0224942` (PR #51). This branch is `feature/commander-seat`. No pull request.
+- **Last verified:** `npm run typecheck` clean, **216 tests**, `./scripts/evaluate-milestone.sh commander-seat`. Node v24.21.0. Golden hashes were not regenerated.
+- **Gate status:** Tick-72 hashes stay `cb04ba5d…` / `bd7d8cc4…` / `20975bf4…` (8301, 8513, 8031). Recovery 572.
+- **Headline risk:** a headless run through tick 2400 never captures a command holder, so the cover is not on the playtest. The UI/readability queue is still open. A witnessed battle-resolved reason is first.
 - **Runtime:** Node 24.21.0, pinned by `.node-version`. ICU 78.3.
 
 ## Open items
@@ -103,6 +104,12 @@ Git remains the complete history. This file exists for three things git does not
 ## Milestones
 
 Backfilled from the commit graph on 2026-09-25. **Attribution caveat:** commits do not record which agent authored them. Milestones M1–M11 are attributed to the ChatGPT partner from session context, not from the repository, and should not be read as verified provenance.
+
+### 2026-09-29 — M30: Name the command seat
+- **Agent:** Open Era Engineer (Cursor cloud agent) | **Branch:** `feature/commander-seat` | **Playtest:** pending, [commander-seat-001](docs/playtests/commander-seat-001.md)
+- The issuer of a faction's standing orders is the commander. While that person is captive, the free mate with the highest leadership plus loyalty times 50 covers the seat. A lower id wins a tie. The cover does not issue, confirm, or retarget. Golden hashes were not regenerated. Tick-72 counts stay 8301 / 8513 / 8031.
+- Verified — typecheck, 216 tests, and `./scripts/evaluate-milestone.sh commander-seat`. The blind session is not run.
+- Links    — [commander-seat-001](docs/playtests/commander-seat-001.md)
 
 ### 2026-09-29 — M27: Close an unanswered completion report
 - **Agent:** Open Era Engineer (Cursor cloud agent) | **Branch:** `feature/confirm-unanswered-orders` | **Playtest:** pending, [order-confirmation-001](docs/playtests/order-confirmation-001.md)
@@ -221,6 +228,14 @@ Backfilled from the commit graph on 2026-09-25. **Attribution caveat:** commits 
 - A player can name a good and a quantity and see the price before paying, on any of the four resources, with every limit quoted before it is hit. A voyage pays for itself (+113.27 on 108 starting money in playtest). Whether it out-earns working the same ticks is a separate, deferred milestone.
 
 ## Entries
+
+### 2026-09-29 — M30: Name the command seat and cover a captive holder
+- **Agent:** Open Era Engineer (Cursor cloud agent) | **Branch:** `feature/commander-seat` | **Commits:** `31e39c5`, `e995413`, `e2668d5` merges `origin/main` at `0224942`. The playtest plan is the commit that adds this entry. | **Type:** Behavior
+- **Changed** — A faction row publishes `commanderId`, the single issuer of that faction's standing orders, and `actingCommanderId`. The cover is written on `character-captured` when the holder, or the current cover, is captured, and the key is deleted when the holder is released or escapes. The sort is leadership plus loyalty times 50, skipping the holder and anyone captive, lower id on a tie. No new event and no new draw. The cover does not take the orders. Open items gained four readability rows under the battle-feed rows, and the buy-provisions defect is marked resolved by PR #50.
+- **Why** — The person who already issues the orders was not named, and a prison term did not change who sat there.
+- **Verified** — Node v24.21.0. `npm run typecheck` clean. **216 tests**. `./scripts/evaluate-milestone.sh commander-seat` passed. Tick-72 hashes stayed `cb04ba5d392d8b1c868cc97e54cb21b21ec171edd546bb70d0d7aba86cc69c11` (1847, 8301), `bd7d8cc44d5fa21022ecb8f8086e13dfbb9475eb025b5ae53f87e2991f90035c` (2718, 8513), `20975bf480e5aa11eeafe1ce39c36cf5ba0fa8e2d5de2bb5887a35d7b3aecc9f` (4096, 8031). Split recovery replayed 572 events. No `golden:update`. Headless runs through tick 2400 on those three seeds never capture `character-01` or `character-14`. The blind session is not run.
+- **Left open** — [commander-seat-001](docs/playtests/commander-seat-001.md). The cover is unobservable in that headless window. The UI/readability queue, starting with a witnessed battle-resolved reason.
+- **Links** — [political layer](docs/design/political-layer.md), [world simulation](docs/design/world-simulation.md), [owner questions](docs/design/owner-questions.md) 38–42, [port churn and captures](docs/design/port-churn-and-captures.md), [commander-seat-001](docs/playtests/commander-seat-001.md)
 
 ### 2026-09-29 — Queue four buy-receipt and briefing readability items
 - **Agent:** Open Era Engineer (Cursor cloud agent) | **Branch:** `feature/commander-seat` | **Type:** Docs
