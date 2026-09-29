@@ -18,6 +18,7 @@ These documents capture the decisions made during the initial design conversatio
 - [Battle morale](battle-morale.md) — Built in M29: a finished major with a higher attacker score is the attacker's victory, including when morale ended it at 12 or under. Surrender and the immediate-battle rule stay
 - [Port churn and captures](port-churn-and-captures.md) — Open / diagnosis: a claim leaves the garrison the fight left, Crown Harbor on 1847 changes hands again within two ticks, and captures fall once M28 and M29 are both on
 - [Captures under M29](captures-under-m29.md) — Open / proposal: an outscore win keeps the attacker's victory and spends the capture roll it already draws on the losing faction's officer standing on the port
+- [Capture wording](capture-wording.md) — Open / proposal: name the captor, say a dock prisoner was taken after the other side won on a higher score, and say who covers a captive commander's seat
 - [Autonomous provisioning](autonomous-provisioning.md) — Open / proposal: the 16% depth cap does not stop captains emptying a small port, and a reserve that they cannot buy below makes the crews hungrier
 - [Contracts](contracts.md) — Open / proposal: a paid provisions delivery the sim would enforce, once a standing order is one job rather than two
 - [Order confirmation](order-confirmation.md) — Open / proposal: a completion report closes when its issuer signs it, or after a day when nobody can
