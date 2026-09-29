@@ -185,6 +185,159 @@ The titles, in order:
 
 ## Session
 
+HEAD before the first request: `4365ec5ffa0f3dff0d48fa9ac38a02df9677d2d2`. Node `v24.21.0`. No commands. Each session was its own process on `http://127.0.0.1:4317`.
+
+### Session 1 — seed 1847
+
+`GET /api/health` HTTP 200 `{"ok":true,"tick":0,"events":0}`.
+
+**State tick 1.** `POST /api/advance` `{"ticks":1}` HTTP 200. `tick` 1. `ticksAdvanced` 1. `combatUpdated` false. `attentionUpdated` false.
+
+`GET /api/state?limit=200` HTTP 200. State `tick` 1. `eventPage.total` 182. `hasMore` false. `oldestSequence` 1. `newestSequence` 182.
+
+Sequence 113, actor `character-18`, event `tick` 0:
+
+- `summary` is `Finn Frost refused a standing order. Finn Frost is sailing from Verdant Cay to Crown Harbor.`
+- `payloadWithheld` is true. `data` is null.
+- The summary does not contain `explore`.
+
+Sequence 137, actor `character-22`, event `tick` 0:
+
+- `summary` is `Bram Tern refused a standing order. Bram Tern is sailing from Verdant Cay to Glassport.`
+- `payloadWithheld` is true. `data` is null.
+- The summary does not contain `trade`.
+
+Sequence 50 is also on this page: `Vale Drake refused the explore order after weighing loyalty, risk, and ambition.` That is an order Mara issued. It is not a failure.
+
+Toma Reef (`character-07`):
+
+- `name` is `Toma Reef`.
+- `displayName` is `Toma Reef (World Government)`.
+- `factionId` is `world-government`.
+
+Toma Hale (`character-27`):
+
+- `name` is `Toma Hale`.
+- `displayName` is `Toma Hale (unaffiliated)`.
+- `factionId` is null.
+
+Mara Vane (`character-01`): `displayName` is `Mara Vane`.
+
+Sequence 164, actor `character-27`:
+
+- `summary` is `Toma Hale (unaffiliated) departed for Glassport.`
+- `payloadWithheld` is true. `data` is null.
+
+Sequence 43, actor `character-07`:
+
+- `summary` is `Toma Reef accepted the trade supplies order.`
+- `payloadWithheld` is false. `data` is not null.
+- The summary does not contain `(World Government)`.
+
+**State tick 71.** `POST /api/advance` `{"ticks":70}` HTTP 200. `tick` 71. `ticksAdvanced` 70.
+
+`GET /api/state?limit=200` HTTP 200. State `tick` 71. `eventPage.total` 8180. The first page is `oldestSequence` 7981, `newestSequence` 8180, `cursor` 7981, `hasMore` true.
+
+Sequence 8079, actor `character-05`, event `tick` 70, type `settlement-claimed`:
+
+- `summary` is `Jun Marrow claimed Cinder Key. The surrender was offered and taken on the next tick, so it was not waiting.`
+- `payloadWithheld` is true. `data` is null.
+- The summary does not contain `accepted`, `outscore`, or `nerve`.
+
+`GET /api/state?limit=200&beforeSequence=7981` HTTP 200. That page is `oldestSequence` 7781, `newestSequence` 7980.
+
+Sequence 7951, actor `character-03`, event `tick` 69:
+
+- `summary` is `Niko Wren won the fight at Cinder Key on a higher score. 2 captains won a fight here on this tick: Niko Wren, Jun Marrow. This fight left the garrison standing.`
+- `payloadWithheld` is true. `data` is null.
+- The summary does not contain `outscore` or `nerve`.
+
+Sequence 7959, actor `character-05`, event `tick` 69:
+
+- `summary` is `Jun Marrow won the fight at Cinder Key on a higher score. 2 captains won a fight here on this tick: Niko Wren, Jun Marrow. This fight left the garrison standing. The surrender was taken on the next tick.`
+- `payloadWithheld` is true. `data` is null.
+- The summary does not contain `outscore` or `nerve`.
+
+**State tick 340.** From tick 71, `POST /api/advance` `{"ticks":144}` HTTP 200. `tick` 215. `ticksAdvanced` 144.
+
+`POST /api/advance` `{"ticks":125}` HTTP 200. `tick` 340. `ticksAdvanced` 125.
+
+`GET /api/state?limit=200` HTTP 200. State `tick` 340. `eventPage.total` 41680. The first page is `oldestSequence` 41481, `newestSequence` 41680.
+
+Sequence 41612, actor `character-14`, event `tick` 339:
+
+- `summary` is `Pax Ash lost the fight at Crown Harbor because morale gave out, on a lower score.`
+- `payloadWithheld` is true. `data` is null.
+- The summary does not contain `nerve` or `outscore`.
+
+Stopped. No further request on this process.
+
+### Session 2 — seed 2718
+
+A new process. `GET /api/health` HTTP 200 `{"ok":true,"tick":0,"events":0}`.
+
+**State tick 72.** `POST /api/advance` `{"ticks":72}` HTTP 200. `tick` 72. `ticksAdvanced` 72. `combatUpdated` false. `attentionUpdated` false.
+
+`GET /api/state?limit=200` HTTP 200. State `tick` 72. `eventPage.total` 8513. The first page is `oldestSequence` 8314, `newestSequence` 8513.
+
+Mina Vale (`character-15`):
+
+- `troops.count` is 0.
+- `captivity.settlementId` is `crown-harbor`.
+- `captivity.cause` is `failed-retreat`.
+- `captiveIntel.troops` is 12.
+- `captiveIntel.partyPower` is `60.244`.
+
+Sequence 8402, actor `character-15`, event `tick` 71, type `character-captured`:
+
+- `summary` is `World Government took Mina Vale at Crown Harbor after failed retreat. 12 troops were taken, power 60.244.`
+- `payloadWithheld` is true. `data` is null.
+
+The check-in item `event:8402`:
+
+- `title` is `A captain was taken`.
+- `summary` is `World Government took Mina Vale at Crown Harbor after failed retreat. 12 troops were taken, power 60.244.`
+
+`briefing.attentionCount` is 11. `briefing.omittedInfoCount` is 7.
+
+**State tick 168.** `POST /api/advance` `{"ticks":96}` HTTP 200. `tick` 168. `ticksAdvanced` 96.
+
+`GET /api/state?limit=200` HTTP 200. State `tick` 168. `eventPage.total` 20101.
+
+- `briefing.attentionCount` is 12.
+- `briefing.omittedInfoCount` is 8.
+- `briefing.shownCount` is 12.
+- `briefing.attentionLabel` is `Check-in · 12 need attention`.
+
+The titles, in order:
+
+1. `The party is starving`
+2. `Intelligence is stale`
+3. `Intelligence is stale`
+4. `A captain was released`
+5. `A captain was taken`
+6. `A battle was decided`
+7. `An order was not followed, 2 times.`
+8. `An order was refused`
+9. `An order was refused`
+10. `An order was not followed.`
+11. `An order was refused`
+12. `An order was refused`
+
+`A captain was taken` on this check-in (`event:8402`) has summary `World Government took Mina Vale at Crown Harbor after failed retreat`. It does not contain `12 troops` or `60.244`.
+
+`An order was not followed, 2 times.` is present. Stopped.
+
 ## Findings
 
+Every listed tick, `ticksAdvanced`, page bound, sentence, title, attention count, omitted count, `displayName`, `payloadWithheld`, and `data` value matched. No mismatch.
+
+The withheld refusals (sequences 113 and 137) name a standing order and the captain's public place. They do not name `explore` or `trade`, and `data` is null. The order Mara can read (sequence 43) keeps `Toma Reef` without the display qualifier, and `data` is present. The two Tomas stay distinct on the card and on the withheld departure. Stored names stay `Toma Reef` and `Toma Hale`.
+
+The Cinder Key rows name both captains, say the garrison was left standing, and say the surrender was taken on the next tick. The claim says the offer was not waiting. None of those sentences use `outscore`, `nerve`, or `accepted`. Pax Ash's loss says morale gave out, on a lower score.
+
+Mina Vale's capture names `12 troops` and power `60.244` on the withheld feed row and on the tick-72 check-in, while `payloadWithheld` is true. At tick 168 the same event's check-in sentence drops those figures. The month window is 12 items, with 8 omitted, and it includes `An order was not followed, 2 times.`
+
 ## Verdict
+
+PROMOTE
