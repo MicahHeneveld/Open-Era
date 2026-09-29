@@ -17,6 +17,7 @@ These documents capture the decisions made during the initial design conversatio
 - [Contracts](contracts.md) — Open / proposal: a paid provisions delivery the sim would enforce, once a standing order is one job rather than two
 - [Order confirmation](order-confirmation.md) — Open / proposal: a completion report closes when its issuer signs it, or after a day when nobody can
 - [Captivity debts](captivity-debts.md) — Open / proposal: the unpaid ransom comes out of the prisoner's purse, up to one day's wages, on each world day
+- [Political layer](political-layer.md) — Open / proposal: the person who already issues a faction's orders is named in command, and a captive commander's seat is covered until release
 - [Owner questions](owner-questions.md) — Open: the decisions still waiting on Micah, each with the default the game runs on or is planned to run on
 - [Generated mockups](../assets/mockups/README.md) — all 13 image concepts produced during the conversation
 - [Development and playtest pipeline](../development-pipeline.md) — branch roles, automated gates, adaptive player protocol, and promotion rules
