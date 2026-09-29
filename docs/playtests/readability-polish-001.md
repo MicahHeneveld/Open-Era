@@ -153,11 +153,157 @@ Stop.
 
 ## Session
 
-Operator fills this in. Do not treat the checkpoints above as a played session.
+Played blind on branch `fix/readability-polish`. Head before the first request: `bdb0e529d6ca805ef4e21eb2a50ebfed109a7856`. Node `v24.21.0`. Operator: M34.1 blind playtest: readability-polish-001 (`bc-a1b2a515-4fe5-5883-9e6c-67f29a60fa24`). One dashboard process per session, `npm run dashboard -- --reset --seed N` on `http://127.0.0.1:4317`. Each process answered `GET /api/health` HTTP 200 `{"ok":true,"tick":0,"events":0}` before the first command or advance. Player `prototype-player`. No other commands were sent.
+
+### Session 1 — seed 1847
+
+`POST /api/commands` travel to `glassport`. HTTP 202.
+
+`POST /api/advance` `{"ticks":2}`. HTTP 200. Advance `tick` 2. Advance `day` `0.33` (not `0.3333333333333333`).
+
+`GET /api/state?limit=200`. State `tick` 2. State `day` `0.33`.
+
+Ada Sorn (`character-13`):
+
+| Field | Expected | Observed |
+| --- | --- | --- |
+| `seaSighting.kind` | `overtaking` | `overtaking` |
+| `seaSighting.arriving` | false | false |
+| `seaSighting.troops` | 35 | 35 |
+| `seaSighting.summary` | `Ada Sorn is overtaking on this route, Crown Harbor to Glassport. 35 troops, 0 ticks old.` | `Ada Sorn is overtaking on this route, Crown Harbor to Glassport. 35 troops, 0 ticks old.` |
+| summary contains `is overtaking,` | no | no |
+| live `troops` | null | null |
+
+`POST /api/advance` `{"ticks":1}`. HTTP 200. Advance `tick` 3. Advance `day` `0.5`. State `tick` 3. State `day` `0.5`.
+
+| Who | Expected | Observed |
+| --- | --- | --- |
+| Ada Sorn (`character-13`) | `kind` `overtaking`. `arriving` true. Summary `Ada Sorn is overtaking on this route, Crown Harbor to Glassport. Docks at Glassport on this tick. 35 troops, 0 ticks old.` | `kind` `overtaking`. `arriving` true. Summary `Ada Sorn is overtaking on this route, Crown Harbor to Glassport. Docks at Glassport on this tick. 35 troops, 0 ticks old.` Live `troops` null. |
+| Sable Sorn (`character-24`) | `kind` `passing`. Summary `Sable Sorn is passing on the opposite course, Glassport to Crown Harbor. 36 troops, 0 ticks old.` | `kind` `passing`. `arriving` false. Summary `Sable Sorn is passing on the opposite course, Glassport to Crown Harbor. 36 troops, 0 ticks old.` `seaSighting.troops` 36. Live `troops` null. |
+| Toma Reef (`character-07`) | `kind` `arriving`. `arriving` true. Summary `Toma Reef is arriving at the same port, Cinder Key to Glassport. Docks at Glassport on this tick. 42 troops, 0 ticks old.` | `kind` `arriving`. `arriving` true. Summary `Toma Reef is arriving at the same port, Cinder Key to Glassport. Docks at Glassport on this tick. 42 troops, 0 ticks old.` `seaSighting.troops` 42. Live `troops` null. |
+
+None of those summaries contained `is overtaking,`, `is passing,`, `is arriving,`, or `is sharing`. Stopped. No further command.
+
+### Session 2 — seed 1847
+
+New process.
+
+1. Travel to `cinder-key`. HTTP 202. `POST /api/advance` `{"ticks":5}`. HTTP 200. Advance `tick` 5. Advance `day` `0.83`. State `tick` 5. State `day` `0.83`. Mara Vane (`character-01`) `locationId` `cinder-key`.
+2. Survey `cinder-key`. HTTP 202. `POST /api/advance` `{"ticks":1}`. HTTP 200. Advance `tick` 6. Advance `day` `1`. State `tick` 6. State `day` `1`. Mara `locationId` `cinder-key`.
+3. Travel to `glassport`. HTTP 202. `POST /api/advance` `{"ticks":1}`. HTTP 200. Advance `tick` 7. Advance `day` `1.17`. State `tick` 7. State `day` `1.17`.
+
+Sable Morrow (`character-04`):
+
+| Field | Expected | Observed |
+| --- | --- | --- |
+| `partySighting.troops` | 21 | 21 |
+| `partySighting.label` | `Sighted troops` | `Sighted troops` |
+| `partySighting.ageTicks` | 2 | 2 |
+| `partySighting.locationId` | `cinder-key` | `cinder-key` |
+| `seaSighting.kind` | `sharing` | `sharing` |
+| `seaSighting.arriving` | true | true |
+| `seaSighting.troops` | 19 | 19 |
+| `seaSighting.summary` | `Sable Morrow is in the same stretch of water, Cinder Key to Glassport. Docks at Glassport on this tick. 19 troops, 0 ticks old.` | `Sable Morrow is in the same stretch of water, Cinder Key to Glassport. Docks at Glassport on this tick. 19 troops, 0 ticks old.` |
+| summary contains `sharing` | no | no |
+| sea row `label` | absent | absent |
+| live `troops` | null | null |
+
+Stopped. No further command.
+
+### Session 3 — seed 2718
+
+New process. No commands. `POST /api/advance` `{"ticks":72}`. HTTP 200. Advance `tick` 72. Advance `day` `12`. State `tick` 72. State `day` `12`.
+
+Sequence 8402 was on the `limit=200` page (`eventPage.oldestSequence` 8314, `newestSequence` 8513).
+
+| Field | Expected | Observed |
+| --- | --- | --- |
+| type | `character-captured` | `character-captured` |
+| `actorId` | `character-15` (the prisoner) | `character-15` |
+| `targetId` | `world-government` (the captor faction) | `world-government` |
+| `payloadWithheld` | true | true |
+| `data` | null | null |
+| summary | `World Government took Mina Vale at Crown Harbor after failed retreat` | `World Government took Mina Vale at Crown Harbor after failed retreat` |
+| briefing `event:8402` title | `A captain was taken` | `A captain was taken` |
+| briefing summary | that same sentence | `World Government took Mina Vale at Crown Harbor after failed retreat` |
+| title is `character captured` or `Prisoner taken` | no | no |
+
+The title does not contain `character-15` or `world-government`.
+
+Mina Vale (`character-15`):
+
+| Field | Expected | Observed |
+| --- | --- | --- |
+| `troops.count` | 0 | 0 |
+| `troopsNote` | `0 with Mina Vale; 12 held by World Government.` | `0 with Mina Vale; 12 held by World Government.` |
+| `captiveIntel.troops` | 12 | 12 |
+| `captiveIntel.ports` | `[]` | `[]` |
+| `captiveIntel.portsNote` | `Mina Vale named no ports. The list may be incomplete.` | `Mina Vale named no ports. The list may be incomplete.` |
+| `skillsNote` | null | null |
+
+Stopped.
+
+### Session 4 — seed 1847
+
+New process. No commands.
+
+`POST /api/advance` `{"ticks":72}`. HTTP 200. Advance `tick` 72. Advance `day` `12`. State `tick` 72. State `day` `12`.
+
+| Check | Expected | Observed |
+| --- | --- | --- |
+| briefing `event:5655` title | `A battle was decided`, not `battle resolved` | `A battle was decided`. Summary `Rook Tern lost at Cinder Key`. |
+| briefing `event:3940` title | `A captain was taken` | `A captain was taken`. Summary `Free Tide Compact took Sable Morrow at Cinder Key after failed retreat`. |
+| a briefing title is `standing order refused` | no | no. The ten check-in titles were `The party is starving`, `Intelligence is stale` (twice), `A battle was decided`, `A captain was taken`, `Jun Marrow's routine digest`, `A port was claimed`, and `A battle was decided` three more times. |
+| one refused order still on the check-in | title `An order was refused` | The string `An order was refused` is not in the tick-72 state JSON. `omittedInfoCount` is 1. See Findings. |
+
+`POST /api/advance` `{"ticks":47}`. HTTP 200. Advance `tick` 119. Advance `day` `19.83`. State `tick` 119. State `day` `19.83`.
+
+Sequence 13680 was on the `limit=200` page (`oldestSequence` 13588).
+
+| Field | Expected | Observed |
+| --- | --- | --- |
+| type | `captivity-released` | `captivity-released` |
+| `actorId` | `character-04` | `character-04` |
+| briefing `event:13680` title | `A captain was released`, not `captivity released` | `A captain was released` |
+| summary | (not specified) | `Sable Morrow was released from Cinder Key: 13.4 paid and 103.21 recorded as debt. Loyalty fell` |
+
+`POST /api/advance` `{"ticks":144}` three times, then `{"ticks":44}`. Each HTTP 200. Advance days `43.83`, `67.83`, `91.83`, `99.17`. State `tick` 595. State `day` `99.17`.
+
+`provision:critical`:
+
+| Field | Expected | Observed |
+| --- | --- | --- |
+| `settlementId` | `verdant-cay` | `verdant-cay` |
+| summary | `The hold is empty and 0.256 provisions per tick cannot be found. That costs health 0.205 per tick. Morale is already 0, so the shortage does not lower it. Morale gains nothing while the shortage lasts, so it will not recover on its own. Crown Harbor has no provisions to sell. Verdant Cay sells provisions, and you cannot reach it while you are held.` | that same sentence |
+| contains `No market you could still reach sells provisions.` | no | no |
+| `party.resupply.settlementId` | `verdant-cay` | `verdant-cay` |
+| `provisions` | 269 | 269 |
+| `price` | 1.18 | 1.18 |
+| `reachable` | false | false |
+| `travelTicks` | null | null |
+
+`POST /api/advance` `{"ticks":84}`. HTTP 200. Advance `tick` 679. Advance `day` `113.17`. State `tick` 679. State `day` `113.17`.
+
+Mara Vane (`character-01`):
+
+| Field | Expected | Observed |
+| --- | --- | --- |
+| `loyalty` | 0.768 | 0.768 |
+| `loyaltyNote` | `The seat reads 0.768. personality.loyalty is the seed and is not the figure the seat reads.` | that same sentence |
+| a number in the note with more than 3 decimal places | no | no. The only number is `0.768`. |
+| note contains `0.767927391717676` or `0.807927391717676` | no | no |
+| `personality.loyalty` | `0.807927391717676` | `0.807927391717676` |
+
+Stopped. Every advance `day` read in these four sessions was a two-place value or a whole number (`0.33`, `0.5`, `0.83`, `1`, `1.17`, `12`, `19.83`, `43.83`, `67.83`, `91.83`, `99.17`, `113.17`).
 
 ## Findings
 
-Operator fills this in.
+- Seed 1847, state tick 72. The check-in does not include a refused order. No briefing title is `An order was refused`, and that string is absent from the state JSON. `briefing.omittedInfoCount` is 1. Paging the event feed, four `standing-order-refused` rows are sentences (`Sable Morrow refused the protect order after weighing loyalty, risk, and ambition.` and the same shape for Vale Drake, Orin Rill, and Kessa Calder; sequences 24, 50, 56, 62). Two withheld rows are still the event type: sequence 113 `Finn Frost: standing order refused`, sequence 137 `Bram Tern: standing order refused`. No briefing title on the check-in is `standing order refused`.
+- Seed 2718, state tick 72. Iris Stone's routine digest reads `1 routine order updates: 1 confirmed. No command decision is required.` The verb does not agree with 1.
+- Seed 2718, state tick 72. Mina Vale's live `troops.count` is 0 and `troopsNote` names World Government, but `troops.experience` is `0.19867861845996232` and `troops.discipline` is `0.3837455657846294`.
+- Seed 1847, state tick 595. The captivity check-in title is `Character held captive`. The summary is `Held at Crown Harbor. Escape always works, and it wounds you. The capture risk was severe. Mandatory release is in 13.8 days.` The other titles on that page are sentences (`The party is starving`, `A captain was taken`, `A captain was released`, `A battle was decided`).
+- Seed 1847, state tick 595. A grouped check-in title is `Scattered troops returned ×2`. Its summary is `2 such reports, the most recent being: 31 scattered troops returned to Jun Marrow. The first was on day 98.` That line does not contain a doubled period.
+- The tick-679 `loyaltyNote` matches the plan and still puts the field name `personality.loyalty` in the sentence the player reads. The note's only number is `0.768`.
 
 ## Verdict
 
@@ -167,4 +313,4 @@ Operator fills this in.
 
 `ABANDON` if `actorId` and `targetId` on sequence 8402 are swapped, or if Glassport, a capture, or a stored cause moved. Those are not wording.
 
-**Applied:** not yet. This plan has not been run.
+**Applied:** `PROMOTE`. Head tested `bdb0e529d6ca805ef4e21eb2a50ebfed109a7856`. Node v24.21.0. Agent M34.1 blind playtest: readability-polish-001 (`bc-a1b2a515-4fe5-5883-9e6c-67f29a60fa24`). The four sea summaries matched and each `kind` stayed. `partySighting.label` was `Sighted troops`. The tick-2 advance `day` was `0.33`. Sequence 8402's title was `A captain was taken`, `actorId` stayed `character-15`, and `targetId` stayed `world-government`. Mina's `portsNote` and `troopsNote` matched. The tick-595 line named Crown Harbor as empty and Verdant Cay as stocked while she is held. The tick-679 note was only `0.768`. No listed REVISE or ABANDON condition was observed. The missing `An order was refused` check-in line is recorded under Findings.
