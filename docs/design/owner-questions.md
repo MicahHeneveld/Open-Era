@@ -896,6 +896,48 @@ Answer by number, for example "4: yes" or "4: keep the default." The default is 
 
 **Source:** [Captures under M29](captures-under-m29.md#questions-for-micah) question 6
 
+## Loyalty scar after M30
+
+### 87. Build the -0.04 scar, stored on the character and read only by the cover sort?
+
+**Default:** Yes. It is written 11, 4, and 2 times, the event log matches the dock rule, and the fixture stays.
+
+**If you pick the other way:** The unpaid release would store no scar, and the cover sort would keep reading the seeded loyalty.
+
+**Status:** Default: yes
+
+**Source:** [Loyalty scar, remeasured](loyalty-scar-remeasure.md#questions-for-micah) question 1
+
+### 88. Should the step be larger than 0.04?
+
+**Default:** No. At 0.08 the tick-594 cover becomes Bram Quill, and Finn Frost is stored at 0.242.
+
+**If you pick the other way:** The step would be 0.08. That names Bram Quill from tick 594 through 678 and stores Finn Frost at 0.242.
+
+**Status:** Default: no
+
+**Source:** [Loyalty scar, remeasured](loyalty-scar-remeasure.md#questions-for-micah) question 2
+
+### 89. If a later scar lands on the person the sort would have chosen, and the gap is smaller than the step, may it rename the cover?
+
+**Default:** Yes. It did not happen at -0.04. Ada Sorn leads Vale Drake by 0.253, and neither of them owes a ransom before that cover starts.
+
+**If you pick the other way:** The scar would not rename the cover, even when it lands on the person the sort would have chosen and the gap is smaller than the step.
+
+**Status:** Default: yes
+
+**Source:** [Loyalty scar, remeasured](loyalty-scar-remeasure.md#questions-for-micah) question 3
+
+### 90. Should orders, plans and work read the scar?
+
+**Default:** No. That path changes serve-faction scores on the release tick, and captures become 13, 9, and 10.
+
+**If you pick the other way:** Orders, plans, and work would read the scar. Serve-faction scores would change on the release tick, and captures would become 13, 9, and 10.
+
+**Status:** Default: no
+
+**Source:** [Loyalty scar, remeasured](loyalty-scar-remeasure.md#questions-for-micah) question 4
+
 ## Already settled
 
 The [progress log](../../progress.md) (reconnaissance brief, 2026-09-29) answered reconnaissance questions 1–8. Reconnaissance question 1 is no: a survey or an officer's look stores population, walls, and who was anchored. Reconnaissance question 2 keeps confidence and the original date on that handoff. Reconnaissance questions 3–8 stay put: public sea courses, a live garrison from your other ports, no captives or informants. [Party sightings](party-sightings.md#left-open) repeats those. A foreign price is that dated report, not a live quote ([World simulation](world-simulation.md#player-trade)). An idle player with money still starves if they give no orders ([Port provisions](port-provisions.md#the-idle-commander)). Unpaid ransom is questions 22–29 ([Captivity debts](captivity-debts.md#questions-for-micah)). A landless raid once a town has 8 soldiers, and no troops left behind on the claim, is questions 30–32 ([Portless recovery](portless-recovery.md#questions-for-micah)). A higher score is the attacker's victory when morale is 12 or under, a close fight included and the short retake accepted, rest does not refill the hold, and the capture die is still rolled, is questions 33–37 ([Battle morale](battle-morale.md#questions-for-micah)). Someone else covers the seat while the commander is in prison and hands it back on release, the cover is the highest leadership plus loyalty with the lower id winning a tie and trust is not used, you cannot name someone else or keep the cover after release, everyone including a rival sees who holds the seat, and if that cover is captured the next person steps up for the whole 14 days, is questions 38–42 ([Political layer](political-layer.md#questions-for-micah)). A character released still owing ransom loses 0.04 loyalty once, a paid release changes nothing, orders, plans and work keep using the starting loyalty, and you see loyalty only for your own faction, is questions 43–45 ([Loyalty drift](loyalty-drift.md#questions-for-micah)). Battered-port surrender, fed garrisons, and refusing an unpaid voyage are built. The first hour is a test, not a choice. The one-click food buy is a known bug queued for engineering: the button will show the cost, apply the share-of-stock cap, and its refusal text will be fixed ([World simulation](world-simulation.md#player-trade); [progress log](../../progress.md#open-items)).
