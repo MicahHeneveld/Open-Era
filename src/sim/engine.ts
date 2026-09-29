@@ -1076,6 +1076,7 @@ function completeMajorBattle(
   attackerScore: number,
   defenderScore: number,
   rng: DeterministicRng,
+  consumeIgnoredCaptureRoll = false,
 ): void {
   const character = world.characters[battle.attackerId];
   const settlement = world.settlements[battle.settlementId];
@@ -1134,6 +1135,12 @@ function completeMajorBattle(
       troopCount: character.troops.count,
     }, events, rng);
     if (!captured) beginPostDefeatWithdrawal(world, character, settlement.id, battle.id, events);
+  } else if (consumeIgnoredCaptureRoll) {
+    // A defeat would have drawn this roll inside attemptCapture. Keep the
+    // draw, and ignore it, so later luck stays put until the victory itself
+    // changes the world. A major that was already an attacker victory does
+    // not pass this flag, and does not draw.
+    rng.next();
   }
 }
 
@@ -1216,11 +1223,34 @@ function resolveBattlePhase(
   const battleEnded = phase >= updatedBattle.totalPhases || attackerTroops < 8 || defenderGarrison === 0 ||
     attackerHealth <= 15 || attackerMorale <= 12;
   if (!battleEnded) return;
-  const attackerWon = defenderGarrison === 0 ||
-    (attackerTroops >= 8 && attackerHealth > 15 && attackerMorale > 12 &&
-      (updatedBattle.attackerPhaseWins > updatedBattle.defenderPhaseWins ||
-        (updatedBattle.attackerPhaseWins === updatedBattle.defenderPhaseWins && attackerScore > defenderScore)));
-  completeMajorBattle(world, updatedBattle, events, attackerWon, attackerScore, defenderScore, rng);
+  const phaseWinsSayAttacker =
+    updatedBattle.attackerPhaseWins > updatedBattle.defenderPhaseWins ||
+    (updatedBattle.attackerPhaseWins === updatedBattle.defenderPhaseWins && attackerScore > defenderScore);
+  // Garrison 0, or troops still in the field with health and morale above the
+  // line and the phase tally, is the win this battle already had.
+  const standingAttackerWin = defenderGarrison === 0 ||
+    (attackerTroops >= 8 && attackerHealth > 15 && attackerMorale > 12 && phaseWinsSayAttacker);
+  // Outscore. The battle still ends at morale 12 or lower. A higher attacker
+  // score is a victory when troops are at least 8, health is above 15, and
+  // the garrison is not yet 0, including when morale is what ended it and
+  // including when the phase tally would still call it a defeat. Surrender
+  // then uses the same garrison and stability limit as any other attacker
+  // victory. Any higher score qualifies. A tie does not.
+  const outscoreAttackerWin = attackerTroops >= 8 &&
+    attackerHealth > 15 &&
+    defenderGarrison !== 0 &&
+    attackerScore > defenderScore;
+  const attackerWon = standingAttackerWin || outscoreAttackerWin;
+  completeMajorBattle(
+    world,
+    updatedBattle,
+    events,
+    attackerWon,
+    attackerScore,
+    defenderScore,
+    rng,
+    attackerWon && !standingAttackerWin,
+  );
 }
 
 function startMajorBattle(
