@@ -30,10 +30,9 @@ Git remains the complete history. This file exists for three things git does not
 
 ## Current state
 
-- **Baseline:** branched from `origin/main` at `6c4c902`. This branch is `feature/buy-provisions-player-fixes`. No pull request.
-- **Last verified:** `npm run typecheck` clean, **213 tests**, `./scripts/evaluate-milestone.sh buy-provisions-player`. Node v24.21.0, ICU 78.3. Golden hashes were not regenerated.
-- **Gate status:** golden hashes were not regenerated. Tick-72 hashes stay `cb04ba5d392d8b1c868cc97e54cb21b21ec171edd546bb70d0d7aba86cc69c11` (1847, 8301 events), `bd7d8cc44d5fa21022ecb8f8086e13dfbb9475eb025b5ae53f87e2991f90035c` (2718, 8513), `20975bf480e5aa11eeafe1ce39c36cf5ba0fa8e2d5de2bb5887a35d7b3aecc9f` (4096, 8031). Split recovery replayed 572 events.
-- **Headline risk:** the buy-provisions playtest is pending with a blind operator at `docs/playtests/buy-provisions-001.md`.
+- **Baseline:** `main` at `ce8fc73` (PR #50). This branch is `feature/commander-seat`. No pull request.
+- **Last verified:** buy-provisions on main. [buy-provisions-001](docs/playtests/buy-provisions-001.md) is `PROMOTE`. Tick-72 hashes `cb04ba5d…` / `bd7d8cc4…` / `20975bf4…` (8301, 8513, 8031). Recovery 572.
+- **Headline risk:** the UI/readability queue. A witnessed battle-resolved reason is first.
 - **Runtime:** Node 24.21.0, pinned by `.node-version`. ICU 78.3.
 
 ## Open items
@@ -44,6 +43,10 @@ Git remains the complete history. This file exists for three things git does not
 | With several attackers, the briefing says more than one captain "won at Crown Harbor" in the same tick while the panel still shows the other side | Readability | Unassigned | Open |
 | A claim says the captain "accepted Crown Harbor's surrender", but the surrender block is written and consumed within one tick, so the player never saw an offer | Readability | Unassigned | Open |
 | The visible port upkeep and the player's knowledge line give a garrison estimate (15) that disagrees with the dock panel (14, then 12) | Readability | Unassigned | Open |
+| The buy receipt's hold, shelf and price differ from the next screen because of the rest of the tick's upkeep and trading (for example hold 48 on the receipt, then 47.424, and price 1.54 then 1.78), and nothing says so | Readability | Unassigned | Open |
+| Doubled period in grouped briefing lines ("Crown Harbor.. The first was on day 1.") | Readability | Unassigned | Open |
+| The starvation item at an empty Crown Harbor (tick 135, seed 1847) points only at Glassport, doesn't say this port is empty, and quotes a morale cost of 1.382 per tick when morale is already 0 | Readability | Unassigned | Open |
+| Recruit's queued and executed lines ("Command queued for Mara Vane", "Mara Vane: action executed") omit quantity and cost (8 for 96) | Readability | Unassigned | Open |
 | After a port is captured, the player's panel falls back to a stale tick-0 rumor (for example "free-tide, garrison 131" at Cinder Key on 2718) instead of the last exact reading | Readability | Unassigned | Open |
 | The owned-port panel shows a surrender block (offeredToId/offeredTick) beside surrenderOffered false, which reads as contradictory | Readability | Unassigned | Open |
 | A silent close is still event type `standing-order-completed` | Readability | Unassigned | Open |
@@ -69,7 +72,7 @@ Git remains the complete history. This file exists for three things git does not
 | `capabilities.requests` omits four endpoints: `/api/threads`, `/api/messages`, `/api/briefing/acknowledge` and `/api/briefing/officer` | Defect | Cursor | **Fixed** in this sweep. All four are now published with their bodies and failure codes, and a test calls each published path to prove the contract describes a route that is really served. The same entry also mis-stated the acknowledgement refusal as 409-style; every rejection is HTTP 400 with a stable `code` |
 | `POST /api/briefing/acknowledge` accepts an `itemId` that names no current item and answers `{ ok: true }` | Behavior | Owner | **Decided: keep lenient.** Acknowledging a nonexistent or already-superseded id stays a documented no-op, because the alternative rejects a legitimate stale click after the tick advances. The contract now states this rather than leaving it to be discovered |
 | `trade-local` takes no parameters, returns only `{ok, command}`, and silently liquidates whatever it chooses | Defect | Cursor | **Fixed** in [PR 10](https://github.com/taia-0/Open-Era/pull/10). `trade-local` is no longer a published player action: `buy-resource` and `sell-resource` name the good and the quantity and quote the price before it is paid. It remains the autonomous path's own verb and is untouched there, which is why the golden hashes did not move |
-| `buy-provisions` has no quantity or cost preview and can spend an entire treasury in one command, and its `insufficient-money` prose conflates the 2-money minimum balance with the price | Defect | Cursor | **Fixed** on `feature/buy-provisions-player-fixes`. The player command quotes unit price and total on accept and on the resolution events. A top-up past `marketDepth` (28.8 provisions) is filled only up to that share, and the accept says so. The purse refusal names the clamped bill. Autonomous `buy-provisions` stays uncapped. `buy-resource` was already the bounded verb |
+| `buy-provisions` has no quantity or cost preview and can spend an entire treasury in one command, and its `insufficient-money` prose conflates the 2-money minimum balance with the price | Defect | Cursor | **Resolved** by [PR #50](https://github.com/taia-0/Open-Era/pull/50). The player command quotes unit price and total on accept and on the resolution events. A top-up past `marketDepth` (28.8 provisions) is filled only up to that share, and the accept says so. The purse refusal names the clamped bill. Autonomous `buy-provisions` stays uncapped. `buy-resource` was already the bounded verb |
 | A merchant cannot learn what a remote market pays, so every profitable route must be discovered by sailing it | Design gap | Cursor | **Narrowed again in M18.** Own-faction ports stay a live board with drift. A foreign price is still not a live quote. A survey or a targeted explore now copies the officer's prices and stocks onto a dated report, which is the channel the reconnaissance brief already described. A remote `maxBuy` / `maxSell` is still not quoted |
 | A price is labelled `exact` with `confidence: 1` but is only good for one tick, and prices drift every tick while a voyage takes four | Design gap | Cursor | **Fixed** in M17. A live board carries `priceQuote.asOfTick` and `expiresTick` of the next tick, plus `priceDrift` for one quiet tick of production and local use. `intelligence.exact` still means the record is current, not that the price will survive a voyage. An estimate keeps `expiresTick: null`, no drift, and its age. The pacing playtest trusted the medicine quote that kept reprinting 18.50 and declined ship materials because that quote had already moved |
 | A destination's `taxRate` is invisible until arrival, because it lives under `market`, which is `null` remotely | Design gap | Cursor | **Fixed** in M17, and the foreign reading was tightened in M21. Every settlement still publishes a rate. Offshore, a report uses the known faction's current rate, so a change of hands does not move the number while the label stays. Standing there, or no report at all, still uses the live holder. Treasury and power stay withheld |
@@ -218,6 +221,14 @@ Backfilled from the commit graph on 2026-09-25. **Attribution caveat:** commits 
 - A player can name a good and a quantity and see the price before paying, on any of the four resources, with every limit quoted before it is hit. A voyage pays for itself (+113.27 on 108 starting money in playtest). Whether it out-earns working the same ticks is a separate, deferred milestone.
 
 ## Entries
+
+### 2026-09-29 — Queue four buy-receipt and briefing readability items
+- **Agent:** Open Era Engineer (Cursor cloud agent) | **Branch:** `feature/commander-seat` | **Type:** Docs
+- **Changed** — Open items gains four readability rows under the battle-feed (a)-(d) rows: a buy receipt whose hold, shelf, and price disagree with the next screen, a doubled period in grouped briefing lines, a starvation item at an empty Crown Harbor that points at Glassport, and recruit lines that omit quantity and cost. The `buy-provisions` defect is marked resolved by PR #50.
+- **Why** — Those four were found in the buy-provisions session and were not queued. The defect they sat beside is on `main`.
+- **Verified** — Compared with `origin/main` at `ce8fc73`. No code change.
+- **Left open** — The four items, and the battle-feed rows above them. None are built.
+- **Links** — [PR #50](https://github.com/taia-0/Open-Era/pull/50), [buy-provisions-001](docs/playtests/buy-provisions-001.md) (`PROMOTE`)
 
 ### 2026-09-29 — Queue four battle-feed readability items
 - **Agent:** Cursor | **Branch:** `feature/buy-provisions-player-fixes` | **Type:** Docs
