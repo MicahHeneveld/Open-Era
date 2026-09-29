@@ -488,3 +488,21 @@ test("an offshore faction label stays on the report after the holder changes", (
   const beach = projected(world).settlements.find((settlement) => settlement.id === "glassport")!;
   assert.equal(beach.factionId, "free-tide");
 });
+
+test("a foreign beach names the owner, and an offshore port does not", () => {
+  const world = createPrototypeWorld(1847);
+  const commander = commanderOf(world);
+  commander.locationId = "crown-harbor";
+  commander.travel = null;
+  const cinder = world.settlements["cinder-key"];
+  assert.notEqual(cinder.factionId, commander.factionId);
+  cinder.ownerId = "character-19";
+
+  const offshore = projected(world).settlements.find((settlement) => settlement.id === "cinder-key")!;
+  assert.equal(offshore.ownerId, null);
+
+  commander.locationId = "cinder-key";
+  const beach = projected(world).settlements.find((settlement) => settlement.id === "cinder-key")!;
+  assert.equal(beach.ownerId, "character-19");
+  assert.equal(beach.factionId, cinder.factionId);
+});

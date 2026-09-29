@@ -986,7 +986,9 @@ export function dashboardState(
           // put. Standing on the island, the faction that is actually there,
           // the same split the garrison already uses.
           factionId: knownFactionId,
-          ownerId: null,
+          // Standing on a foreign island, the person who holds it is visible.
+          // Offshore, a personal owner is not part of the report.
+          ownerId: coLocated ? settlement.ownerId : null,
           population: coLocated ? settlement.population : recordedGround?.population ?? null,
           workers: null,
           focus: null,
