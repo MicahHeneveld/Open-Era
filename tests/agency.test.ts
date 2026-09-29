@@ -1109,3 +1109,50 @@ test("a captive issuer's order is not retargeted, refused, or confirmed, and the
     character.standingOrders.some((entry) => entry.issuerId === actingId)
   ), false);
 });
+
+test("orders, plans, and work ignore a stored loyalty scar", () => {
+  const seeded = createPrototypeWorld(1847);
+  const scarred = createPrototypeWorld(1847);
+  const officer = Object.values(scarred.characters).find((character) =>
+    character.controller.kind === "autonomous" &&
+    character.standingOrders.length > 0 &&
+    character.locationId !== null &&
+    character.travel === null
+  );
+  assert.ok(officer);
+  const twin = seeded.characters[officer.id];
+  const order = officer.standingOrders[0];
+  const before = assessStandingOrder(twin, twin.standingOrders[0]);
+  officer.loyaltyAdjustment = -0.12;
+  assert.deepEqual(assessStandingOrder(officer, order), before);
+  assert.equal(officer.personality.loyalty, twin.personality.loyalty);
+
+  officer.plan = null;
+  twin.plan = null;
+  const seededReview = reviewPlan(seeded, twin, new DeterministicRng(1));
+  const scarredReview = reviewPlan(scarred, officer, new DeterministicRng(1));
+  assert.ok(seededReview);
+  assert.ok(scarredReview);
+  const serve = (review: NonNullable<typeof seededReview>) =>
+    review.goalScores.find((goal) => goal.kind === "serve-faction");
+  assert.deepEqual(serve(scarredReview), serve(seededReview));
+  assert.deepEqual(scarredReview.orderAssessment, seededReview.orderAssessment);
+
+  const seededTick = runTick(seeded);
+  const scarredTick = runTick(scarred);
+  assert.equal(JSON.stringify(scarredTick.events), JSON.stringify(seededTick.events));
+  assert.equal(scarred.rngState, seeded.rngState);
+  assert.equal(scarred.nextEventSequence, seeded.nextEventSequence);
+  const decision = scarredTick.events.find((event) => event.type === "decision-made" && event.actorId === officer.id);
+  assert.ok(decision);
+  const candidates = decision.data.candidates as Array<{ action: string; score: number }>;
+  const work = candidates.find((candidate) => candidate.action === "work");
+  assert.ok(work);
+  const seededDecision = seededTick.events.find((event) => event.type === "decision-made" && event.actorId === officer.id);
+  assert.ok(seededDecision);
+  const seededWork = (seededDecision.data.candidates as Array<{ action: string; score: number }>).find((candidate) => candidate.action === "work");
+  assert.equal(work.score, seededWork?.score);
+  assert.equal(officer.loyaltyAdjustment, -0.12);
+  assert.equal(officer.personality.loyalty, twin.personality.loyalty);
+  assert.equal(Object.hasOwn(twin, "loyaltyAdjustment"), false);
+});
