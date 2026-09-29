@@ -72,15 +72,39 @@ The fixture already contains M19 and M20. A does not call `npm run golden:update
 
 ## Playtest
 
-Follow `docs/playtests/TEMPLATE.md`. Dashboard HTTP JSON only, as in [informed-commitment-002](../playtests/informed-commitment-002.md). Seed 1847, Mara Vane (`character-01`), ticks 0–700, with rule A in. No survey, no raid, no trade. She is already at Crown Harbor.
+Follow `docs/playtests/TEMPLATE.md`. Dashboard HTTP JSON only, as in [informed-commitment-002](../playtests/informed-commitment-002.md). Seed 1847, Mara Vane (`character-01`). No survey, no raid, no trade. She is already at Crown Harbor. Do not send a command.
 
-**Hypothesis.** Crown Harbor changes hands and does not freeze at stability 0, and it changes hands again because the garrison climbed.
+The ticks below are a headless re-measure on the short-purse history with rule A in: `createPrototypeWorld` plus `runTick`, no commands, Node v24.21.0, ICU 78.3. The earlier plan (a `settlement-claimed` at tick 503, garrison 7, and another at tick 660, read at tick 520) was measured before M22. On this history Crown Harbor is not claimed inside ticks 0–700. Without rule A the same history claims it once, at tick 959 (Esme Dusk, `character-19`, Free Tide, garrison 8), then freezes: stability 0 at tick 1230, and at tick 1600 it is still Free Tide, garrison 8, stability 0. With rule A the first claim is tick 979 and the second is tick 1126, and stability does not hit 0.
 
-**Ambition.** Stay at Crown Harbor. At tick 520, read the port. At tick 700, read it again.
+**Hypothesis.** Crown Harbor changes hands and does not freeze at stability 0, and it changes hands again because the garrison climbed. An idle Mara still starves in place. That is not this rule.
 
-**Success.** The log has a `settlement-claimed` for `crown-harbor` at tick 503, garrison 7, and another by tick 700 (measured tick 660). At tick 520 stability is above 0. The panel is the live port, because she is standing on it.
+**Ambition.** Stay at Crown Harbor through state tick 1200. Read the port at state ticks 520, 700, 980, 1100, 1127, and 1200.
 
-`PROMOTE` if both claims are in the log and tick 520 is not stability 0. `REVISE` if two Crown Harbor claims land inside one garrison interval of 11 ticks, or if the shelf being 0 is presented as a shortage. `ABANDON` if tick 700 still has one Crown Harbor claim and stability 0.
+**Success.** The log has a `settlement-claimed` for `crown-harbor` at event tick 979 (Bram Tern, `character-22`, Free Tide, garrison 11) and another at event tick 1126 (Lio Crow, `character-12`, World Government, garrison 7). At state tick 1100, between those claims, stability is above 0 (measured 46.6) and the garrison has climbed (measured 12). The shelf can read 0. That is not a shortage: through tick 1600 Crown Harbor emits no `settlement-shortage`.
+
+```bash
+npm run dashboard -- --reset --seed 1847 --player-character character-01
+```
+
+The server listens on `http://127.0.0.1:4317`.
+
+- `GET /api/state?limit=200`. Page older events by passing `eventPage.cursor` as `beforeSequence`. `limit` is at most 200. A claim names an actor, so `data` is null and `payloadWithheld` is true. The garrison is on the live port, not in the event.
+- `POST /api/advance` with `{"ticks": N}` and `N` at most 144. From 0: 144 then 6 lands on 150; then 144, 144, and 82 lands on 520; then 144 and 36 lands on 700; then 144 and 136 lands on 980; then 120 lands on 1100; then 27 lands on 1127; then 73 lands on 1200.
+- Do not call `POST /api/commands`. A command body would carry `playerId` `prototype-player`.
+
+She is standing on Crown Harbor, so `settlements` for `id` `crown-harbor` stays present-tense after the faction changes: `factionId`, `ownerId`, `garrison`, `stability`, `stocks.provisions`. Match `ownerId` and the claim's `actorId` to `characters[].name`. The claim's `tick` is one less than `tick` on the state you just advanced to. Her own purse and hold are `party.hold.money` and `party.hold.cargo.provisions`. Her `health` and `morale` are on her character, rounded to one decimal.
+
+| State tick | Headless reading |
+| ---: | --- |
+| 150 | Still at `crown-harbor`. Money 108, provisions 0, morale 0, health 59.7 on the panel (59.663). The hold emptied on event tick 62 and morale hit 0 on event tick 131. Idle starvation, unchanged by rule A. |
+| 520 | `world-government`, `ownerId` null, garrison 187, stability 93.3, provisions 0.389. No `crown-harbor` claim yet. |
+| 700 | `world-government`, `ownerId` null, garrison 71, stability 73.34, provisions 0.119. Still no Crown Harbor claim. |
+| 980 | Claim event tick 979. `free-tide`, owner `character-22` (Bram Tern), garrison 11, stability 55. |
+| 1100 | Still `free-tide`, Bram Tern, garrison 12, stability 46.6, provisions 0. Stability is not 0. |
+| 1127 | Claim event tick 1126. `world-government`, owner `character-12` (Lio Crow), garrison 7, stability 55. |
+| 1200 | `world-government`, Lio Crow, garrison 14, stability 57.19, provisions 0. |
+
+`PROMOTE` if both claim event ticks are in the log and state ticks 1100 and 1200 are not stability 0. `REVISE` if two Crown Harbor claims land inside one garrison interval of 11 ticks, or if a shelf of 0 is presented as a `settlement-shortage`. `ABANDON` if state tick 1200 still has one Crown Harbor claim and stability 0.
 
 ## The idle commander
 

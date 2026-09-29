@@ -30,10 +30,10 @@ Git remains the complete history. This file exists for three things git does not
 
 ## Current state
 
-- **Baseline:** branched from `9267125`. This branch is `feature/protect-own-port` (M23). No pull request. `origin/main` had moved to `6d7badb` (the contracts note); that was merged and did not touch the simulation.
-- **Last verified:** `./scripts/evaluate-milestone.sh protect-own-port` passes on this branch, Node v24.21.0, ICU 78.3. Typecheck clean, **170 tests**. Golden hashes were not regenerated.
+- **Baseline:** branched from `2918554`. This branch is `feature/ration-floor` (M24). No pull request.
+- **Last verified:** `./scripts/evaluate-milestone.sh ration-floor` passes, Node v24.21.0, ICU 78.3. Typecheck clean, **173 tests**. Golden hashes were not regenerated.
 - **Gate status:** tick-72 hashes unchanged. Counts stay 8275 / 8489 / 8003. Split recovery replayed 572 events.
-- **Headline risk:** the playtest is pending with a separate fresh-context operator. Sea sightings, a passive glance, and a faction total are still unbuilt.
+- **Headline risk:** the playtest is pending with a blind operator. Idle-player starvation stays intended.
 - **Runtime:** Node 24.21.0, pinned by `.node-version`. ICU 78.3.
 
 ## Open items
@@ -49,7 +49,7 @@ Git remains the complete history. This file exists for three things git does not
 | `POST /api/advance` returns no diff or event stream, so every step is advance-then-refetch | Ergonomic | Cursor | **Fixed** in [PR 4](https://github.com/taia-0/Open-Era/pull/4); advance returns a projected event diff and a sequence watermark |
 | Undocumented targeting and parameter rules: a pressure order needs a faction target, `briefing/officer` needs `characterId` | Wording | Cursor | **Fixed** in [PR 4](https://github.com/taia-0/Open-Era/pull/4) and [PR 5](https://github.com/taia-0/Open-Era/pull/5); `capabilities.requests` publishes the whole contract |
 | Surrender has no explicit command; it resolves implicitly through `claim-settlement` | Design gap | Cursor | **Fixed** in [PR 5](https://github.com/taia-0/Open-Era/pull/5); `decline-surrender` makes the offer an explicit decision |
-| Starving pins morale at zero permanently while health keeps decaying, and the briefing never raises a provisioning item | Defect | Cursor | **Closed** as misdiagnosed, and M21 rechecked it. `rest` does restore morale; the same-tick upkeep takes it straight back. An idle human commander is not fed from the purse: upkeep burns provisions, then morale and health, and never touches money. Auto-buying food would move the golden hashes. The briefing already names the empty hold |
+| An idle human commander eats the opening hold and then starves in place while still holding money | Intended | Unassigned | **Stays intended in M24.** The ration floor feeds a port. It does not buy food for a player who never orders it. On seed 1847, Mara at world tick 150 still has money 108, provisions 0, morale 0, health 59.663. A UI warning is queued. The briefing already names the empty hold |
 | Two pending commands targeting the same `orderId` are both accepted, and the second fails after the first resolves | Defect | Cursor | **Fixed** in this sweep. `orderMutationPending` refuses a second command naming an order another queued command will consume, as `order-already-queued`; two *different* orders can still be changed in one tick |
 | `briefing.attentionCount` did not match the number of `items` returned, and near-identical items were not aggregated | Defect | Cursor | **Fixed** in this milestone. The count was taken before the display slice, so an action-required decision could be counted and never shown. The budget now applies to background only, the count describes the list it is attached to, and repeated reports for one subject collapse into one counted item |
 | `capabilities.requests` omits four endpoints: `/api/threads`, `/api/messages`, `/api/briefing/acknowledge` and `/api/briefing/officer` | Defect | Cursor | **Fixed** in this sweep. All four are now published with their bodies and failure codes, and a test calls each published path to prove the contract describes a route that is really served. The same entry also mis-stated the acknowledgement refusal as 409-style; every rejection is HTTP 400 with a stable `code` |
@@ -146,6 +146,10 @@ Backfilled from the commit graph on 2026-09-25. **Attribution caveat:** commits 
 - **Agent:** Cursor | **PR:** [#8](https://github.com/taia-0/Open-Era/pull/8)
 - Six defects closed without touching simulation behavior: duplicate order mutations, four unpublished endpoints, backdated staleness, unqualified estimates, a fragile cadence parse, and Node 20 actions. The first dashboard render test executes the shipped inline script against a real projection.
 
+### 2026-09-29 — M24: Ration floor
+- **Agent:** Open Era Engineer (Cursor cloud agent) | **Branch:** `feature/ration-floor` | **Playtest:** pending, [ration-floor-001](docs/playtests/ration-floor-001.md) (to be added by a blind operator)
+- Provisions output is `max(penalized, min(unpenalized, demand))`. A stability penalty cannot cut a field that covers the ration, and a field that cannot cover it is not topped up. Golden hashes were not regenerated. Tick-72 counts stay 8275 / 8489 / 8003. Idle-player starvation is unchanged.
+
 ### 2026-09-29 — M23: Protect completes on the faction's own port
 - **Agent:** Open Era Engineer (Cursor cloud agent) | **Branch:** `feature/protect-own-port` | **Playtest:** pending, [protect-own-port-001](docs/playtests/protect-own-port-001.md) (to be added)
 - A `protect` order completes only when the settlement's faction is the officer's. A faction with no ports keeps its record. Golden hashes were not regenerated. Tick-72 counts stay 8275 / 8489 / 8003.
@@ -183,6 +187,14 @@ Backfilled from the commit graph on 2026-09-25. **Attribution caveat:** commits 
 - A player can name a good and a quantity and see the price before paying, on any of the four resources, with every limit quoted before it is hit. A voyage pays for itself (+113.27 on 108 starting money in playtest). Whether it out-earns working the same ticks is a separate, deferred milestone.
 
 ## Entries
+
+### 2026-09-29 — M24: the stability penalty cannot cut provisions below the ration
+- **Agent:** Open Era Engineer (Cursor cloud agent) | **Branch:** `feature/ration-floor` | **Commits:** `4b9e0fb` (the floor), `7b8315f` (the tests), `90b927d` (golden hashes read only from the fixture). This entry is the record commit. | **Type:** Behavior
+- **Changed** — provisions output in `producedStocks` (`src/sim/engine.ts`). Unpenalized is `production.provisions * focusMultiplier`. Penalized is that times `workerCondition`. Demand is `round(population / 3600, 3)`. Output is `max(penalized, min(unpenalized, demand))`. The other goods are unchanged. No new event and no new RNG draw. `npm run golden:update` was not run. The price drift uses the same function, so the board and the field stay one number.
+- **Why** — below stability about 69.7, Crown Harbor's penalized field is under the ration of 5, the shortage never removes a soldier, and M20 regrowth stays off. The port freezes. The floor keeps a covering field at the ration and does not invent grain.
+- **Verified** — baseline on `2918554`, before any of this, Node v24.21.0, ICU 78.3: `npm ci`, `npm run typecheck` clean, **170 tests**, `./scripts/evaluate-milestone.sh baseline-ration-floor` passes. Hashes `d7eb02eb0e6b835ee923147b855d0a91969a416115d0c3bd5c2650ff0e2b6a3f` (1847, 8275 events), `d0b4b449ce9bc3fc27f0cfa15a5cc8ef04d5a2e6a9cdded2c2b11b6c4ca6583d` (2718, 8489), `d5d9da8bb1e9c9bd86c93ccbaa570f04ea9052ea1b5d4b48f3452e2db6f0c0c7` (4096, 8003). Split recovery replayed 572 events. After the floor and tests: typecheck clean, **173 tests**. New tests: "Crown Harbor at the claim floor meets the ration, and stability 91 keeps the surplus increment", "Crown Harbor gains one garrison on its 11-tick interval when the ration is met, and none when the fields cannot cover it", "Crown Harbor left at garrison 6 and stability 0 reaches 15 and a hostile raid is offered", "the ration floor does not read the surrender limit". The golden item is the existing "pinned seeds reproduce their committed state hash and event count", which stayed green. The literal protect-own-port hash pin was folded into that fixture read. Hashes and counts did not move. Finish gate `./scripts/evaluate-milestone.sh ration-floor` passes: the same three hashes, 8275 / 8489 / 8003, split recovery replayed 572 events. Through 400 ticks the state hash matches `9267125` on all three seeds, so Free Tide's portless stretches stay 77–231 (1847) and 77–324 (4096). The playtest is pending with a blind operator.
+- **Left open** — the playtest, at `docs/playtests/ration-floor-001.md`. Idle-player starvation stays intended: the commander never buys food, and a UI warning is queued. The note is still a proposal until it moves into world simulation.
+- **Links** — [port provisions](docs/design/port-provisions.md). No pull request. Playtest file not written yet; a blind operator adds `docs/playtests/ration-floor-001.md`.
 
 ### 2026-09-29 — M23: a protect order completes only on the officer's own port
 - **Agent:** Open Era Engineer (Cursor cloud agent) | **Branch:** `feature/protect-own-port` | **Commits:** `f1179c5` (the predicate), `72d9871` (the tests), `65c3199` (merge of `origin/main` at `6d7badb`). This entry is the record commit. | **Type:** Behavior
