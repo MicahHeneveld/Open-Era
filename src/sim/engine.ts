@@ -1977,6 +1977,7 @@ function resolveOfferedContracts(world: WorldState, events: SimEvent[]): void {
       travelTicks: assessment.travelTicks,
       ticksLeft: assessment.ticksLeft,
       costBasis: assessment.costBasis,
+      ...(assessment.reason ? { reason: assessment.reason } : {}),
     });
   }
 }

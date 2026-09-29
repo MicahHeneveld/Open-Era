@@ -107,8 +107,10 @@ function eventSummary(world: WorldState, event: SimEvent): string {
       return `${actor} revised the provisions contract to ${event.data.price} for ${event.data.quantity} at ${destinationName(world, event)}.`;
     case "contract-accepted":
       return `${actor} accepted the provisions contract.`;
-    case "contract-refused":
-      return `${actor} refused the provisions contract.`;
+    case "contract-refused": {
+      const reason = typeof event.data.reason === "string" ? ` ${event.data.reason}` : "";
+      return `${actor} refused the provisions contract.${reason}`;
+    }
     case "contract-fulfilled":
       return `${actor} landed ${event.data.quantity} provisions at ${destinationName(world, event)}.`;
     case "contract-breached":

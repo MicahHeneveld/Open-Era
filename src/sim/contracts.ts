@@ -45,13 +45,35 @@ export interface ContractAssessment {
   accepted: boolean;
   /** `travel` and `purse` are hard gates. `score` is the line. Null when accepted. */
   gate: "travel" | "purse" | "score" | null;
+  /** Player-readable sentence when a hard gate refuses. Null when the score is the decision. */
+  reason: string | null;
   score: number;
   threshold: number;
   factors: ContractFactors;
   travelTicks: number;
   ticksLeft: number;
+  /**
+   * Quantity times the provisions price where the carrier is standing.
+   * Zero only when they are not standing anywhere, and that path never scores.
+   */
   costBasis: number;
 }
+
+/** Said on the refusal the player reads. A carrier underway has no market under them. */
+export const AT_SEA_REASON = "The carrier is already at sea.";
+
+/** Said when a docked carrier cannot reach the shelf before the deadline. */
+export const VOYAGE_REASON = "The voyage does not fit the deadline.";
+
+const UNSCORED_FACTORS: ContractFactors = {
+  commerce: 0,
+  margin: 0,
+  trust: 0,
+  respect: 0,
+  grievance: 0,
+  obligation: 0,
+  perceivedRisk: 0,
+};
 
 /**
  * Ticks the carrier still needs to reach the shelf.
@@ -59,19 +81,30 @@ export interface ContractAssessment {
  * Already standing there is 0, which `travelDuration` does not return: that
  * helper's floor is 2, and a delivery that does not sail must not be refused
  * for a voyage that will not happen.
+ *
+ * A carrier at sea has no `locationId`. `travelDuration` then returns 1, which
+ * is not the voyage to the shelf. Callers must not treat that 1 as a haul.
  */
 export function contractTravelTicks(world: WorldState, carrier: Character, destinationId: string): number {
-  if (carrier.locationId === destinationId && !carrier.travel) return 0;
+  if (carrier.travel || !carrier.locationId) return carrier.travel?.remainingTicks ?? 1;
+  if (carrier.locationId === destinationId) return 0;
   return travelDuration(world, carrier, destinationId);
 }
 
 /**
  * Whether the carrier takes the haul. No RNG.
  *
- * Hard gates first: the voyage does not fit the ticks left, or the hold is
- * short and the purse cannot buy the shortfall where they stand. Past the
- * gates the weights match `assessStandingOrder`, with margin in place of an
- * order priority.
+ * Hard gates first. A carrier already at sea is refused before any score:
+ * `travelDuration` would report 1 tick, and there is no provisions price
+ * under them, so a margin on that price is zero for every offer. A docked
+ * voyage that does not fit the ticks left is the same gate. The purse gate
+ * is next. Only then do the weights match `assessStandingOrder`, with margin
+ * in place of an order priority.
+ *
+ * The board price cannot be zero. `resourcePrice` clamps scarcity to at least
+ * 0.55 against a provisions base of 1.8, so a carrier standing at a settlement
+ * has a positive cost basis for every quantity of at least 1. Scoring is
+ * reached only on that path.
  */
 export function assessSupplyContract(
   world: WorldState,
@@ -79,8 +112,23 @@ export function assessSupplyContract(
   terms: ContractTerms,
 ): ContractAssessment {
   const ticksLeft = terms.deadlineTick - world.tick;
+  const threshold = round(0.54 + carrier.personality.ambition * 0.08);
+  if (carrier.travel || !carrier.locationId) {
+    return {
+      accepted: false,
+      gate: "travel",
+      reason: AT_SEA_REASON,
+      score: 0,
+      threshold,
+      factors: UNSCORED_FACTORS,
+      travelTicks: carrier.travel?.remainingTicks ?? 1,
+      ticksLeft,
+      costBasis: 0,
+    };
+  }
+
   const travelTicks = contractTravelTicks(world, carrier, terms.destinationId);
-  const standing = carrier.locationId ? marketPrice(world, carrier.locationId, "provisions") : 0;
+  const standing = marketPrice(world, carrier.locationId, "provisions");
   const costBasis = round(terms.quantity * standing, 2);
   const destination = world.settlements[terms.destinationId];
   const alreadyThere = travelTicks === 0;
@@ -90,7 +138,7 @@ export function assessSupplyContract(
   const relationship = carrier.relationships[terms.buyerId];
   const factors: ContractFactors = {
     commerce: round(carrier.personality.commerce * 0.30),
-    margin: round(clamp(costBasis === 0 ? 0 : (terms.price - costBasis) / costBasis, -0.25, 0.25)),
+    margin: round(clamp((terms.price - costBasis) / costBasis, -0.25, 0.25)),
     trust: round((relationship?.trust ?? SCORE_TRUST) * 0.14),
     respect: round((relationship?.respect ?? SCORE_RESPECT) * 0.16),
     grievance: round(-(relationship?.grievance ?? 0) * 0.18),
@@ -102,16 +150,22 @@ export function assessSupplyContract(
     0,
     1,
   ));
-  const threshold = round(0.54 + carrier.personality.ambition * 0.08);
   const shortfall = Math.max(0, terms.quantity - carrier.cargo.provisions);
-  const shortfallCost = carrier.locationId ? round(shortfall * standing, 2) : Number.POSITIVE_INFINITY;
+  const shortfallCost = round(shortfall * standing, 2);
   let gate: ContractAssessment["gate"] = null;
-  if (travelTicks > ticksLeft) gate = "travel";
-  else if (shortfall > 0 && carrier.money < shortfallCost) gate = "purse";
-  else if (score < threshold) gate = "score";
+  let reason: string | null = null;
+  if (travelTicks > ticksLeft) {
+    gate = "travel";
+    reason = VOYAGE_REASON;
+  } else if (shortfall > 0 && carrier.money < shortfallCost) {
+    gate = "purse";
+  } else if (score < threshold) {
+    gate = "score";
+  }
   return {
     accepted: gate === null,
     gate,
+    reason,
     score,
     threshold,
     factors,

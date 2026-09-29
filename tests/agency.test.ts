@@ -2,7 +2,8 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { assessStandingOrder, judgeOrderCompletion, reviewPlan } from "../src/sim/agency.ts";
 import { submitCommand } from "../src/sim/commands.ts";
-import { assessSupplyContract } from "../src/sim/contracts.ts";
+import { AT_SEA_REASON, VOYAGE_REASON, assessSupplyContract } from "../src/sim/contracts.ts";
+import { projectEventFeed } from "../src/dashboard/view-model.ts";
 import { runTick, runTicks } from "../src/sim/engine.ts";
 import { DeterministicRng } from "../src/sim/rng.ts";
 import { createPrototypeWorld } from "../src/sim/scenario.ts";
@@ -456,6 +457,120 @@ test("Zara accepts price 18 and refuses price 8 at the opening factors, and scor
   assert.equal(world.rngState, rng);
   assert.equal(stateHash(world), hash);
   assert.equal(Object.keys(world.contracts ?? {}).length, 0);
+});
+
+test("a carrier already at sea refuses under the travel gate and the escrow returns once", () => {
+  const world = createPrototypeWorld(1847);
+  const mara = world.characters["character-01"];
+  const corin = world.characters["character-16"];
+  assert.equal(corin.name, "Corin Hale");
+  assert.equal(corin.locationId, "glassport");
+  assert.equal(corin.travel, null);
+  const submission = submitCommand(world, {
+    playerId: "prototype-player",
+    type: "offer-contract",
+    characterId: "character-16",
+    quantity: 10,
+    destinationId: "crown-harbor",
+    price: 30,
+    expiresInTicks: 24,
+  });
+  assert.equal(submission.ok, true);
+
+  const offered = runTick(world);
+  const contract = Object.values(world.contracts ?? {})[0];
+  assert.ok(contract);
+  assert.equal(contract.status, "offered");
+  assert.equal(contract.escrow, 30);
+  assert.equal(contract.settled, false);
+  assert.equal(mara.money, 78);
+  assert.equal(offered.events.some((event) => event.type === "contract-refused"), false);
+  assert.equal(offered.events.some((event) => event.type === "contract-accepted"), false);
+
+  corin.locationId = null;
+  corin.travel = { fromId: "glassport", toId: "cinder-key", totalTicks: 2, remainingTicks: 2 };
+  const judged = runTick(world);
+  const refusal = judged.events.find((event) => event.type === "contract-refused");
+  assert.ok(refusal);
+  assert.equal(refusal.data.gate, "travel");
+  assert.notEqual(refusal.data.gate, "score");
+  assert.equal(refusal.data.reason, AT_SEA_REASON);
+  assert.equal(refusal.data.escrow, 0);
+  assert.equal(refusal.data.buyerMoney, 108);
+  assert.equal(world.contracts?.[contract.id].status, "refused");
+  assert.equal(world.contracts?.[contract.id].settled, true);
+  assert.equal(world.contracts?.[contract.id].escrow, 0);
+  assert.equal(mara.money, 108);
+  assert.equal(
+    judged.events.filter((event) => event.type === "contract-refused").length,
+    1,
+  );
+  const feed = projectEventFeed(world, mara.id, [refusal]);
+  assert.equal(
+    feed[0].summary,
+    "Corin Hale refused the provisions contract. The carrier is already at sea.",
+  );
+
+  const again = runTick(world);
+  assert.equal(again.events.some((event) => event.type === "contract-refused"), false);
+  assert.equal(mara.money, 108);
+});
+
+test("scoring a contract always has a positive cost basis", () => {
+  const world = createPrototypeWorld(1847);
+  const mara = world.characters["character-01"];
+  const docked = Object.values(world.characters).filter((character) => character.locationId && !character.travel);
+  assert.ok(docked.length > 0);
+  for (const carrier of docked) {
+    for (const price of [8, 18, 30]) {
+      const assessment = assessSupplyContract(world, carrier, {
+        buyerId: mara.id,
+        quantity: 10,
+        price,
+        destinationId: "crown-harbor",
+        deadlineTick: 720,
+      });
+      if (assessment.gate === null || assessment.gate === "score" || assessment.gate === "purse") {
+        assert.ok(
+          assessment.costBasis > 0,
+          `${carrier.id} price ${price} gate ${assessment.gate} costBasis ${assessment.costBasis}`,
+        );
+      }
+      if (assessment.gate === "travel") {
+        assert.equal(assessment.reason, VOYAGE_REASON);
+        assert.ok(assessment.costBasis > 0, `${carrier.id} voyage refusal still has a market price`);
+      }
+    }
+  }
+
+  const corin = world.characters["character-16"];
+  corin.locationId = null;
+  corin.travel = { fromId: "glassport", toId: "cinder-key", totalTicks: 2, remainingTicks: 2 };
+  const atSea = assessSupplyContract(world, corin, {
+    buyerId: mara.id,
+    quantity: 10,
+    price: 30,
+    destinationId: "crown-harbor",
+    deadlineTick: 720,
+  });
+  assert.equal(atSea.gate, "travel");
+  assert.equal(atSea.reason, AT_SEA_REASON);
+  assert.notEqual(atSea.gate, "score");
+  assert.equal(atSea.costBasis, 0);
+
+  corin.locationId = "glassport";
+  corin.travel = null;
+  const tooShort = assessSupplyContract(world, corin, {
+    buyerId: mara.id,
+    quantity: 10,
+    price: 30,
+    destinationId: "crown-harbor",
+    deadlineTick: world.tick + 1,
+  });
+  assert.equal(tooShort.gate, "travel");
+  assert.equal(tooShort.reason, VOYAGE_REASON);
+  assert.ok(tooShort.costBasis > 0);
+  assert.ok(tooShort.travelTicks > tooShort.ticksLeft);
 });
 
 test("fulfilling a delivery of 10 adds 10 provisions to Crown Harbor, pays the carrier from escrow, and is not a market-trade", () => {
