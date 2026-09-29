@@ -1,8 +1,8 @@
 # Capture wording
 
-**Status: Open.** Wording only. No rule was left in the tree. The runs were taken on `8db4706686c417645342d5dacc0838b101672e59` (PR #61). M29.1, the dock capture on an outscore win, and M30, the acting commander while captive, are built. [Outscore dock capture 001](../playtests/outscore-dock-capture-001.md) and [command seat 001](../playtests/commander-seat-001.md) are the playtests that flagged the sentences.
+**Status: Open.** Wording only. No rule was left in the tree. The wording runs were taken on `8db4706686c417645342d5dacc0838b101672e59` (PR #61). This branch was then merged with `ee9eb6ec145fa0befc0d6376dd28470b64bc5501` (PR #62, the loyalty scar). M29.1, the dock capture on an outscore win, and M30, the acting commander while captive, are built. [Outscore dock capture 001](../playtests/outscore-dock-capture-001.md) and [command seat 001](../playtests/commander-seat-001.md) are the playtests that flagged the sentences.
 
-Runs are `createPrototypeWorld` plus `runTick`, seeds 1847 / 2718 / 4096, Node v24.21.0, ICU 78.3. Tick numbers on events are the `tick` field. A figure at tick 72 or tick 1200 is the world after that many `runTick` calls. `npm test` on this tree passes, 223 tests. The committed 72-tick fixture reproduced, including the recovery replay of 572 events:
+Runs are `createPrototypeWorld` plus `runTick`, seeds 1847 / 2718 / 4096, Node v24.21.0, ICU 78.3. Tick numbers on events are the `tick` field. A figure at tick 72 or tick 1200 is the world after that many `runTick` calls. `npm test` on the wording tree passed, 223 tests. `npm test` on this merged tree passes, 231 tests. The committed 72-tick fixture reproduced on both, including the recovery replay of 572 events:
 
 | Seed | State hash | Events |
 | ---: | --- | ---: |
@@ -10,7 +10,7 @@ Runs are `createPrototypeWorld` plus `runTick`, seeds 1847 / 2718 / 4096, Node v
 | 2718 | `bd7d8cc44d5fa21022ecb8f8086e13dfbb9475eb025b5ae53f87e2991f90035c` | 8513 |
 | 4096 | `20975bf480e5aa11eeafe1ce39c36cf5ba0fa8e2d5de2bb5887a35d7b3aecc9f` | 8031 |
 
-The same three seeds at 1200 ticks, unmodified, are the comparison below. `stateHash` is the canonical world. It does not include the event log and it does not include a dashboard sentence. The event-body hash in the tables is sha256 of the canonical JSON of each event's sequence, tick, type, actor, target, settlement, and data. The golden fixture does not store that hash. It stores the state hash and the event count.
+The same three seeds at 1200 ticks, unmodified, are the comparison below. That table, and every patched-read match under it, was measured on `8db4706` and was not remeasured after the loyalty-scar merge. The scar stores `loyaltyAdjustment` on a character after an unpaid release, so a later 1200-tick state hash can differ from these rows. The 72-tick fixture on the merged tree is the table above. `stateHash` is the canonical world. It does not include the event log and it does not include a dashboard sentence. The event-body hash in the tables is sha256 of the canonical JSON of each event's sequence, tick, type, actor, target, settlement, and data. The golden fixture does not store that hash. It stores the state hash and the event count.
 
 | Seed | State hash | Events | Event-body hash |
 | ---: | --- | ---: | --- |
@@ -26,7 +26,7 @@ The sentences are built when the state is read.
 - `checkInBriefing` writes the captivity card. `dashboardState` returns the stored player, so `displayName` is the string on that record. `projectFactions` publishes `commanderId` and `actingCommanderId` and no sentence.
 - `attemptCapture` stores the prisoner as `actorId` and the captor faction as `targetId`. `applyEvent` puts the captivity on that actor. The roles are how the world is updated.
 
-The proposal below was patched in, measured, and removed. With that patch applied, `npm test` still passed, 223 tests. The 72-tick rows and the 1200-tick rows above matched, including the event-body hashes.
+The proposal below was patched in on `8db4706`, measured, and removed. With that patch applied, `npm test` still passed, 223 tests. The 72-tick rows and the 1200-tick rows above matched, including the event-body hashes. Line numbers below are the merged tree.
 
 ## 1. Name the captor
 
@@ -38,7 +38,7 @@ Current template, `src/dashboard/view-model.ts` line 99:
 `${actor} was captured at ${settlement} after ${String(event.data.cause).replaceAll("-", " ")}`
 ```
 
-Withheld feed, `src/dashboard/visibility.ts` line 429:
+Withheld feed, `src/dashboard/visibility.ts` line 437:
 
 ```text
 `${actor}: ${event.type.replaceAll("-", " ")}`
@@ -95,7 +95,7 @@ The ids on the row are a separate question. `projectEvent` still copies `actorId
 
 ## 2. "after outscore loss"
 
-The cause stored on the hold is `outscore-loss` (`src/sim/engine.ts` line 1198, and the union at `src/sim/types.ts` line 96). The briefing replaces the hyphen with a space, so the prisoner is the subject of "outscore loss."
+The cause stored on the hold is `outscore-loss` (`src/sim/engine.ts` line 1199, and the union at `src/sim/types.ts` line 96). The briefing replaces the hyphen with a space, so the prisoner is the subject of "outscore loss."
 
 On the same seed-4096 read, briefing `event:59635` is `Pax Ash won at Glassport`. The template is `src/dashboard/view-model.ts` line 89: the actor won or lost at the settlement. The feed row for that battle stays withheld: `Pax Ash: battle resolved`. The chronicle line before the patch:
 
@@ -133,7 +133,7 @@ While the prisoner is still held, the state hash moves. Seed 4096 at state tick 
 
 ## 3. The seat, the escape line, and the display name
 
-No sentence names the cover. `projectFactions` (`src/dashboard/visibility.ts` lines 320–321) returns `commanderId` and `actingCommanderId`. The seat play on seed 2718, state tick 34, has World Government `actingCommanderId` `character-06`. That character is Iris Stone. The briefing items from that run contain no seat line and no use of "cover."
+No sentence names the cover. `projectFactions` (`src/dashboard/visibility.ts` lines 328–329) returns `commanderId` and `actingCommanderId`. The seat play on seed 2718, state tick 34, has World Government `actingCommanderId` `character-06`. That character is Iris Stone. The briefing items from that run contain no seat line and no use of "cover."
 
 The captivity card, `src/dashboard/view-model.ts` line 306:
 
