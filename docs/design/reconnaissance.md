@@ -155,7 +155,7 @@ Built after that session, on `fix/survey-polish`. These are readings of the same
 - A remote garrison publishes `garrisonIntelligence { source, observedTick, ageTicks }` next to the number, and the panel says how old it is. The age is the age `combatForecast` already uses, so a rumor backdated before tick 0 is old on day one. The tick shown to the player is floored at 0. The simulation keeps the negative tick: that backdate is why the rumor is stale, and rewriting the seed would make opening rumors fresh and move the golden hashes.
 - Standing on the island, the panel keeps the true fortification. The local forecast names that same figure and says the defender band is skill-scaled. It no longer prints the scaled product as if it were a second wall. The string stored on an active battle is unchanged.
 - An explore that finishes on the tick it was issued, because the officer is already on the target, says so in the order response and in the chronicle. It still does not cost a tick.
-- A player voyage is refused as `insufficient-passage` when the purse is short of the quoted passage. Autonomous travel does not take that refusal.
+- A player voyage is refused as `insufficient-passage` when the purse is short of the quoted passage. M22 applies that same quote to an autonomous voyage that has not started: the candidate scores −1000 and another action is chosen. A voyage already underway still pays what the purse has each sea tick.
 
 ### Golden hashes
 

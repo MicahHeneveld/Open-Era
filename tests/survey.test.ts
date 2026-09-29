@@ -5,7 +5,7 @@ import { dashboardState, fullEventFeed, projectEventFeed } from "../src/dashboar
 import { directObservation } from "../src/sim/agency.ts";
 import { combatForecast } from "../src/sim/combat.ts";
 import { ACTION_CAPABILITIES, COMMAND_LIMITS, submitCommand } from "../src/sim/commands.ts";
-import { passageCost, runTick, travelDuration } from "../src/sim/engine.ts";
+import { passageCost, quotedPassage, runTick, travelDuration } from "../src/sim/engine.ts";
 import { createPrototypeWorld } from "../src/sim/scenario.ts";
 import { applyEvent } from "../src/sim/state.ts";
 import type { Character, Settlement, SettlementGround, SettlementKnowledge, SimEvent, StandingOrder, WorldState } from "../src/sim/types.ts";
@@ -689,7 +689,11 @@ test("a player voyage the quoted passage cannot cover is refused", () => {
   const commander = commanderOf(world);
   const destination = Object.values(world.settlements).find((settlement) => settlement.id !== commander.locationId)!;
   const cost = passageCost(travelDuration(world, commander, destination.id));
+  const quote = quotedPassage(world, commander, destination.id);
+  assert.equal(quote.cost, cost);
+  assert.equal(quote.ticks, travelDuration(world, commander, destination.id));
   commander.money = Math.max(0, cost - 0.01);
+  assert.equal(quotedPassage(world, commander, destination.id).affordable, false);
   const refused = submitCommand(world, {
     playerId: "prototype-player",
     type: "character-action",
@@ -702,6 +706,7 @@ test("a player voyage the quoted passage cannot cover is refused", () => {
   assert.equal(world.pendingCommands.length, 0);
 
   commander.money = cost;
+  assert.equal(quotedPassage(world, commander, destination.id).affordable, true);
   const accepted = submitCommand(world, {
     playerId: "prototype-player",
     type: "character-action",
@@ -711,13 +716,12 @@ test("a player voyage the quoted passage cannot cover is refused", () => {
   assert.equal(accepted.ok, true);
 });
 
-test("an autonomous party still sails when the purse cannot cover the passage", () => {
+function curiousTraveler(money: number): { world: WorldState; traveler: Character; away: Settlement } {
   const world = createPrototypeWorld(1847);
   const traveler = Object.values(world.characters).find((character) => character.controller.kind === "autonomous" && character.factionId)!;
   const home = Object.values(world.settlements).find((settlement) => settlement.factionId === traveler.factionId)!;
   place(traveler, home.id);
   const away = Object.values(world.settlements).find((settlement) => settlement.id !== home.id)!;
-  traveler.money = 0;
   traveler.health = 100;
   traveler.morale = 100;
   traveler.cargo = { provisions: 80, arms: 0, medicine: 0, shipMaterials: 0 };
@@ -732,19 +736,70 @@ test("an autonomous party still sails when the purse cannot cover the passage", 
   traveler.plan = {
     id: "sail-broke",
     goalId: goal.id,
-    intent: "sail anyway",
+    intent: "sail when the purse can cover it",
     preferredActions: ["travel"],
     targetId: away.id,
     createdTick: world.tick,
     reviewAfterTick: world.tick + 500,
-    reason: "the passage check is not on this path",
+    reason: "the same passage quote the player command uses",
   };
   traveler.lastPlanReviewTick = world.tick;
-  const cost = passageCost(travelDuration(world, traveler, away.id));
-  assert.ok(cost > traveler.money);
+  traveler.money = money;
+  return { world, traveler, away };
+}
 
-  const sailed = runTick(world).events.find((event) => event.type === "travel-started" && event.actorId === traveler.id);
-  assert.ok(sailed, "autonomous travel does not use the player passage refusal");
+function travelStarted(events: SimEvent[], travelerId: string): SimEvent | undefined {
+  return events.find((event) => event.type === "travel-started" && event.actorId === travelerId);
+}
+
+test("an autonomous character with a short purse does not pick unaffordable travel", () => {
+  const { world, traveler, away } = curiousTraveler(0);
+  const quote = quotedPassage(world, traveler, away.id);
+  traveler.money = Math.max(0, quote.cost - 0.01);
+  assert.equal(quotedPassage(world, traveler, away.id).affordable, false);
+
+  const events = runTick(world).events;
+  assert.equal(travelStarted(events, traveler.id), undefined);
+  const decision = events.find((event) => event.type === "decision-made" && event.actorId === traveler.id);
+  assert.ok(decision, "the character still chooses something else");
+  const chosen = decision.data.chosen as { action: string };
+  assert.notEqual(chosen.action, "travel");
+  assert.equal(traveler.travel, null);
+});
+
+test("affordable autonomous travel is still offered", () => {
+  const { world, traveler, away } = curiousTraveler(0);
+  const quote = quotedPassage(world, traveler, away.id);
+  traveler.money = quote.cost;
+  assert.equal(quotedPassage(world, traveler, away.id).affordable, true);
+
+  const sailed = travelStarted(runTick(world).events, traveler.id);
+  assert.ok(sailed, "a purse that covers the quote still sails");
+  assert.equal(sailed.targetId, away.id);
+  assert.equal(traveler.travel?.toId, away.id);
+});
+
+test("autonomous travel comes back once the purse can cover it", () => {
+  const { world, traveler, away } = curiousTraveler(0);
+  assert.equal(quotedPassage(world, traveler, away.id).affordable, false);
+  const broke = runTick(world).events;
+  assert.equal(travelStarted(broke, traveler.id), undefined);
+  assert.equal(traveler.travel, null);
+
+  // One tick of work or trade can refill a purse. Put it back under the quote
+  // and the same character still stays in port, then sails once it covers it.
+  const quote = quotedPassage(world, traveler, away.id);
+  traveler.money = Math.max(0, quote.cost - 0.01);
+  assert.equal(quotedPassage(world, traveler, away.id).affordable, false);
+  const stillShort = runTick(world).events;
+  assert.equal(travelStarted(stillShort, traveler.id), undefined);
+  assert.equal(traveler.travel, null);
+
+  traveler.money = quotedPassage(world, traveler, away.id).cost;
+  assert.equal(quotedPassage(world, traveler, away.id).affordable, true);
+  const sailed = travelStarted(runTick(world).events, traveler.id);
+  assert.ok(sailed, "funding the same passage puts travel back on the table");
+  assert.equal(sailed.targetId, away.id);
 });
 
 const PLANTED_GROUND: SettlementGround = {

@@ -1,5 +1,5 @@
 import { applyEvent, clamp, round, settlementClaimAvailableTo } from "./state.ts";
-import { MARKET_DEPTH_FRACTION, passageCost, tradeQuote, travelDuration } from "./engine.ts";
+import { MARKET_DEPTH_FRACTION, quotedPassage, tradeQuote } from "./engine.ts";
 import type {
   OrderDirective,
   PlayerAction,
@@ -331,13 +331,12 @@ function validateCharacterAction(
     if (request.targetId === character.locationId) {
       return reject("already-there", "The character is already at that settlement");
     }
-    const ticks = travelDuration(world, character, request.targetId);
-    const cost = passageCost(ticks);
-    if (character.money < cost) {
+    const quote = quotedPassage(world, character, request.targetId);
+    if (!quote.affordable) {
       const destination = world.settlements[request.targetId];
       return reject(
         "insufficient-passage",
-        `The passage to ${destination.name} costs ${cost}; the character holds ${character.money}`,
+        `The passage to ${destination.name} costs ${quote.cost}; the character holds ${character.money}`,
       );
     }
   }
