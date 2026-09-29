@@ -31,7 +31,7 @@ Git remains the complete history. This file exists for three things git does not
 ## Current state
 
 - **Baseline:** `origin/main` at `443be9e` (PR #70). This branch is `feature/ransom-split`.
-- **Last verified:** See the ransom-split entry. Tick-72 hashes match `443be9e`. Tick-1200 hashes move, because a paid ransom now arrives.
+- **Last verified:** See the ransom-split entry. Tick-72 hashes match `443be9e`. Tick-1200 hashes move, because a paid ransom now arrives. 294 tests. `evaluate-milestone.sh ransom-split` passed. The 72-tick golden fixture is unchanged.
 - **Gate status:** Tick-72 hashes stay `cb04ba5d…` / `bd7d8cc4…` / `20975bf4…` (8301, 8513, 8031). Recovery 572. No ransom is paid before tick 72.
 - **Headline:** A ransom paid on release splits between the captor's treasury and party leader. The odd cent goes to the treasury. Question 24 is settled.
 - **Runtime:** Node 24.21.0, pinned by `.node-version`. ICU 78.3.
@@ -129,10 +129,10 @@ Git remains the complete history. This file exists for three things git does not
 Backfilled from the commit graph on 2026-09-25. **Attribution caveat:** commits do not record which agent authored them. Milestones M1–M11 are attributed to the ChatGPT partner from session context, not from the repository, and should not be read as verified provenance.
 
 ### 2026-09-29 — Ransom split
-- **Agent:** Open Era Engineer (Cursor cloud agent) | **Branch:** `feature/ransom-split` | **Commits:** the implementation commit on this branch | **Type:** feature
+- **Agent:** Open Era Engineer (Cursor cloud agent) | **Branch:** `feature/ransom-split` | **Commits:** `a4a9a3d` (the split), `b490521` (the campaign pins). This commit records that `golden:update` left the fixture unchanged. | **Type:** feature
 - **Changed** — On `captivity-released`, the coins actually paid split in whole cents. A captor faction's treasury receives half and the captor's party leader receives half. The odd cent goes to the treasury. No faction: the leader receives every cent. The debt is still the unpaid remainder. The event type stays `captivity-released` and gains a `ransom` object. The feed, briefing, and chronicle add one line both sides can read, and keep the debt wording and "Loyalty fell".
 - **Why** — Question 24. The coins left the purse and arrived nowhere.
-- **Verified** — Base `443be9e` is an ancestor of this branch. Node v24.21.0. The base suite was 285 tests before this change. Tick-72 hashes do not move, and the reason is that no ransom is paid before tick 72: `cb04ba5d392d8b1c868cc97e54cb21b21ec171edd546bb70d0d7aba86cc69c11` (1847, 8301), `bd7d8cc44d5fa21022ecb8f8086e13dfbb9475eb025b5ae53f87e2991f90035c` (2718, 8513), `20975bf480e5aa11eeafe1ce39c36cf5ba0fa8e2d5de2bb5887a35d7b3aecc9f` (4096, 8031). Recovery replay stays 572. `golden:update` is not in this commit. The first state divergence is the first release, one tick later, because the credit is applied during that tick. The hash at the event tick itself still matches the base.
+- **Verified** — Base `443be9e` is an ancestor of this branch. Node v24.21.0. The base suite was 285 tests before this change. Tick-72 hashes do not move, and the reason is that no ransom is paid before tick 72: `cb04ba5d392d8b1c868cc97e54cb21b21ec171edd546bb70d0d7aba86cc69c11` (1847, 8301), `bd7d8cc44d5fa21022ecb8f8086e13dfbb9475eb025b5ae53f87e2991f90035c` (2718, 8513), `20975bf480e5aa11eeafe1ce39c36cf5ba0fa8e2d5de2bb5887a35d7b3aecc9f` (4096, 8031). Recovery replay stays 572. `npm run golden:update` was run after this explanation. The fixture diff is empty, so `tests/fixtures/golden-hashes.json` is unchanged. `npm run typecheck` is clean. **294 tests.** `./scripts/evaluate-milestone.sh ransom-split` passed. The two seeded readability pins at ticks 595 and 679 now match this campaign: Mara is free at Crown Harbor, and her loyalty note is the unscarred `0.808`. The held sentence and the scarred `0.768` note stay on the constructed fixtures. The first state divergence is the first release, one tick later, because the credit is applied during that tick. The hash at the event tick itself still matches the base.
 
   | Seed | First different state tick | Cause |
   | ---: | ---: | --- |
