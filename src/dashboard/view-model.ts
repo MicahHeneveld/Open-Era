@@ -45,9 +45,17 @@ function eventSummary(world: WorldState, event: SimEvent): string {
     : null;
   const settlement = event.settlementId ? world.settlements[event.settlementId]?.name ?? event.settlementId : null;
   switch (event.type) {
-    case "player-command-accepted":
+    case "player-command-accepted": {
+      const command = event.data.command as { action?: string; quantity?: number; unitPrice?: number; gross?: number } | undefined;
+      if (command?.action === "buy-provisions" && typeof command.gross === "number") {
+        return `Command queued for ${actor}: ${command.quantity} provisions at ${command.unitPrice} each, ${command.gross} total`;
+      }
       return `Command queued for ${actor}`;
+    }
     case "player-command-resolved":
+      if (event.data.action === "buy-provisions" && typeof event.data.gross === "number") {
+        return `${actor} bought ${event.data.quantity} provisions for ${event.data.gross} (${event.data.unitPrice} each)`;
+      }
       return `${actor}: ${String(event.data.outcome).replaceAll("-", " ")}`;
     case "player-command-failed":
       return `${actor}'s command failed: ${event.data.reason}`;
@@ -100,6 +108,9 @@ function eventSummary(world: WorldState, event: SimEvent): string {
     case "travel-started":
       return `${actor} departed for ${target}`;
     case "market-trade":
+      if (event.data.direction === "bought" && typeof event.data.gross === "number") {
+        return `${actor} bought ${event.data.quantity} ${event.data.resource} at ${settlement} for ${event.data.gross} (${event.data.unitPrice} each)`;
+      }
       return `${actor} ${event.data.direction} ${event.data.quantity} ${event.data.resource} at ${settlement}`;
     case "contract-offered":
       return `${actor} offered ${event.data.price} to land ${event.data.quantity} provisions at ${destinationName(world, event)}.`;

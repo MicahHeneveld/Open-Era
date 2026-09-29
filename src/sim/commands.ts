@@ -1,7 +1,7 @@
 import { openStandingOrder } from "./agency.ts";
 import { openSupplyContract } from "./contracts.ts";
-import { applyEvent, clamp, round, settlementClaimAvailableTo } from "./state.ts";
-import { MARKET_DEPTH_FRACTION, quotedPassage, tradeQuote } from "./engine.ts";
+import { applyEvent, clamp, marketPrice, round, settlementClaimAvailableTo } from "./state.ts";
+import { MARKET_DEPTH_FRACTION, marketDepth, provisionResupplyTarget, quotedPassage, tradeAmounts, tradeQuote } from "./engine.ts";
 import type {
   OrderDirective,
   PlayerAction,
@@ -125,7 +125,16 @@ export const ACTION_PRECONDITIONS: readonly string[] = [
 
 export const ACTION_CAPABILITIES: readonly ActionCapability[] = [
   { action: "travel", target: "settlement", requires: ["the destination is a known settlement", "the destination is not the current settlement", "the character's money covers the quoted passage"] },
-  { action: "buy-provisions", target: "none", requires: ["at least 2 money", "at least 1 provision in local stock"] },
+  {
+    action: "buy-provisions",
+    target: "none",
+    requires: [
+      "at least 2 money",
+      "at least 1 provision in local stock",
+      `the top-up does not exceed ${Math.round(MARKET_DEPTH_FRACTION * 100)}% of the market's target stock`,
+      "the character holds enough money at the quoted price",
+    ],
+  },
   {
     action: "buy-resource",
     target: "none",
@@ -401,15 +410,59 @@ function validateCharacterAction(
     if (character.money < 30) return reject("insufficient-money", `Recruitment costs 30 money; the character holds ${character.money}`);
     if (settlement.stocks.arms < 2) return reject("no-arms", `Recruitment needs 2 arms here; the settlement holds ${settlement.stocks.arms}`);
   }
-  if (request.action === "buy-provisions") {
-    if (character.money < 2) return reject("insufficient-money", `Buying provisions costs 2 money; the character holds ${character.money}`);
-    if (settlement.stocks.provisions < 1) return reject("no-provisions", "This settlement has no provisions left to sell");
-  }
-
   // The price the accepted order will be filled at, if this is a trade. Captured
   // here so the player is charged the total they were quoted: a tick of
   // autonomous trading can move a board between acceptance and the fill.
   let acceptedUnitPrice: number | undefined;
+  let acceptedQuantity: number | undefined;
+  let acceptedGross: number | undefined;
+
+  if (request.action === "buy-provisions") {
+    const price = marketPrice(world, settlement.id, "provisions");
+    const depth = marketDepth(settlement, "provisions");
+    const desired = round(Math.max(0, provisionResupplyTarget(character) - character.cargo.provisions), 3);
+    const stock = settlement.stocks.provisions;
+    // The same shelf gate the autonomous score uses: under 1 is not a board
+    // this command may clear. The text names the stock, because "none left"
+    // was how a fractional shelf used to read.
+    if (stock < 1) {
+      return reject(
+        "no-provisions",
+        `${settlement.name} holds ${round(stock, 3)} provisions; a purchase needs at least 1`,
+      );
+    }
+    // What this command would take. The player does not name a quantity; the
+    // top-up is the gap up to the resupply target, and it cannot exceed the
+    // shelf. The depth cap is that figure against `marketDepth`. An order past
+    // the cap is refused, not shortened: a player who asks for more than the
+    // board will clear is told the ceiling.
+    const quantity = round(Math.min(desired, stock), 3);
+    if (quantity > depth) {
+      return reject(
+        "market-depth",
+        `${settlement.name} will clear ${depth} provisions in one order; this top-up would buy ${quantity}`,
+      );
+    }
+    const gross = tradeAmounts(quantity, price, 0, "buy").gross;
+    const held = round(character.money, 2);
+    if (character.money < gross) {
+      return reject(
+        "insufficient-money",
+        `${quantity} provisions costs ${gross} at ${price} each; the character holds ${held}`,
+      );
+    }
+    // Two money is the minimum balance, not the price. A purse that can pay a
+    // smaller bill and still sits under 2 is refused with both numbers.
+    if (character.money < 2) {
+      return reject(
+        "insufficient-money",
+        `Buying provisions needs at least 2 money; ${quantity} provisions costs ${gross} at ${price} each and the character holds ${held}`,
+      );
+    }
+    acceptedUnitPrice = price;
+    acceptedQuantity = quantity;
+    acceptedGross = gross;
+  }
 
   if (request.action === "buy-resource" || request.action === "sell-resource") {
     const direction = request.action === "buy-resource" ? "buy" : "sell";
@@ -466,6 +519,9 @@ function validateCharacterAction(
       : request.targetId,
     ...(request.action === "buy-resource" || request.action === "sell-resource"
       ? { resource: request.resource, quantity: request.quantity, unitPrice: acceptedUnitPrice }
+      : {}),
+    ...(request.action === "buy-provisions"
+      ? { resource: "provisions" as const, quantity: acceptedQuantity, unitPrice: acceptedUnitPrice, gross: acceptedGross }
       : {}),
   };
   return { ok: true, command, event: acceptedEvent(world, command) };

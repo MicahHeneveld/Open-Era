@@ -196,22 +196,23 @@ test("a one-tick runway is described in the singular", () => {
 test("the quoted top-up is the amount buy-provisions actually buys", () => {
   const world = createPrototypeWorld(1847);
   const commander = commanderOf(world);
-  commander.cargo.provisions = 0;
+  const target = provisionResupplyTarget(commander);
+  // An empty hold asks for the whole target, which is past the depth cap and is
+  // refused. A gap inside the cap is still the figure the command charges.
+  const gap = 10;
+  commander.cargo.provisions = round(target - gap, 3);
   commander.money = 10_000;
 
-  // The ceiling was invisible to the first playtest: the hold filled to a number
-  // the player was never shown, and buys at the cap silently debited fractions.
-  // Quoting it is only honest if it is the same number the command charges against.
   const quoted = provisionRunway(world, commander).resupplyTarget;
-  assert.equal(quoted, provisionResupplyTarget(commander));
+  assert.equal(quoted, target);
 
   submitCommand(world, { playerId: "prototype-player", type: "character-action", action: "buy-provisions" });
-  const purchase = runTick(world).events.find((event) => event.type === "market-trade");
+  const purchase = runTick(world).events.find((event) => event.type === "market-trade" && event.actorId === commander.id);
   assert.ok(purchase);
-  assert.equal(purchase.data.quantity, quoted, "the market sells exactly the quoted ceiling");
+  assert.equal(purchase.data.quantity, gap, "the market sells exactly the gap up to the quoted target");
   // The hold then reads one tick lower, because upkeep for the same tick lands
   // after the purchase. The first playtest mistook that for a capacity limit.
-  assert.equal(commander.cargo.provisions, round(quoted - provisionDemand(commander), 3));
+  assert.equal(commander.cargo.provisions, round(target - provisionDemand(commander), 3));
 });
 
 test("a voyage that cannot be finished is flagged even with a full hold", () => {

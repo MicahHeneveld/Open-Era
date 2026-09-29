@@ -422,6 +422,12 @@ export type PlayerCommand =
        * autonomous trading moves the board before the order fills.
        */
       unitPrice?: number;
+      /**
+       * The total quoted at acceptance, in cents: `quantity` times `unitPrice`.
+       * Set on `buy-provisions` so the accepted command states what the purse
+       * will pay. The resolution event's `gross` is what was actually paid.
+       */
+      gross?: number;
     }
   | {
       id: string;
