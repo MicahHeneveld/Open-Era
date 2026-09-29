@@ -980,7 +980,12 @@ export function dashboardState(
           id: settlement.id,
           name: settlement.name,
           position: settlement.position,
-          factionId: knowledge?.factionId ?? null,
+          // Offshore, the faction on the viewer's report. A claim they have not
+          // been told about does not change the label; substituting the live
+          // holder would announce that change while the stored garrison stayed
+          // put. Standing on the island, the faction that is actually there,
+          // the same split the garrison already uses.
+          factionId: knownFactionId,
           ownerId: null,
           population: coLocated ? settlement.population : recordedGround?.population ?? null,
           workers: null,

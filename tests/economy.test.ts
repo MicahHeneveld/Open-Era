@@ -470,3 +470,21 @@ test("a foreign port's tax follows the holder the viewer last knew", () => {
   const beach = projected(world).settlements.find((settlement) => settlement.id === "glassport")!;
   assert.equal(beach.taxRate, world.factions["free-tide"].taxRate);
 });
+
+test("an offshore faction label stays on the report after the holder changes", () => {
+  const world = createPrototypeWorld(1847);
+  const commander = commanderOf(world);
+  commander.locationId = "crown-harbor";
+  commander.travel = null;
+  const glassport = world.settlements.glassport;
+  glassport.factionId = "free-tide";
+  glassport.ownerId = "character-17";
+  assert.equal(commander.knowledge.glassport.factionId, "world-government");
+
+  const offshore = projected(world).settlements.find((settlement) => settlement.id === "glassport")!;
+  assert.equal(offshore.factionId, "world-government");
+
+  commander.locationId = "glassport";
+  const beach = projected(world).settlements.find((settlement) => settlement.id === "glassport")!;
+  assert.equal(beach.factionId, "free-tide");
+});
