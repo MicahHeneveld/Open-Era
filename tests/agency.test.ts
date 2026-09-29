@@ -105,6 +105,73 @@ test("an autonomous character claims a hostile settlement that offers surrender"
   assert.equal(settlement.factionId, claimant.factionId);
 });
 
+test("satisfying the last ambition renews opening roots and leaves battle goals finished", () => {
+  const world = createPrototypeWorld(1847);
+  const character = world.characters["character-25"];
+  assert.equal(character.archetype, "steward");
+  assert.equal(character.factionId, null);
+  const security = character.goals.find((goal) => goal.kind === "material-security");
+  const power = character.goals.find((goal) => goal.kind === "build-power");
+  assert.ok(security && power);
+  security.progress = 1;
+  security.status = "satisfied";
+  power.progress = 0.999;
+  power.status = "active";
+  character.activeGoalId = power.id;
+  character.goals.push({
+    id: `${character.id}:recover-strength`,
+    kind: "recover-strength",
+    label: "Recover strength after a consequential defeat",
+    priority: 0.92,
+    progress: 1,
+    status: "satisfied",
+    origin: "defeat at Glassport",
+    createdTick: 40,
+  });
+
+  let renewed = false;
+  for (let attempt = 0; attempt < 6 && !renewed; attempt += 1) {
+    const result = runTick(world);
+    renewed = result.events.some((event) =>
+      event.type === "goal-evolved" &&
+      event.actorId === character.id &&
+      event.data.trigger === "satisfying every open ambition"
+    );
+  }
+  assert.equal(renewed, true);
+  const recovery = character.goals.find((goal) => goal.kind === "recover-strength");
+  const renewedSecurity = character.goals.find((goal) => goal.kind === "material-security");
+  const renewedPower = character.goals.find((goal) => goal.kind === "build-power");
+  assert.equal(recovery?.status, "satisfied");
+  assert.equal(recovery?.progress, 1);
+  for (const goal of [renewedSecurity, renewedPower]) {
+    assert.ok(goal);
+    assert.equal(goal.status, "active");
+    assert.equal(goal.progress, 0);
+    assert.equal(goal.origin.startsWith("renewed: "), true);
+  }
+  assert.doesNotThrow(() => runTick(world));
+  assert.ok(character.goals.some((goal) => goal.status === "active"));
+});
+
+test("seeds that used to exhaust ambitions still have a goal after 400 ticks", () => {
+  for (const seed of [1847, 2718, 4096]) {
+    const result = runTicks(createPrototypeWorld(seed), 400);
+    assert.equal(result.state.tick, 400);
+    const renewals = result.events.filter((event) =>
+      event.type === "goal-evolved" && event.data.trigger === "satisfying every open ambition"
+    );
+    assert.ok(renewals.length > 0, `seed ${seed} never renewed an ambition`);
+    assert.ok(renewals.every((event) => event.tick > 72), `seed ${seed} renewed inside the golden window`);
+    for (const character of Object.values(result.state.characters)) {
+      assert.ok(
+        character.goals.some((goal) => goal.status === "active"),
+        `${character.name} on seed ${seed} has no active goal at tick 400`,
+      );
+    }
+  }
+});
+
 test("accepted orders report temporary deviations, resumptions, and completion judgments", () => {
   const result = runTicks(createPrototypeWorld(1847), 24);
   const deviations = result.events.filter((event) => event.type === "standing-order-deviated");
