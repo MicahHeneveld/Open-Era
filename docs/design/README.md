@@ -6,6 +6,7 @@ These documents capture the decisions made during the initial design conversatio
 - [World simulation](world-simulation.md) — factions, economy, settlements, troops, combat, progression, aging, captivity, and inheritance
 - [Autonomous characters](autonomous-characters.md) — decision architecture, knowledge, memory, relationships, communication, and the bounded role of language models
 - [UI and art direction](ui-art-direction.md) — map structure, information hierarchy, character treatment, screen inventory, and mockup status
+- [Reconnaissance](reconnaissance.md) — Open / investigation: earned, dated knowledge of rival strength, with provenance
 - [Generated mockups](../assets/mockups/README.md) — all 13 image concepts produced during the conversation
 - [Development and playtest pipeline](../development-pipeline.md) — branch roles, automated gates, adaptive player protocol, and promotion rules
 - [Roadmap](../roadmap.md) — documented systems that are not built, and whether their deferral is recorded anywhere
