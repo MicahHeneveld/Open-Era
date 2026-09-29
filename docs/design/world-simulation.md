@@ -92,7 +92,7 @@ When the owner declares separation:
 
 If the settlement survives a time threshold or makes peace, the owner may remain independent, found a new faction, or seek protection or membership elsewhere.
 
-The prototype offers surrender after an attacker victory, in an immediate battle and at the end of a major one, when the garrison is still at most 15 and stability is at or below `min(80, 30 + 10 × max(0, 15 − garrison))`. A neighbour is not offered another raid once the garrison is under 15. The conquering character then claims personally. Longer-term occupation, negotiation, and population responses remain deferred. The measurement is [the raid floor](raid-floor.md).
+The prototype offers surrender after an attacker victory, in an immediate battle and at the end of a major one, when the garrison is still at most 15 and stability is at or below `min(80, 30 + 10 × max(0, 15 − garrison))`. A neighbour is not offered another raid once the garrison is under 15. The conquering character then claims personally. A fed settlement under `round(population / 70)` regains one soldier every `max(6, round(200000 / population))` world ticks, written on settlement upkeep, including a neutral port. Shortage still only reduces the garrison. Longer-term occupation, negotiation, and population responses remain deferred. The measurements are [the raid floor](raid-floor.md) and [garrison recovery](garrison-recovery.md).
 
 ## Parties, troops, and ships
 

@@ -1,6 +1,12 @@
 # Garrison recovery
 
-**Status: Open.** Proposal for the owner to accept, change, or reject. Current code is `main` at `a51266a`. The slope-10 surrender slide is accepted as M19 and is not in that code; every recovery run below was applied on top of it. This note is not decided until it moves into [world simulation](world-simulation.md).
+**Status: Built (M20).** Fast population regrowth is the rule. In `produceSettlements` (`src/sim/engine.ts`), a settlement with no battle gains one garrison on its upkeep when provisions are met (`shortage === 0`), garrison is under `round(population / 70)`, and the world tick is a positive multiple of `max(6, round(200000 / population))`. Both rounds are to the nearest integer. The new garrison is the existing `settlement-upkeep` field. Shortage still only reduces garrison. Neutral ports count: Verdant Cay opens at 70 under a ceiling of 103 and ends a 400-tick run at 84. The raid gate and the slope-10 slide are unchanged. There is no new event and no RNG draw.
+
+The interval is the world clock, not time since a claim. Tick 0 is the opening figure and is not a gain. A shortage, the ceiling, or a battle that skips the settlement drops that tick's soldier; it is not owed later. The rule reads that settlement's population, its own provision shortage, and its garrison. It does not read a treasury, a survey, or anyone's knowledge.
+
+Tick-72 event counts after this change, Node v24.21.0, ICU 78.3: **8338 / 8411 / 8298** (seeds 1847 / 2718 / 4096). Those are the fast counts in the table below. Seeds 1847 and 4096 keep the slide's counts and still change hash, because Verdant Cay gains at ticks 28 and 56. Seed 2718 drops from 8417 to 8411 because Cinder Key, claimed at tick 32, regrows before tick 72. The sentence in [world simulation](world-simulation.md) now states this rule. The playtest is [garrison-regrowth-001](../playtests/garrison-regrowth-001.md).
+
+The sections under this status are the proposal as it was measured. They are the record of why fast population regrowth was chosen, not a second rule.
 
 Runs are `createPrototypeWorld` plus `runTick`, 400 ticks, seeds 1847 / 2718 / 4096, Node v22.14.0, ICU 76.1. Patches were reverted. The slide-only replay matched the [raid floor](raid-floor.md) slope-10 table, including tick-72 event counts 8338 / 8417 / 8298.
 
