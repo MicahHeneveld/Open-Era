@@ -380,6 +380,45 @@ function settlementLedger(events: { type: string; settlementId?: string; data: R
   );
 }
 
+test("Crown Harbor gains one garrison on its 11-tick interval when the ration is met, and none when the fields cannot cover it", () => {
+  const world = createPrototypeWorld(1847);
+  const harbor = world.settlements["crown-harbor"];
+  assert.equal(Math.max(6, Math.round(200_000 / harbor.population)), 11);
+  harbor.garrison = 6;
+  harbor.stability = 0;
+  harbor.stocks.provisions = 0;
+  const opening = harbor.garrison;
+
+  world.tick = 10;
+  const before = runTick(world);
+  const beforeLedger = settlementLedger(before.events, harbor.id);
+  assert.equal(beforeLedger?.type, "settlement-upkeep");
+  assert.equal(beforeLedger?.data.shortage, 0);
+  assert.equal(beforeLedger?.data.garrison, opening);
+
+  const onInterval = runTick(world);
+  const intervalLedger = settlementLedger(onInterval.events, harbor.id);
+  assert.equal(world.tick, 12, "the interval tick is the one just applied");
+  assert.equal(intervalLedger?.type, "settlement-upkeep");
+  assert.equal(intervalLedger?.data.shortage, 0);
+  assert.equal(intervalLedger?.data.garrison, opening + 1);
+  assert.equal(harbor.garrison, opening + 1);
+
+  const short = createPrototypeWorld(1847);
+  const hungry = short.settlements["crown-harbor"];
+  hungry.production = { provisions: 0, arms: 0, medicine: 0, shipMaterials: 0 };
+  hungry.stocks.provisions = 0;
+  hungry.garrison = 6;
+  hungry.stability = 0;
+  short.tick = 11;
+  const starved = runTick(short);
+  const starvedLedger = settlementLedger(starved.events, hungry.id);
+  assert.equal(starvedLedger?.type, "settlement-shortage");
+  assert.ok(Number(starvedLedger?.data.shortage) > 0);
+  assert.equal(starvedLedger?.data.garrison, 6);
+  assert.equal(hungry.garrison, 6);
+});
+
 test("a fed settlement under the ceiling gains one garrison on its interval tick and not the tick before", () => {
   const world = createPrototypeWorld(1847);
   const settlement = world.settlements["verdant-cay"];
@@ -449,6 +488,44 @@ test("a shortage gains no garrison, and a settlement at its population ceiling g
   assert.equal(heldLedger?.type, "settlement-upkeep");
   assert.equal(heldLedger?.data.shortage, 0);
   assert.equal(heldLedger?.data.garrison, ceiling);
+});
+
+test("Crown Harbor at the claim floor meets the ration, and stability 91 keeps the surplus increment", () => {
+  const floored = createPrototypeWorld(1847);
+  const harbor = floored.settlements["crown-harbor"];
+  harbor.stability = 55;
+  harbor.stocks.provisions = 0;
+  const flooredTick = runTick(floored);
+  const produced = flooredTick.events.find((event) =>
+    event.type === "settlement-produced" && event.settlementId === harbor.id
+  );
+  const producedProvisions = (produced?.data.stocks as { provisions: number } | undefined)?.provisions;
+  assert.equal(producedProvisions, 5);
+  const ledger = settlementLedger(flooredTick.events, harbor.id);
+  assert.equal(ledger?.type, "settlement-upkeep");
+  assert.equal(ledger?.data.shortage, 0);
+  assert.equal(ledger?.data.demand, 5);
+  assert.equal(ledger?.data.consumed, 5);
+
+  const surplus = createPrototypeWorld(1847);
+  const fed = surplus.settlements["crown-harbor"];
+  assert.equal(fed.stability, 91);
+  assert.equal(fed.focus, "arms");
+  const opening = fed.stocks.provisions;
+  const workerCondition = 0.7 + (fed.stability / 100) * 0.3;
+  const expected = round(opening + fed.production.provisions * workerCondition);
+  const surplusTick = runTick(surplus);
+  const surplusProduced = surplusTick.events.find((event) =>
+    event.type === "settlement-produced" && event.settlementId === fed.id
+  );
+  assert.equal(
+    (surplusProduced?.data.stocks as { provisions: number } | undefined)?.provisions,
+    expected,
+  );
+  assert.ok(expected - opening > 5, `surplus increment ${expected - opening} should stay above the ration`);
+  const surplusLedger = settlementLedger(surplusTick.events, fed.id);
+  assert.equal(surplusLedger?.type, "settlement-upkeep");
+  assert.equal(surplusLedger?.data.shortage, 0);
 });
 
 test("a foreign port's tax follows the holder the viewer last knew", () => {
