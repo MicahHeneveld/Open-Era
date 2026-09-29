@@ -130,6 +130,11 @@ test("a surrendering settlement can be claimed by the conquering character", () 
     action: "claim-settlement",
   });
   assert.equal(submission.ok, true);
+  // Free Tide is about to lose its only port. Hold everyone else so a landless
+  // raid on this same tick does not move the stability the claim just set.
+  for (const character of Object.values(world.characters)) {
+    if (character.id !== commander.id) character.lastBattleTick = world.tick;
+  }
 
   const result = runTick(world);
   const claim = result.events.find((event) => event.type === "settlement-claimed");

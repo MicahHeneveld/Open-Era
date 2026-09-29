@@ -796,11 +796,16 @@ function buildCandidates(
       reason: `accept ${settlement.name}'s surrender and establish a personal claim`,
     });
   }
+  // A faction that still holds a settlement raids at 15. A landless faction
+  // raids at 8. Troops, cooldown, hostility, and the open-battle check stay.
+  const landless =
+    character.factionId !== null &&
+    !Object.values(world.settlements).some((held) => held.factionId === character.factionId);
   if (
     hostileTerritory &&
     character.factionId !== null &&
     character.troops.count >= 25 &&
-    settlement.garrison >= 15 &&
+    (settlement.garrison >= 15 || (landless && settlement.garrison >= 8)) &&
     world.tick - character.lastBattleTick >= 18 &&
     !Object.values(world.activeBattles).some((battle) => battle.settlementId === settlement.id)
   ) {
