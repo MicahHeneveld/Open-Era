@@ -111,8 +111,8 @@ Backfilled from the commit graph on 2026-09-25. **Attribution caveat:** commits 
 ### 2026-09-29 — M29.1: Spend the outscore roll on the dock
 - **Agent:** Open Era Engineer (Cursor cloud agent) | **Branch:** `feature/outscore-dock-capture` | **Playtest:** pending, [outscore-dock-capture-001](docs/playtests/outscore-dock-capture-001.md)
 - An outscore win spends the capture roll it already draws on the senior losing officer standing on the port. The cause is `outscore-loss`. An empty dock spends the roll and takes nobody. Golden hashes were not regenerated. Tick-72 counts stay 8301 / 8513 / 8031.
-- Verified — typecheck, 223 tests, and `./scripts/evaluate-milestone.sh outscore-dock-capture` after merging `origin/main` at `557ed84`. The playtest reads Rook Tern's capture on seed 4096 at state tick 476. The blind session is not run.
-- Links    — [outscore-dock-capture-001](docs/playtests/outscore-dock-capture-001.md), [captures under M29](docs/design/captures-under-m29.md)
+- Verified — typecheck, 223 tests, and `./scripts/evaluate-milestone.sh outscore-dock-capture` after merging `origin/main` at `557ed84`. Blind session [outscore-dock-capture-001](docs/playtests/outscore-dock-capture-001.md) on seed 4096 at state tick 476, head `bdb22cd`: **PROMOTE**. Sequence 59637 is withheld `character-captured` for Rook Tern. Briefing text is `Rook Tern was captured at Glassport after outscore loss` and `Pax Ash won at Glassport`. Card cause `outscore-loss`, captor `free-tide`. Glassport stays World Government, garrison 6. Both `actingCommanderId` values stay null.
+- Links    — [playtest](docs/playtests/outscore-dock-capture-001.md), [captures under M29](docs/design/captures-under-m29.md)
 
 ### 2026-09-29 — M30: Name the command seat
 - **Agent:** Open Era Engineer (Cursor cloud agent) | **Branch:** `feature/commander-seat` | **Playtest:** pending, [commander-seat-001](docs/playtests/commander-seat-001.md)
