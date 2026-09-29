@@ -148,6 +148,15 @@ Playtest: [informed-commitment-002](../playtests/informed-commitment-002.md) rer
 
 The follow-up question has an answer in that session, and it is not a change to this brief. Commitment got more accurate and less tense. A lot of the tension in the first session was the width of a band that did not know the walls.
 
+### Survey polish
+
+Built after that session, on `fix/survey-polish`. These are readings of the same channel. They do not add a subject or a writer.
+
+- A remote garrison publishes `garrisonIntelligence { source, observedTick, ageTicks }` next to the number, and the panel says how old it is. The age is the age `combatForecast` already uses, so a rumor backdated before tick 0 is old on day one. The tick shown to the player is floored at 0. The simulation keeps the negative tick: that backdate is why the rumor is stale, and rewriting the seed would make opening rumors fresh and move the golden hashes.
+- Standing on the island, the panel keeps the true fortification. The local forecast names that same figure and says the defender band is skill-scaled. It no longer prints the scaled product as if it were a second wall. The string stored on an active battle is unchanged.
+- An explore that finishes on the tick it was issued, because the officer is already on the target, says so in the order response and in the chronicle. It still does not cost a tick.
+- A player voyage is refused as `insufficient-passage` when the purse is short of the quoted passage. Autonomous travel does not take that refusal.
+
 ### Golden hashes
 
 The expectation is that the golden hashes stay **byte-identical**, so a moved hash would mean something is wrong:
