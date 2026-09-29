@@ -2,7 +2,7 @@
 
 ## Session
 
-- **Candidate commit:** the raid-floor commit on `feature/raid-floor` (recorded in the progress log; this session is that commit, before any later purse change)
+- **Candidate commit:** `504996c`
 - **Date:** 2026-09-29 UTC
 - **Operator:** The implementing agent, Open Era Engineer, a Cursor cloud agent. This was not a fresh-context operator. The agent had already read the repository and written the surrender slide. During the session every decision was taken from the dashboard HTTP JSON (`GET /api/state`, `POST /api/commands`, `POST /api/advance`). The database, the event log, and the world report were opened only after the session stopped, for this evidence review.
 - **Interface:** Dashboard over HTTP, JSON API only for every decision. Server `127.0.0.1:4371`, database `simulation-output/playtests/raid-floor-001/dashboard.sqlite`, started with `--seed 1847 --reset`.
