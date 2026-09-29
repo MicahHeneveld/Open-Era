@@ -318,7 +318,7 @@ test("the commanded Glassport crossing names Ada at tick 2 and is gone at tick 4
   assert.equal(tomaRow?.kind, "arriving");
   assert.equal(
     tomaRow?.summary,
-    "Toma Reef is arriving at the same port, Cinder Key to Glassport. Docks at Glassport on this tick. 42 troops, 0 ticks old.",
+    "Toma Reef (World Government) is arriving at the same port, Cinder Key to Glassport. Docks at Glassport on this tick. 42 troops, 0 ticks old.",
   );
 
   runTick(world);

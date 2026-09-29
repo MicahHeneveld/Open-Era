@@ -6,6 +6,11 @@ import type { SimEvent, WorldState } from "./types.ts";
 
 /** Largest event-feed page a player may request in one read. */
 export const EVENT_FEED_PAGE_LIMIT = 200;
+/**
+ * Largest check-in read. A month of this campaign is about 20–28 thousand
+ * events. Past this cap the newest rows inside the tick window are kept.
+ */
+export const CHECK_IN_READ_CAP = 40_000;
 /** Page size used when a request does not ask for one. */
 export const EVENT_FEED_PAGE_DEFAULT = 100;
 
@@ -178,6 +183,23 @@ export class WorldStore {
     const rows = this.database
       .prepare("SELECT * FROM events ORDER BY sequence DESC LIMIT ?")
       .all(safeLimit) as unknown as EventRow[];
+    return rows.reverse().map((row) => this.rowToEvent(row));
+  }
+
+  /**
+   * Events from `minTick` forward, oldest first, capped so one check-in cannot
+   * read the whole log.
+   *
+   * The cap is 40,000. A month of this campaign is about 20–28 thousand events
+   * (measured at tick 1200). When the window is larger than the cap, the newest
+   * rows inside it are kept.
+   */
+  eventsSinceTick(minTick: number, limit = CHECK_IN_READ_CAP): SimEvent[] {
+    const safeLimit = Math.max(1, Math.min(CHECK_IN_READ_CAP, Math.floor(limit)));
+    const floorTick = Math.max(0, Math.floor(minTick));
+    const rows = this.database
+      .prepare("SELECT * FROM events WHERE tick >= ? ORDER BY sequence DESC LIMIT ?")
+      .all(floorTick, safeLimit) as unknown as EventRow[];
     return rows.reverse().map((row) => this.rowToEvent(row));
   }
 

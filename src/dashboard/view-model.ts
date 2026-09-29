@@ -14,19 +14,22 @@ import {
   travelDuration,
   type ProvisionRunway,
 } from "../sim/engine.ts";
-import { marketPrice, round, settlementClaimAvailableTo } from "../sim/state.ts";
+import { marketPrice, partyPowerFromTroops, round, settlementClaimAvailableTo } from "../sim/state.ts";
+import { CHECK_IN_READ_CAP } from "../sim/persistence.ts";
 import { RESOURCE_KEYS, type ActiveBattle, type Character, type CombatForecast, type SettlementKnowledge, type SimEvent, type WorldState } from "../sim/types.ts";
 import { captiveIntelFor, projectCharacter, projectEvent, projectFactions, projectSupplyContracts, seaSightingsFor } from "./visibility.ts";
 import {
   attentionLabel,
+  battleResolvedSentence,
   captivityEscapedSentence,
   captivityReleasedSentence,
   causeLabelFor,
   characterCapturedSentence,
+  characterName,
   eventBriefingTitle,
-  higherScoreClause,
   passageUpkeepSentence,
   publicFeedSentence,
+  settlementClaimedSentence,
 } from "./wording.ts";
 
 /**
@@ -50,11 +53,62 @@ function destinationName(world: WorldState, event: SimEvent): string {
   return world.settlements[id]?.name ?? id;
 }
 
-function eventSummary(world: WorldState, event: SimEvent, events?: SimEvent[]): string {
-  const actor = event.actorId ? world.characters[event.actorId]?.name ?? event.actorId : "World";
-  const target = event.targetId
-    ? world.characters[event.targetId]?.name ?? world.settlements[event.targetId]?.name ?? world.factions[event.targetId]?.name ?? event.targetId
-    : null;
+/**
+ * How far back the check-in looks, in world ticks.
+ *
+ * Thirty days. `ticksPerDay` is 6, so this is 180 ticks. The opening
+ * standing-order warnings on seed 2718 are ticks 0–39. At tick 168 a read of
+ * the newest 5,000 events starts at tick 127 and drops all 21 of them, so
+ * attention was following event volume. A week (42 ticks) and a captivity
+ * term (84 ticks) still start after those warnings. 180 ticks reaches tick 0
+ * at that checkpoint.
+ */
+export const CHECK_IN_TICKS = 180;
+
+/** The store will not return more than this from one check-in read. */
+export const CHECK_IN_EVENT_CAP = CHECK_IN_READ_CAP;
+
+/**
+ * The check-in window: events in the last {@link CHECK_IN_TICKS} ticks, and
+ * at most {@link CHECK_IN_EVENT_CAP} of them, keeping the newest if the cap
+ * binds. This is the same bound `WorldStore.eventsSinceTick` enforces.
+ */
+export function checkInEvents(events: SimEvent[], tick: number): SimEvent[] {
+  const minTick = Math.max(0, tick - CHECK_IN_TICKS);
+  const inWindow = events.filter((event) => event.tick >= minTick);
+  if (inWindow.length <= CHECK_IN_EVENT_CAP) return inWindow;
+  return inWindow.slice(-CHECK_IN_EVENT_CAP);
+}
+
+function labelOf(world: WorldState, id: string | null | undefined): string | null {
+  if (!id) return null;
+  if (world.characters[id]) return characterName(world, id, id);
+  return world.settlements[id]?.name ?? world.factions[id]?.name ?? id;
+}
+
+/**
+ * Troops and power the reader can already see on the captor row, or on their
+ * own captivity. A rival who only has the withheld capture sentence does not
+ * get the numbers. Zero troops and zero power add nothing.
+ */
+function capturedTroopsClause(world: WorldState, reader: Character | undefined, event: SimEvent): string | null {
+  if (!reader || event.type !== "character-captured" || !event.actorId) return null;
+  const prisoner = world.characters[event.actorId];
+  if (!prisoner) return null;
+  const intel = captiveIntelFor(world, reader, prisoner);
+  if (intel && (intel.troops > 0 || intel.partyPower > 0)) {
+    return `${intel.troops} troops were taken, power ${intel.partyPower}.`;
+  }
+  if (reader.id !== prisoner.id || !prisoner.captivity) return null;
+  const scattered = prisoner.captivity.scatteredTroops;
+  const power = partyPowerFromTroops(prisoner, scattered);
+  if (scattered.count <= 0 && power <= 0) return null;
+  return `${scattered.count} troops were taken, power ${power}.`;
+}
+
+function eventSummary(world: WorldState, event: SimEvent, events?: SimEvent[], reader?: Character): string {
+  const actor = event.actorId ? characterName(world, event.actorId, event.actorId) : "World";
+  const target = labelOf(world, event.targetId);
   const settlement = event.settlementId ? world.settlements[event.settlementId]?.name ?? event.settlementId : null;
   switch (event.type) {
     case "player-command-accepted": {
@@ -97,7 +151,7 @@ function eventSummary(world: WorldState, event: SimEvent, events?: SimEvent[]): 
     case "plan-reconsidered":
       return `${actor} reconsidered their plan: ${event.data.reason}`;
     case "battle-resolved":
-      return `${actor} ${event.data.outcome === "attacker-victory" ? "won" : "lost"} at ${settlement}${higherScoreClause(event.data)}`;
+      return battleResolvedSentence(world, event, events);
     case "battle-started":
       return `${actor} committed to a major battle at ${settlement}`;
     case "battle-phase-resolved":
@@ -106,8 +160,11 @@ function eventSummary(world: WorldState, event: SimEvent, events?: SimEvent[]): 
       return `${actor} retreated from ${settlement} toward ${world.settlements[String(event.data.retreatDestinationId)]?.name ?? "open waters"}`;
     case "post-defeat-withdrawal-started":
       return `${actor} escaped defeat at ${settlement} and withdrew toward ${target ?? "open waters"}`;
-    case "character-captured":
-      return characterCapturedSentence(world, event, events);
+    case "character-captured": {
+      const captured = characterCapturedSentence(world, event, events);
+      const troops = capturedTroopsClause(world, reader, event);
+      return troops ? `${captured}. ${troops}` : captured;
+    }
     case "captivity-escaped":
       return captivityEscapedSentence(world, event);
     case "captivity-released":
@@ -120,7 +177,7 @@ function eventSummary(world: WorldState, event: SimEvent, events?: SimEvent[]): 
     case "scattered-troops-returned":
       return `${event.data.returning} scattered troops returned to ${actor}`;
     case "settlement-claimed":
-      return `${actor} accepted ${settlement}'s surrender and established a claim`;
+      return settlementClaimedSentence(world, event, events);
     case "arrived":
       return `${actor} arrived at ${settlement}`;
     case "travel-started":
@@ -587,7 +644,7 @@ function checkInBriefing(world: WorldState, commanderId: string, events: SimEven
       severity: warning ? "warning" : "info",
       actionRequired: false,
       title: eventBriefingTitle(event.type),
-      summary: eventSummary(world, event, events),
+      summary: eventSummary(world, event, events, commander),
       day: round(event.tick / world.ticksPerDay, 2),
       characterId: event.targetId && world.characters[event.targetId] ? event.targetId : event.actorId,
       settlementId: event.settlementId,
@@ -611,7 +668,7 @@ function checkInBriefing(world: WorldState, commanderId: string, events: SimEven
       id: `routine:${reportingOfficer.id}:${throughSequence}`,
       severity: "info",
       actionRequired: false,
-      title: `${reportingOfficer.name} sent a routine digest.`,
+      title: `${characterName(world, reportingOfficer.id, reportingOfficer.name)} sent a routine digest.`,
       summary: `${routineEvents.length} routine order ${updateWord}: ${details}. No command decision is required.`,
       day: round(Math.max(...routineEvents.map((event) => event.tick)) / world.ticksPerDay, 2),
       reportingOfficerId: reportingOfficer.id,
@@ -689,7 +746,11 @@ function checkInBriefing(world: WorldState, commanderId: string, events: SimEven
       player.knownCharacterIds.includes(character.id)
     )
     .sort((left, right) => right.skills.leadership - left.skills.leadership || left.id.localeCompare(right.id))
-    .map((character) => ({ id: character.id, name: character.name, leadership: character.skills.leadership }));
+    .map((character) => ({
+      id: character.id,
+      name: characterName(world, character.id, character.name),
+      leadership: character.skills.leadership,
+    }));
 
   return {
     /**
@@ -705,7 +766,7 @@ function checkInBriefing(world: WorldState, commanderId: string, events: SimEven
     omittedInfoCount,
     reportingOfficer: reportingOfficer ? {
       id: reportingOfficer.id,
-      name: reportingOfficer.name,
+      name: characterName(world, reportingOfficer.id, reportingOfficer.name),
       leadership: reportingOfficer.skills.leadership,
     } : null,
     eligibleOfficers,
@@ -746,9 +807,16 @@ export function projectEventFeed(
   world: WorldState,
   commanderId: string,
   events: SimEvent[],
+  /**
+   * Sibling events used for a reason line, such as a surrender taken on the
+   * next tick. The check-in window is wider than one feed page. When omitted,
+   * the page itself is the sibling set.
+   */
+  context?: SimEvent[],
 ): Record<string, unknown>[] {
   const commander = world.characters[commanderId];
-  return events.map((event) => projectEvent(world, commander, event, eventSummary(world, event, events)));
+  const siblings = context ?? events;
+  return events.map((event) => projectEvent(world, commander, event, eventSummary(world, event, siblings, commander)));
 }
 
 /** Builds a feed page holding every supplied event. Convenient when the caller already holds a full set. */
@@ -1079,7 +1147,7 @@ export function dashboardState(
         settlementId: battle.settlementId,
         settlementName: world.settlements[battle.settlementId].name,
         attackerId: battle.attackerId,
-        attackerName: world.characters[battle.attackerId]?.name ?? battle.attackerId,
+        attackerName: characterName(world, battle.attackerId, battle.attackerId),
         phase: battle.phase,
         totalPhases: battle.totalPhases,
       })),
@@ -1245,7 +1313,7 @@ export function dashboardState(
       .sort((left, right) => left.id.localeCompare(right.id))
       .map((character) => projectCharacter(world, commander, character, briefingEvents)),
     contracts: projectSupplyContracts(world, commander),
-    events: projectEventFeed(world, commander.id, feed.events).reverse(),
+    events: projectEventFeed(world, commander.id, feed.events, briefingEvents).reverse(),
     /**
      * How to page `events`. This is a page descriptor, not the feed itself: the
      * events are under `events` above. It was called `eventFeed`, which read as

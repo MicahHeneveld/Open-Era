@@ -46,12 +46,28 @@ export function higherScoreClause(data: Record<string, unknown>): string {
  * `data` stays null. A decision, a contract, and an upkeep row are not in this set.
  */
 export function summaryStaysWhenWithheld(type: string): boolean {
-  return type === "character-captured" || type === "captivity-released" || type === "battle-resolved";
+  return type === "character-captured" || type === "captivity-released" || type === "battle-resolved" || type === "settlement-claimed";
 }
+
+/**
+ * Toma Reef and Toma Hale share a first name. The qualifier is display only.
+ * The stored name is unchanged. Other shared first names are left as they are.
+ */
+const TOMA_REEF_ID = "character-07";
+const TOMA_HALE_ID = "character-27";
 
 export function characterName(world: WorldState, id: string | undefined, fallback: string): string {
   if (!id) return fallback;
-  return world.characters[id]?.name ?? id;
+  const character = world.characters[id];
+  if (!character) return fallback;
+  if (id !== TOMA_REEF_ID && id !== TOMA_HALE_ID) return character.name;
+  const otherId = id === TOMA_REEF_ID ? TOMA_HALE_ID : TOMA_REEF_ID;
+  const other = world.characters[otherId];
+  if (!other || other.name.split(" ")[0] !== character.name.split(" ")[0]) return character.name;
+  const faction = character.factionId
+    ? world.factions[character.factionId]?.name ?? character.factionId
+    : "unaffiliated";
+  return `${character.name} (${faction})`;
 }
 
 export function settlementName(world: WorldState, id: string | undefined, fallback: string): string {
@@ -61,6 +77,148 @@ export function settlementName(world: WorldState, id: string | undefined, fallba
 
 function numberOrNull(value: unknown): number | null {
   return typeof value === "number" && Number.isFinite(value) ? value : null;
+}
+
+function surrenderOfferedThisTick(event: SimEvent): boolean {
+  const surrender = event.data.surrender;
+  if (!surrender || typeof surrender !== "object") return false;
+  return (surrender as { offeredTick?: unknown }).offeredTick === event.tick;
+}
+
+/**
+ * Why a witnessed battle ended, in plain words, from the battle payload.
+ *
+ * "outscore" and "nerve broke" are not used. A major that ends with morale at
+ * 12 or lower says morale gave out. A higher score on that shape says so.
+ * The phase tally is not on the event, so a win with morale still above 12
+ * is not called a phase win. An immediate fight (no battle id) is the score only.
+ */
+export function battleResolvedSentence(world: WorldState, event: SimEvent, events?: SimEvent[]): string {
+  const actor = characterName(world, event.actorId, "Someone");
+  const settlement = settlementName(world, event.settlementId, "the port");
+  const won = event.data.outcome === "attacker-victory";
+  const verb = won ? "won the fight" : "lost the fight";
+  const parts = [`${actor} ${verb} at ${settlement}${battleReasonClause(event.data)}.`];
+  const company = sameTickVictories(world, event, events);
+  if (company) parts.push(company);
+  const surrender = surrenderClause(event, events);
+  if (surrender) parts.push(surrender);
+  return parts.join(" ");
+}
+
+function battleReasonClause(data: Record<string, unknown>): string {
+  const major = typeof data.battleId === "string";
+  const morale = numberOrNull(data.attackerMorale);
+  const health = numberOrNull(data.attackerHealth);
+  const troops = numberOrNull(data.attackerTroops);
+  const garrison = numberOrNull(data.defenderGarrison);
+  const score = scoreClause(data);
+  if (major && garrison === 0) return " because the garrison was gone";
+  if (major && troops !== null && troops < 8) return " because fewer than 8 troops were left";
+  if (major && health !== null && health <= 15) return " because the captain was too badly wounded to keep fighting";
+  if (higherScoreWin(data)) return " on a higher score, after morale gave out";
+  if (major && morale !== null && morale <= 12) {
+    return score ? ` because morale gave out,${score}` : " because morale gave out";
+  }
+  return score;
+}
+
+function scoreClause(data: Record<string, unknown>): string {
+  const attackerScore = numberOrNull(data.attackerScore);
+  const defenderScore = numberOrNull(data.defenderScore);
+  if (attackerScore === null || defenderScore === null) return "";
+  if (attackerScore > defenderScore) return " on a higher score";
+  if (attackerScore < defenderScore) return " on a lower score";
+  return " on an equal score";
+}
+
+function sameTickVictories(world: WorldState, event: SimEvent, events: SimEvent[] | undefined): string | null {
+  if (event.data.outcome !== "attacker-victory" || !events) return null;
+  const wins = events.filter((other) =>
+    other.type === "battle-resolved" &&
+    other.tick === event.tick &&
+    other.settlementId === event.settlementId &&
+    other.data.outcome === "attacker-victory",
+  );
+  if (wins.length < 2) return null;
+  const names = wins.map((other) => characterName(world, other.actorId, "Someone"));
+  const garrison = numberOrNull(event.data.defenderGarrison);
+  const standing = garrison !== null && garrison > 0 ? " This fight left the garrison standing." : "";
+  return `${wins.length} captains won a fight here on this tick: ${names.join(", ")}.${standing}`;
+}
+
+function offerTo(event: SimEvent): { offeredToId?: string; offeredTick?: number } | null {
+  const surrender = event.data.surrender;
+  if (!surrender || typeof surrender !== "object") return null;
+  return surrender as { offeredToId?: string; offeredTick?: number };
+}
+
+/**
+ * The claim that took this battle's offer. It has to come after the battle.
+ * A claim earlier in the tick took some other offer.
+ */
+function claimOfOffer(event: SimEvent, events: SimEvent[] | undefined): SimEvent | null {
+  const offer = offerTo(event);
+  if (!offer?.offeredToId || offer.offeredTick !== event.tick) return null;
+  return (events ?? []).find((other) =>
+    other.type === "settlement-claimed" &&
+    other.settlementId === event.settlementId &&
+    other.sequence > event.sequence &&
+    other.actorId === offer.offeredToId,
+  ) ?? null;
+}
+
+function surrenderClause(event: SimEvent, events: SimEvent[] | undefined): string | null {
+  if (!surrenderOfferedThisTick(event)) return null;
+  const claim = claimOfOffer(event, events);
+  if (!claim) return "A surrender was offered.";
+  if (claim.tick === event.tick) return "The surrender was offered and taken on this same tick.";
+  if (claim.tick === event.tick + 1) return "The surrender was taken on the next tick.";
+  return "A surrender was offered.";
+}
+
+/**
+ * A claim that took a surrender offered on this tick or the tick before.
+ * The offer did not sit as a decision. Without that battle in the read,
+ * the line only says the port was claimed.
+ */
+export function settlementClaimedSentence(world: WorldState, event: SimEvent, events?: SimEvent[]): string {
+  const actor = characterName(world, event.actorId, "Someone");
+  const settlement = settlementName(world, event.settlementId, "the port");
+  const offer = [...(events ?? [])].reverse().find((other) => {
+    const surrender = offerTo(other);
+    const offeredTick = surrender?.offeredTick;
+    return other.type === "battle-resolved" &&
+      other.settlementId === event.settlementId &&
+      other.sequence < event.sequence &&
+      surrender?.offeredToId === event.actorId &&
+      typeof offeredTick === "number";
+  });
+  const offeredTick = offer ? offerTo(offer)?.offeredTick : undefined;
+  if (typeof offeredTick === "number" && event.tick - offeredTick <= 1) {
+    const when = event.tick === offeredTick ? "on this same tick" : "on the next tick";
+    return `${actor} claimed ${settlement}. The surrender was offered and taken ${when}, so it was not waiting.`;
+  }
+  return `${actor} claimed ${settlement}.`;
+}
+
+/**
+ * A withheld refusal. The directive stays out. The second sentence is the
+ * captain's public place at the moment the state is read.
+ */
+export function refusedStandingOrderSentence(world: WorldState, event: SimEvent): string {
+  const actor = characterName(world, event.actorId, "Someone");
+  const character = event.actorId ? world.characters[event.actorId] : undefined;
+  if (character?.travel) {
+    const from = settlementName(world, character.travel.fromId, "a port");
+    const to = settlementName(world, character.travel.toId, "a port");
+    return `${actor} refused a standing order. ${actor} is sailing from ${from} to ${to}.`;
+  }
+  if (character?.locationId) {
+    const place = settlementName(world, character.locationId, "a port");
+    return `${actor} refused a standing order. ${actor} is at ${place}.`;
+  }
+  return `${actor} refused a standing order.`;
 }
 
 /** The captor faction on the capture row. A test event with no target falls back to the hold. */
@@ -286,7 +444,7 @@ export function publicFeedSentence(world: WorldState, event: SimEvent): string {
   const at = settlement ? ` at ${settlement}` : "";
   switch (event.type) {
     case "standing-order-refused":
-      return `${actor} refused an order.`;
+      return refusedStandingOrderSentence(world, event);
     case "standing-order-accepted":
       return `${actor} accepted an order.`;
     case "standing-order-deviated":

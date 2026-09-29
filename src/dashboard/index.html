@@ -384,6 +384,7 @@
     function faction(id) { return world.factions.find(function (item) { return item.id === id; }); }
     function settlement(id) { return world.settlements.find(function (item) { return item.id === id; }); }
     function character(id) { return world.characters.find(function (item) { return item.id === id; }); }
+    function shownName(item) { return item.displayName || item.name; }
     function fmt(value, digits) { return value == null ? "—" : Number(value).toFixed(digits == null ? 0 : digits); }
     function rangeText(value, suffix) { return value ? fmt(value.low) + "–" + fmt(value.high) + (suffix || "") : "—"; }
     function toast(message, error) {
@@ -614,7 +615,7 @@
         var x = from.position.x + (to.position.x - from.position.x) * progress;
         var y = from.position.y + (to.position.y - from.position.y) * progress;
         routes.push('<line x1="' + from.position.x + '" y1="' + from.position.y + '" x2="' + to.position.x + '" y2="' + to.position.y + '" stroke="#557b83" stroke-width=".35" stroke-dasharray="1.4 1.2" opacity=".45"/>');
-        ships.push('<button type="button" class="ship" style="left:' + x + "%;top:" + y + '%" title="' + esc(item.name) + '" data-character="' + esc(item.id) + '"></button>');
+        ships.push('<button type="button" class="ship" style="left:' + x + "%;top:" + y + '%" title="' + esc(shownName(item)) + '" data-character="' + esc(item.id) + '"></button>');
       });
       byId("routes").innerHTML = routes.join("");
       byId("ships").innerHTML = ships.join("");
@@ -770,7 +771,7 @@
         marketHtml(item.market) +
         "<h3>Parties present</h3>" +
         (parties.length ? parties.map(function (party) {
-          return '<button class="party-row" type="button" data-party="' + esc(party.id) + '"><span><strong>' + esc(party.name) + "</strong><br><span class=\"subtle\">" + esc(party.archetype) + '</span></span><span>' + (party.partyPower == null ? '<span class="subtle">strength unknown</span>' : fmt(party.partyPower)) + "</span></button>";
+          return '<button class="party-row" type="button" data-party="' + esc(party.id) + '"><span><strong>' + esc(shownName(party)) + "</strong><br><span class=\"subtle\">" + esc(party.archetype) + '</span></span><span>' + (party.partyPower == null ? '<span class="subtle">strength unknown</span>' : fmt(party.partyPower)) + "</span></button>";
         }).join("") : '<div class="empty">' + (intel && intel.exact ? "No named parties are currently here." : "Foreign party positions are not available in this report.") + "</div>") + battleNotice + forecastHtml +
         "<h3>Direct command</h3><div class=\"actions\">" +
           (travelAllowed ? '<button class="action" type="button" data-action="travel" data-target="' + esc(item.id) + '">Sail here' + (item.travelTicks == null ? "" : " — " + item.travelTicks + " ticks (" + fmt(item.travelDays, 1) + " days), passage " + fmt(item.passageCost, 2)) + "</button>" : "") +
@@ -802,7 +803,7 @@
         : cancellableOrder
           ? '<h3>Manage reported order</h3><button class="action danger" id="cancel-order" type="button">Cancel instead of confirming</button>'
           : "";
-      return '<div class="eyebrow">' + (item.controller.kind === "human" ? "Human-controlled character" : "Autonomous character") + '</div><h2>' + esc(item.name) + "</h2>" +
+      return '<div class="eyebrow">' + (item.controller.kind === "human" ? "Human-controlled character" : "Autonomous character") + '</div><h2>' + esc(shownName(item)) + "</h2>" +
         '<div class="subtle">' + esc(item.archetype) + " · " + esc(f ? f.name : "Unaffiliated") + " · " + esc(place) + "</div>" +
         '<div class="stat-grid">' +
           stat("Party power", item.partyPower) +
@@ -882,7 +883,7 @@
         '<button class="action" type="button" data-action="rest">Rest</button>' +
         "</div><h3>Issue standing order</h3>" +
         '<label for="order-recipient">Recipient</label><select id="order-recipient">' +
-        recipients.map(function (item) { return '<option value="' + esc(item.id) + '">' + esc(item.name) + " — " + esc(item.archetype) + "</option>"; }).join("") +
+        recipients.map(function (item) { return '<option value="' + esc(item.id) + '">' + esc(shownName(item)) + " — " + esc(item.archetype) + "</option>"; }).join("") +
         '</select><label for="order-directive">Directive</label><select id="order-directive"><option value="protect">Protect</option><option value="pressure">Pressure faction</option><option value="trade-supplies">Trade supplies</option><option value="explore">Explore</option></select>' +
         '<label for="order-target">Objective</label><select id="order-target"></select>' +
         '<label for="order-priority">Priority</label><input id="order-priority" type="range" min=".1" max="1" step=".05" value=".85">' +
@@ -1031,7 +1032,7 @@
       byId("chat-participants").innerHTML = world.characters.filter(function (item) {
         return item.id !== world.commanderId && world.player.knownCharacterIds.includes(item.id);
       }).map(function (item) {
-        return '<option value="' + esc(item.id) + '">' + esc(item.name) + " — " + esc(item.archetype) + "</option>";
+        return '<option value="' + esc(item.id) + '">' + esc(shownName(item)) + " — " + esc(item.archetype) + "</option>";
       }).join("");
       byId("thread-tabs").innerHTML = conversations.threads.map(function (thread) {
         return '<button class="thread-tab' + (thread.id === selectedThreadId ? " active" : "") + '" type="button" data-thread="' + esc(thread.id) + '">' + esc(thread.title) + "</button>";

@@ -105,7 +105,7 @@ test("a capture names the captor, and an outscore row does not say outscore", ()
   const captureRow = feed.find((row) => row.sequence === 59637);
   assert.equal(battleRow?.payloadWithheld, true);
   assert.equal(battleRow?.data, null);
-  assert.equal(battleRow?.summary, "Pax Ash won at Glassport on a higher score");
+  assert.equal(battleRow?.summary, "Pax Ash won the fight at Glassport on a higher score, after morale gave out.");
   assert.equal(captureRow?.payloadWithheld, true);
   assert.equal(captureRow?.data, null);
   assert.equal(
@@ -407,7 +407,7 @@ test("Mina Vale's capture on seed 2718 names World Government beside the captor 
   assert.equal(capture.tick, 71);
   assert.equal(capture.actorId, "character-15");
   assert.equal(capture.targetId, "world-government");
-  const sentence = "World Government took Mina Vale at Crown Harbor after failed retreat";
+  const sentence = "World Government took Mina Vale at Crown Harbor after failed retreat. 12 troops were taken, power 60.244.";
   const [row] = projectEventFeed(world, mara.id, [capture]);
   assert.equal(row?.payloadWithheld, true);
   assert.equal(row?.data, null);

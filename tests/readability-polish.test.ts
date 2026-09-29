@@ -271,7 +271,7 @@ test("overtaking, passing, and arriving read as sentences, and the kind stays", 
   assert.equal(arriving.arriving, true);
   assert.equal(
     arriving.summary,
-    "Toma Reef is arriving at the same port, Cinder Key to Glassport. Docks at Glassport on this tick. 42 troops, 0 ticks old.",
+    "Toma Reef (World Government) is arriving at the same port, Cinder Key to Glassport. Docks at Glassport on this tick. 42 troops, 0 ticks old.",
   );
 });
 
