@@ -223,9 +223,9 @@ Backfilled from the commit graph on 2026-09-25. **Attribution caveat:** commits 
 - **Agent:** Cursor | **Branch:** `feature/buy-provisions-player-fixes` | **Type:** Docs
 - **Changed** — Open items gains four readability rows copied from the unmerged captivity-debt branch: a witnessed battle-resolved reason (highest priority), several captains each "won at Crown Harbor", a surrender claim with no offer the player saw, and a garrison estimate of 15 against the dock panel's 14 then 12.
 - **Why** — Those rows are not on `main`. The M26, M27, and M28 readability rows already are.
-- **Verified** — Compared with `origin/main` and `origin/feature/captivity-debt-installments`. That branch was not checked out.
+- **Verified** — Compared with `origin/main` and `origin/feature/captivity-debt-installments`. That branch was not checked out. Blind session [buy-provisions-001](docs/playtests/buy-provisions-001.md) on this branch at `499b0aa`, Node v24.21.0, seed 1847, dashboard HTTP only: `PROMOTE`. Beats A–D matched. The four readability rows in this entry were not part of that session.
 - **Left open** — The four items. None are built.
-- **Links** — None.
+- **Links** — [buy-provisions-001](docs/playtests/buy-provisions-001.md) (`PROMOTE`)
 
 ### 2026-09-29 — Player buy-provisions quotes its cost and stops at the depth cap
 - **Agent:** Cursor | **Branch:** `feature/buy-provisions-player-fixes` | **Commits:** `12a7c66`. `8f5b97e` merges `origin/main` at `2eef285` (the captive-intelligence note). | **Type:** Behavior
