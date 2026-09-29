@@ -834,6 +834,68 @@ Answer by number, for example "4: yes" or "4: keep the default." The default is 
 
 **Source:** [Autonomous orders after M29](autonomous-orders-after-m29.md#questions-for-micah) question 7
 
+## Captures under M29
+
+### 81. Spend the capture roll M29 already draws on the senior losing officer standing on the port?
+
+**Default:** Yes. The chance stays 0.04, 0.12, 0.3, or 0.55, the captor is the winner's faction, and the cause is outscore-loss. Captures are 12, 8, and 6, with the first difference at tick 498, 871, or 475.
+
+**If you pick the other way:** The roll would stay discarded, and the senior losing officer standing on the port would not be taken.
+
+**Status:** Default: yes
+
+**Source:** [Captures under M29](captures-under-m29.md#questions-for-micah) question 1
+
+### 82. Capture the port's owner instead?
+
+**Default:** No. On seed 2718 both new prisoners were people who were not on the port.
+
+**If you pick the other way:** The prisoner would be the port's owner. On seed 2718 both of those new prisoners were elsewhere.
+
+**Status:** Default: no
+
+**Source:** [Captures under M29](captures-under-m29.md#questions-for-micah) question 2
+
+### 83. Should the chance be half?
+
+**Default:** No. Half of the dock rule captures 9, 5, and 11, so seed 4096 captures more at half.
+
+**If you pick the other way:** The chance would be half. The miss at tick 475 on seed 4096 leaves a different campaign, and that seed takes more prisoners.
+
+**Status:** Default: no
+
+**Source:** [Captures under M29](captures-under-m29.md#questions-for-micah) question 3
+
+### 84. Should the victory draw a new roll?
+
+**Default:** No. Even a miss moves later luck.
+
+**If you pick the other way:** The victory would draw a fresh roll, and every later draw on that seed would move, including when the new roll captures nobody.
+
+**Status:** Default: no
+
+**Source:** [Captures under M29](captures-under-m29.md#questions-for-micah) question 4
+
+### 85. Seed 4096 never captures Pax or Mara. Is the cover on the other two seeds enough?
+
+**Default:** Yes. Seed 1847 covers Mara with Jun Marrow and Pax with Dax Pike, twice, and seed 2718 covers Mara with Ada Sorn because Iris Stone is already captive.
+
+**If you pick the other way:** Capturing the issuer wherever they stand would cover seed 4096, and it captures Mara six times on seed 1847.
+
+**Status:** Default: yes
+
+**Source:** [Captures under M29](captures-under-m29.md#questions-for-micah) question 5
+
+### 86. With unpaid releases at 11, 4, and 2, should the day's-wage collector be built?
+
+**Default:** No. It stays parked. These debts are not the sixteen it was written against.
+
+**If you pick the other way:** The day's-wage collector would be built on these 11, 4, and 2 unpaid releases.
+
+**Status:** Default: no
+
+**Source:** [Captures under M29](captures-under-m29.md#questions-for-micah) question 6
+
 ## Already settled
 
 The [progress log](../../progress.md) (reconnaissance brief, 2026-09-29) answered reconnaissance questions 1–8. Reconnaissance question 1 is no: a survey or an officer's look stores population, walls, and who was anchored. Reconnaissance question 2 keeps confidence and the original date on that handoff. Reconnaissance questions 3–8 stay put: public sea courses, a live garrison from your other ports, no captives or informants. [Party sightings](party-sightings.md#left-open) repeats those. A foreign price is that dated report, not a live quote ([World simulation](world-simulation.md#player-trade)). An idle player with money still starves if they give no orders ([Port provisions](port-provisions.md#the-idle-commander)). Unpaid ransom is questions 22–29 ([Captivity debts](captivity-debts.md#questions-for-micah)). A landless raid once a town has 8 soldiers, and no troops left behind on the claim, is questions 30–32 ([Portless recovery](portless-recovery.md#questions-for-micah)). A higher score is the attacker's victory when morale is 12 or under, a close fight included and the short retake accepted, rest does not refill the hold, and the capture die is still rolled, is questions 33–37 ([Battle morale](battle-morale.md#questions-for-micah)). Someone else covers the seat while the commander is in prison and hands it back on release, the cover is the highest leadership plus loyalty with the lower id winning a tie and trust is not used, you cannot name someone else or keep the cover after release, everyone including a rival sees who holds the seat, and if that cover is captured the next person steps up for the whole 14 days, is questions 38–42 ([Political layer](political-layer.md#questions-for-micah)). A character released still owing ransom loses 0.04 loyalty once, a paid release changes nothing, orders, plans and work keep using the starting loyalty, and you see loyalty only for your own faction, is questions 43–45 ([Loyalty drift](loyalty-drift.md#questions-for-micah)). Battered-port surrender, fed garrisons, and refusing an unpaid voyage are built. The first hour is a test, not a choice. The one-click food buy is a known bug queued for engineering: the button will show the cost, apply the share-of-stock cap, and its refusal text will be fixed ([World simulation](world-simulation.md#player-trade); [progress log](../../progress.md#open-items)).
