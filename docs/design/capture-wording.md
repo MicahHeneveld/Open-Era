@@ -1,8 +1,8 @@
 # Capture wording
 
-**Status: Open.** Wording only. No rule was left in the tree. The wording runs were taken on `8db4706686c417645342d5dacc0838b101672e59` (PR #61). This branch was then merged with `ee9eb6ec145fa0befc0d6376dd28470b64bc5501` (PR #62, the loyalty scar). M29.1, the dock capture on an outscore win, and M30, the acting commander while captive, are built. [Outscore dock capture 001](../playtests/outscore-dock-capture-001.md) and [command seat 001](../playtests/commander-seat-001.md) are the playtests that flagged the sentences.
+**Status: Open.** Wording only. No rule was left in the tree. The wording runs in this note were measured on `ee9eb6ec145fa0befc0d6376dd28470b64bc5501` (PR #62, the loyalty scar). M29.1, the dock capture on an outscore win, and M30, the acting commander while captive, are built. [Outscore dock capture 001](../playtests/outscore-dock-capture-001.md) and [command seat 001](../playtests/commander-seat-001.md) flagged the sentences in sections 1–3. [Loyalty scar 001](../playtests/loyalty-scar-001.md) flagged sections 4–9.
 
-Runs are `createPrototypeWorld` plus `runTick`, seeds 1847 / 2718 / 4096, Node v24.21.0, ICU 78.3. Tick numbers on events are the `tick` field. A figure at tick 72 or tick 1200 is the world after that many `runTick` calls. `npm test` on the wording tree passed, 223 tests. `npm test` on this merged tree passes, 231 tests. The committed 72-tick fixture reproduced on both, including the recovery replay of 572 events:
+Runs are `createPrototypeWorld` plus `runTick`, seeds 1847 / 2718 / 4096, Node v24.21.0, ICU 78.3. Tick numbers on events are the `tick` field. A figure at tick 72 or tick 1200 is the world after that many `runTick` calls. `npm test` on this tree passes, 231 tests. The committed 72-tick fixture reproduced, including the recovery replay of 572 events:
 
 | Seed | State hash | Events |
 | ---: | --- | ---: |
@@ -10,13 +10,21 @@ Runs are `createPrototypeWorld` plus `runTick`, seeds 1847 / 2718 / 4096, Node v
 | 2718 | `bd7d8cc44d5fa21022ecb8f8086e13dfbb9475eb025b5ae53f87e2991f90035c` | 8513 |
 | 4096 | `20975bf480e5aa11eeafe1ce39c36cf5ba0fa8e2d5de2bb5887a35d7b3aecc9f` | 8031 |
 
-The same three seeds at 1200 ticks, unmodified, are the comparison below. That table, and every patched-read match under it, was measured on `8db4706` and was not remeasured after the loyalty-scar merge. The scar stores `loyaltyAdjustment` on a character after an unpaid release, so a later 1200-tick state hash can differ from these rows. The 72-tick fixture on the merged tree is the table above. `stateHash` is the canonical world. It does not include the event log and it does not include a dashboard sentence. The event-body hash in the tables is sha256 of the canonical JSON of each event's sequence, tick, type, actor, target, settlement, and data. The golden fixture does not store that hash. It stores the state hash and the event count.
+The same three seeds at 1200 ticks, unmodified, are the comparison below. Measured on this tree. The event counts and the event-body hashes are the same as on `8db4706`. The scar stores `loyaltyAdjustment` on the character and does not write the event log, so the log at 72 and at 1200 matches that earlier tree. The state hashes moved. `stateHash` is the canonical world. It does not include the event log and it does not include a dashboard sentence. The event-body hash is sha256 of the canonical JSON of the events, each as sequence, tick, type, `actorId`, `targetId`, `settlementId`, and data, with a missing id stored as null. The golden fixture does not store that hash. It stores the state hash and the event count.
 
 | Seed | State hash | Events | Event-body hash |
 | ---: | --- | ---: | --- |
-| 1847 | `d106abfca8fcfabf7e821cad1059fdb50acf84661694fa06bcc07e91ae17ba45` | 164313 | `fa487dcbe7af52ed4128c0b27560c3b307e4ac405df975feaa6a4acd8fd5ed8a` |
-| 2718 | `2d56e9eaf2dbb889884ad7b4465fc8043a654e42f1cf0abf5ad301765eea6001` | 165434 | `6673109c20b943ecd77e3ab76ea7bf73a23cdd9b32e4e1c0094571ec3d8fffe5` |
-| 4096 | `92c907be75f142774ad022bf642ed3f22f7301793e49d9c5be11f607d9d2dc5e` | 164691 | `e7bbe6cc25a8be6f1e5e288ab5912c6b72f45f8b85e8d6a24ad20d7b3d3ad35b` |
+| 1847 | `95bd71dc877f4e12c77ba2f07a2f10f8e076fc32deaf997dd4cf5e4fa7d011b5` | 164313 | `fa487dcbe7af52ed4128c0b27560c3b307e4ac405df975feaa6a4acd8fd5ed8a` |
+| 2718 | `55d48cbbdeb6e562ca4002d6e22a713a9977175e06e0383b36a3af015e53c57d` | 165434 | `6673109c20b943ecd77e3ab76ea7bf73a23cdd9b32e4e1c0094571ec3d8fffe5` |
+| 4096 | `f5355c1a254bd3df4924fd784da645b770cf01bafe6d73d8d9c99a82446715df` | 164691 | `e7bbe6cc25a8be6f1e5e288ab5912c6b72f45f8b85e8d6a24ad20d7b3d3ad35b` |
+
+The same event-body hash at 72 ticks, not stored in the fixture:
+
+| Seed | Event-body hash at 72 |
+| ---: | --- |
+| 1847 | `de2c5ee6b08fc9518fd2f76557c4626c816ad264c5dda8e3e753e8437f60ce00` |
+| 2718 | `495f638b16b30c14b8e04a5081e6323ec89b15d886070ac4b3d3ee6f6e93cff6` |
+| 4096 | `6537378b713f4539f69d165fba67af808d1e78c2c439a8e2145e2c8f936dd186` |
 
 The sentences are built when the state is read.
 
@@ -26,7 +34,7 @@ The sentences are built when the state is read.
 - `checkInBriefing` writes the captivity card. `dashboardState` returns the stored player, so `displayName` is the string on that record. `projectFactions` publishes `commanderId` and `actingCommanderId` and no sentence.
 - `attemptCapture` stores the prisoner as `actorId` and the captor faction as `targetId`. `applyEvent` puts the captivity on that actor. The roles are how the world is updated.
 
-The proposal below was patched in on `8db4706`, measured, and removed. With that patch applied, `npm test` still passed, 223 tests. The 72-tick rows and the 1200-tick rows above matched, including the event-body hashes. Line numbers below are the merged tree.
+Sections 1–3 were patched in on this tree, measured, and removed. With that patch applied, `npm test` still passed, 231 tests. The 72-tick rows and the 1200-tick rows above matched, including both event-body tables. The sentences quoted under those sections were read again on this tree. They match the earlier read: the event log did not move. Line numbers below are this tree. Seed 4096 at state tick 476 is now `132d7ca24e69aee0369bde71555a4d1a4bc975ddd49409fccba4ff0258fee9c9`, with 59717 events. Glassport is still `world-government`. Calling `dashboardState` on that world left the hash in place.
 
 ## 1. Name the captor
 
@@ -80,7 +88,7 @@ Chronicle line from the same patched `writeReports`:
 
 This is hash-neutral. The patched read matched every state hash, event count, and event-body hash in the two tables.
 
-The ids on the row are a separate question. `projectEvent` still copies `actorId` and `targetId`. A client that ignores the summary and reads the ids still sees the prisoner acting on the captor faction. Swapping those roles is not projection-only. `applyEvent` puts the captivity on `world.characters[event.actorId]`. The harness pointed `actorId` at the captor faction and `targetId` at the prisoner, and taught the reducer to update the prisoner. The world that came out matched the tables above, at 72 ticks and at 1200. The event log did not. The first capture on seed 1847, tick 34, was stored as `actorId` `free-tide`, `targetId` `character-04`.
+The ids on the row are a separate question. `projectEvent` still copies `actorId` and `targetId`. A client that ignores the summary and reads the ids still sees the prisoner acting on the captor faction. Swapping those roles is not projection-only. `applyEvent` puts the captivity on `world.characters[event.actorId]`. The harness pointed `actorId` at the captor faction and `targetId` at the prisoner, and taught the reducer to update the prisoner. The world that came out matched the tables above, at 72 ticks and at 1200. The event log did not. That swap was measured on `8db4706`. This tree has the same event log, so the event-body hashes below still describe it, and the state hash stays on the table at the top. The first capture on seed 1847, tick 34, was stored as `actorId` `free-tide`, `targetId` `character-04`.
 
 | Seed | Ticks | State hash | Events | Event-body hash |
 | ---: | ---: | --- | ---: | --- |
@@ -129,7 +137,7 @@ This is hash-neutral on the same grounds as section 1. Renaming the stored cause
 | 2718 | `f7494718a715008307ed4de11a3f608a7af5b1df9722009df09be4f6296b8fad` |
 | 4096 | `ccc3a8c3c51c079f1b62882a73e4fab66ed68de35954f01d974e5a8a6d04aa45` |
 
-While the prisoner is still held, the state hash moves. Seed 4096 at state tick 476 is `48cfec701791dc951f19d5516c8d3fe46450ac846f73fe13fd3e838f31db2bf9` with cause `outscore-loss`, and `d0dee816e4ef464f892fcfe9bd68f419acea8203b9eba5ae1695c7c6babc7458` with cause `dock-capture`. Both runs had 59717 events. The 72-tick logs from this run contain no `outscore-loss`: the causes are `failed-retreat` on 1847 and 2718, and `failed-retreat` and `major-defeat` on 4096. The first `outscore-loss` this run printed is Rook's, event tick 475. `npm test` on the rename: 218 passed, 5 failed, all assertions that the cause is `outscore-loss`. The golden test passed. The proposal leaves the stored code and changes the sentence.
+While the prisoner is still held, the state hash moves. On this tree, seed 4096 at state tick 476 is `132d7ca24e69aee0369bde71555a4d1a4bc975ddd49409fccba4ff0258fee9c9` with cause `outscore-loss`, and 59717 events. The rename was not re-run here. On `8db4706` the same checkpoint moved from `48cfec701791dc951f19d5516c8d3fe46450ac846f73fe13fd3e838f31db2bf9` to `d0dee816e4ef464f892fcfe9bd68f419acea8203b9eba5ae1695c7c6babc7458` when the cause stored as `dock-capture`. The event log is the same log, so the event-body hashes in the table above still describe that rename. The 72-tick logs from this run contain no `outscore-loss`: the causes are `failed-retreat` on 1847 and 2718, and `failed-retreat` and `major-defeat` on 4096. The first `outscore-loss` this run printed is Rook's, event tick 475. `npm test` on the rename, on `8db4706`: 218 passed, 5 failed, all assertions that the cause is `outscore-loss`. The golden test passed. The proposal leaves the stored code and changes the sentence.
 
 ## 3. The seat, the escape line, and the display name
 
@@ -156,11 +164,11 @@ Proposed, from the patched read of the seat play and of seed 1847 at tick 960:
 - Chronicle of that release: `- Day 19.5: **Mara Vane** was released from **Cinder Key** under mandatory terms: 103 paid and 33.58 recorded as debt. **Mara Vane** holds the seat of **World Government** again.`
 - `player.displayName` on the view: `Mara Vane`. The stored field stayed `Prototype Commander`.
 
-`projectFactions` gains `seatSummary`, built from `actingCommanderId`, `commandHolderId`, and the two names. `checkInBriefing` reads `displayedRisk` into the escape sentence. `eventSummary` and `eventStory` append the seat sentence on `captivity-released` and `captivity-escaped` when the freed character is still `commandHolderId`. `dashboardState` returns a copy of the player whose `displayName` is `commander.name`. The world is not written. Calling `dashboardState` on the tick-476 world left its state hash at `48cfec701791dc951f19d5516c8d3fe46450ac846f73fe13fd3e838f31db2bf9`.
+`projectFactions` gains `seatSummary`, built from `actingCommanderId`, `commandHolderId`, and the two names. `checkInBriefing` reads `displayedRisk` into the escape sentence. `eventSummary` and `eventStory` append the seat sentence on `captivity-released` and `captivity-escaped` when the freed character is still `commandHolderId`. `dashboardState` returns a copy of the player whose `displayName` is `commander.name`. The world is not written. Calling `dashboardState` on the tick-476 world left its state hash at `132d7ca24e69aee0369bde71555a4d1a4bc975ddd49409fccba4ff0258fee9c9`.
 
 The release line does not name Iris. By the time it is read, `actingCommanderId` has been deleted. The appointment line is what names her, and it is on the faction row for as long as she covers.
 
-Writing the cover onto the capture event would let a later release name her. The harness set `event.data.coverId` inside the capture reducer, not on the captivity object, and restored it. State hashes and event counts matched at 72 and at 1200. `npm test` passed, 223 tests. The event-body hash moved at tick 72 anyway, because every capture gained the field and the covers inside 72 ticks are null:
+Writing the cover onto the capture event would let a later release name her. The harness set `event.data.coverId` inside the capture reducer, not on the captivity object, and restored it. That write was measured on `8db4706`. This tree has the same event log, so the event-body hashes below still describe it, and the state hash stays on the table at the top. `npm test` on that write passed, 223 tests, the suite on `8db4706`. The event-body hash moved at tick 72 anyway, because every capture gained the field and the covers inside 72 ticks are null:
 
 | Seed | Event-body hash at 72 |
 | ---: | --- |
@@ -169,6 +177,123 @@ Writing the cover onto the capture event would let a later release name her. The
 | 4096 | `f9b3cec04c712105efbfa0567754a7ec20fd8497cb8a16cc58d0dcdd2592357a` |
 
 At 1200 the field was set on three captures on seed 1847 (Mara Vane at tick 594, cover `character-05` Jun Marrow; Pax Ash at 957 and at 1058, cover `character-20` Dax Pike) and on one on seed 2718 (Mara Vane at tick 1034, cover `character-13` Ada Sorn). Seed 4096 set none. The proposal does not write the field. The ending line names the holder who returns.
+
+## 4. Say that loyalty fell, and which figure the seat reads
+
+No release line says loyalty fell. `eventSummary` for `captivity-released`, `src/dashboard/view-model.ts` lines 102–104:
+
+```text
+`${actor} was released from ${settlement}: ${terms.moneyPaid} paid and ${terms.debtValue} recorded as debt`
+```
+
+The card publishes two loyalty figures and does not say which one the seat sort reads. `projectCharacter` in `src/dashboard/visibility.ts` lines 292 and 298–300 puts `personality` on the commander's own row and `loyalty` on every own-faction row. `loyalty` is `round(personality.loyalty + (loyaltyAdjustment ?? 0), 3)`. `coverLoyalty` in `src/sim/state.ts` lines 205–207 is the unrounded sum, and `commandScore` at lines 209–211 is leadership plus that sum times 50. `applyUnpaidReleaseScar` (lines 225–235) writes `loyaltyAdjustment` when `terms.debtValue > 0`. It does not write `personality.loyalty`, and the captivity test asserts the release payload has no `loyaltyAdjustment`.
+
+Seed 1847, the loyalty-scar session. Sequence 13680, event tick 118, state tick 119. Sable Morrow, `payloadWithheld` true. Feed: `Sable Morrow: captivity released`. Briefing `event:13680`: `Sable Morrow was released from Cinder Key: 13.4 paid and 103.21 recorded as debt`. Her card `loyalty` is 0.537. It was 0.577 at tick 0. Sequence 74786, Jun Marrow, briefing `Jun Marrow was released from Glassport: 133.37 paid and 317.15 recorded as debt`, card `loyalty` 0.69 from 0.73. Sequence 74787, Lio Crow, debt 0, briefing `Lio Crow was released from Glassport: 126.63 paid and 0 recorded as debt`, card `loyalty` still 0.666. Sequence 88540, state tick 679, Mara's own release is not withheld. Feed and briefing: `Mara Vane was released from Crown Harbor: 108 paid and 72.25 recorded as debt`. Her card shows `loyalty` 0.768 beside `personality.loyalty` `0.807927391717676`. The stored adjustment on that character is `-0.04`.
+
+Proposed, from the patched read. The line gains `Loyalty fell` only when `debtValue > 0`. Lio's debt is 0, so his line does not change.
+
+- Sable, briefing and feed: `Sable Morrow was released from Cinder Key: 13.4 paid and 103.21 recorded as debt. Loyalty fell`
+- Jun, briefing and feed: `Jun Marrow was released from Glassport: 133.37 paid and 317.15 recorded as debt. Loyalty fell`
+- Lio, briefing and feed: `Lio Crow was released from Glassport: 126.63 paid and 0 recorded as debt`
+- Mara, briefing and feed: `Mara Vane was released from Crown Harbor: 108 paid and 72.25 recorded as debt. Loyalty fell. Mara Vane holds the seat of World Government again`
+- Mara's card, a projected `loyaltyNote` on her own row: `The seat reads 0.767927391717676, personality loyalty 0.807927391717676 plus the stored adjustment -0.04. The loyalty figure on this card rounds that to 0.768. personality.loyalty is the seed and is not the figure the seat reads.`
+- The same field before any scar, state tick 119, still on her row: `The seat reads 0.807927391717676, personality loyalty with no stored adjustment. The loyalty figure on this card rounds that to 0.808.`
+
+The seat reads the unrounded sum. The `loyalty` figure is that sum rounded to 3 decimals. A mate's card does not grow a note: `personality` stays null, and `loyalty` is already the rounded effective value. `payloadWithheld` on Sable and Jun stayed true, and `data` stayed null. Mara's own payload stayed visible.
+
+`eventSummary` and `eventStory` append the clause. `projectCharacter` adds `loyaltyNote` on the commander's own card. Nothing stored and no event field changes.
+
+This is hash-neutral. With the patch applied, the state hash, the event count, and the event-body hash matched both tables, at 72 and at 1200, on all three seeds. `npm test` still passed, 231 tests.
+
+Putting the size on the historical line is not projection-only. The event does not carry the before and after, and the current adjustment is the scar so far, not the drop from one old release. The harness wrote `loyaltyBefore` and `loyaltyAfter` onto the release event inside `applyUnpaidReleaseScar` and restored them. A paid release did not gain the fields. Sequence 13680 stored 0.577 and 0.537. Sequence 74786 stored 0.73 and 0.69. Sequence 88540 stored 0.808 and 0.768. Sequence 74787, debt 0, stored neither. State hashes and event counts matched at 72 and at 1200. The 72-tick event-body hashes matched: no unpaid release has happened yet. The 1200-tick event-body hashes moved:
+
+| Seed | Event-body hash at 1200 |
+| ---: | --- |
+| 1847 | `9a18881caa38f3f804ccde9f15886f8820e9c34db78fd210c2c86560e942a338` |
+| 2718 | `093c485c851c4363d1d7e447148f179e6bfb51e3066b23babd2c5473196b0155` |
+| 4096 | `ac84ec88c371a24d554a8f084ce20f571c9b382544dada4da7e2fe170883922c` |
+
+`npm test` on that write still passed, 231 tests. The golden fixture stores the state hash and the event count, which did not move. The proposal does not write the fields. The line says loyalty fell, and the card says which figure the seat reads.
+
+## 5. Put the payment and the debt on the release feed
+
+A withheld feed row is the actor's name, a colon, and the event type. `projectEvent` in `src/dashboard/visibility.ts` line 437:
+
+```text
+`${actor}: ${event.type.replaceAll("-", " ")}`
+```
+
+The briefing already uses the release template in section 4, which names the payment and the debt. The feed uses it only when the payload is visible.
+
+Seed 1847. Sequence 13680, feed `Sable Morrow: captivity released`, `data` null, `payloadWithheld` true. The briefing item is `Sable Morrow was released from Cinder Key: 13.4 paid and 103.21 recorded as debt`. Sequence 74786, feed `Jun Marrow: captivity released`. Sequence 74787, feed `Lio Crow: captivity released`. Sequence 88540 is Mara's own release, so the feed already matches the briefing and the payload is present: `moneyPaid` 108, `debtValue` 72.25.
+
+Proposed, from the patched read. The feed uses the briefing sentence even when `payloadWithheld` stays true. `data` stays null.
+
+- `Sable Morrow was released from Cinder Key: 13.4 paid and 103.21 recorded as debt. Loyalty fell`
+- `Jun Marrow was released from Glassport: 133.37 paid and 317.15 recorded as debt. Loyalty fell`
+- `Lio Crow was released from Glassport: 126.63 paid and 0 recorded as debt`
+
+`projectEvent` keeps the rich summary for `captivity-released`. The same patch as section 4. Hash-neutral on that measurement. 231 tests.
+
+## 6. The battle feed says who won
+
+The battle template, `src/dashboard/view-model.ts` lines 88–89, is the actor won or lost at the settlement. The feed fallback is the same line as section 5, so a withheld battle is `Name: battle resolved`.
+
+Seed 1847, state tick 595, sequence 76573. Feed: `Pax Ash: battle resolved`, `payloadWithheld` true, `data` null. Briefing `event:76573`: `Pax Ash won at Crown Harbor`. The payload, read from the event, is `outcome` `attacker-victory`, `attackerTroops` 214, `attackerHealth` 96.401, `attackerMorale` 3, `defenderGarrison` 12, `attackerScore` 436.104, `defenderScore` 47.267. Morale 3 is the case section 2 already marks `on a higher score`. The same shape on the Glassport fight, sequence 59635, is still `Pax Ash: battle resolved` on the feed.
+
+Proposed, from the patched read. The feed uses the briefing sentence. `payloadWithheld` stays true. `data` stays null.
+
+- Crown Harbor, sequence 76573: `Pax Ash won at Crown Harbor on a higher score`
+- Glassport, sequence 59635: `Pax Ash won at Glassport on a higher score`
+
+`projectEvent` keeps the rich summary for `battle-resolved`. The score clause is the one in section 2, so a battle the payload does not rule out of a standing win still says `won at`. Hash-neutral on the same measurement as sections 4 and 5. 231 tests.
+
+## 7. At morale 0 the starvation line still quotes a morale cost
+
+The shortage sentence, `src/dashboard/view-model.ts` lines 367–378, always quotes both rates:
+
+```text
+`health ${runway.shortageHealthPerTick} and morale ${runway.shortageMoralePerTick} per tick`
+```
+
+`shortageMoralePerTick` is `round(shortage * 2.4, 3)` (`src/sim/engine.ts` inside `provisionRunway`). Upkeep then does `clamp(morale - shortage * 2.4 - travel + fed, 0, 100)` at line 533. At 0 the subtraction does not move the stored morale.
+
+Seed 1847, state tick 595. Mara's morale is 0 and her health is 1. The briefing line is `The hold is empty and 0.256 provisions per tick cannot be found. That costs health 0.205 and morale 0.614 per tick. Morale gains nothing while the shortage lasts, so it will not recover on its own. No market you could still reach sells provisions.` The same morale cost is on the state tick 679 line, and that one ends `Verdant Cay is 3 ticks by report away — out of reach, which is short by 3 ticks.` 0.614 is `round(0.256 * 2.4, 3)`. The upkeep on sequence 88541 stores `shortage` 0.256 and `morale` 0. At state tick 119 her morale is 17.397, and that line still quotes a morale cost, `morale 1.382 per tick`, because the figure is not 0 yet.
+
+Proposed, from the patched read, only when `commander.morale` is already at or below 0. The health cost stays. The recovery sentence stays.
+
+- State tick 595: `The hold is empty and 0.256 provisions per tick cannot be found. That costs health 0.205 per tick. Morale is already 0, so the shortage does not lower it. Morale gains nothing while the shortage lasts, so it will not recover on its own. No market you could still reach sells provisions.`
+- State tick 679: `The hold is empty and 0.256 provisions per tick cannot be found. That costs health 0.205 per tick. Morale is already 0, so the shortage does not lower it. Morale gains nothing while the shortage lasts, so it will not recover on its own. Verdant Cay is 3 ticks by report away — out of reach, which is short by 3 ticks.`
+
+`checkInBriefing` changes. The runway numbers are not rewritten. Hash-neutral on the same measurement. 231 tests.
+
+## 8. attentionCount is not the number of lines
+
+`checkInBriefing` returns `attentionCount: attention.length` at `src/dashboard/view-model.ts` line 586. The comment above it says the count is the action and warning items, because every one of them is returned. `items` is that list plus the info rows that fit. The info budget is `max(0, 10 - attention.length)` at line 567. `omittedInfoCount` is the info rows that did not fit. `tests/own-party.test.ts` lines 266–271 assert `attentionCount` equals the action and warning items, not `items.length`. The panel title in `src/dashboard/index.html` lines 940–941 is `Check-in · N need attention`, and the next block draws every item.
+
+Seed 1847, state tick 119. `attentionCount` 4, `omittedInfoCount` 0, and the list has 6 lines: 1 action (`The party is starving`), 3 warnings (two stale reports and Sable's release), 2 info (Pax claimed Cinder Key, Iris claimed Glassport). State tick 595: `attentionCount` 7, `omittedInfoCount` 1, and the list has 10 lines. The 7 are 2 actions (the captivity card and starvation) and 5 warnings (two stale reports, Mara's capture, Lio's release, Jun's release). The 3 info lines are Pax's battle, Lio's returning troops, and Jun's grouped troop return. One further info row is held back. State tick 679: `attentionCount` 4 and the list has 4 lines. State tick 0: both are 0.
+
+`attentionCount` is the right count of lines that need a decision. The list length is the right count of lines drawn. The 4 and the 7 are the decisions. The extra lines are background info, which the title does not mention.
+
+Proposed, from the patched read. `attentionCount` stays the decision count. The briefing gains `shownCount`, the length of `items`, and `attentionLabel`, which the title uses.
+
+- State tick 119: `Check-in · 4 need attention, and 2 background lines are listed with them.` `shownCount` 6.
+- State tick 595: `Check-in · 7 need attention, and 3 background lines are listed with them.` `shownCount` 10. The omitted line stays `1 older background report(s) not shown.`
+- State tick 679: `Check-in · 4 need attention`. `shownCount` 4.
+
+`checkInBriefing` and the title in `index.html` change. Setting `attentionCount` to `items.length` would still leave the state hash, the event count, and the event-body hash where they are, and it would fail the own-party assertion that the count is the action and warning rows. That variant was not patched. The proposal keeps the count and names the extra lines. Hash-neutral. 231 tests.
+
+## 9. Pax's leadership leaves the card
+
+`projectCharacter` sets `skills` from `capabilityExact` (`src/dashboard/visibility.ts` line 291). That flag is false only on the `distant` tier (`characterIntelligence`, lines 113–120). A rival is distant unless `isDirectlyObserved` (lines 52–66) puts him on the co-located tier: same location, neither party travelling, or standing in a settlement the commander's faction holds.
+
+Seed 1847, state tick 595. Mara is held at Crown Harbor. Pax Ash is at `crown-harbor`, `captivity` null, `skills.leadership` 75 on the card and 75 on the character. The tier is `co-located`, so the card shows the skill. State tick 679. Mara's `locationId` is null and her travel is `verdant-cay` with `remainingTicks` 3. Pax is still at `crown-harbor`, `captivity` still null, and the character's `skills.leadership` is still 75. The card's `skills` is null. The tier is `distant`, source `reputation`, `capabilityExact` false. The number did not leave the character. The view hid it because he is no longer where Mara can see him, and he is not in her faction. It is not captivity.
+
+Proposed, from the patched read, on every card whose skills are withheld. At state tick 595 the field is null, because the 75 is on the card. At state tick 679 Pax's card carries:
+
+`Pax Ash's leadership is withheld on this card. The reading is distant (reputation), so skills stay off the card.`
+
+The sentence does not include 75. `projectCharacter` adds `skillsNote`. The stored skill is not written. Hash-neutral on the same measurement. 231 tests.
 
 ## Questions for Micah
 
