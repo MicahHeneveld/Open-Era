@@ -4,6 +4,10 @@
 
 Checked on `origin/main` at `149d94209d3267cd069b0fe9ce6c7e3927ebe491`, which contains `1cdf09c`. Node v24.21.0, ICU 78.3. `npm test` passed, 242 tests. The 72-tick fixture passed: `cb04ba5d392d8b1c868cc97e54cb21b21ec171edd546bb70d0d7aba86cc69c11` / `bd7d8cc44d5fa21022ecb8f8086e13dfbb9475eb025b5ae53f87e2991f90035c` / `20975bf480e5aa11eeafe1ce39c36cf5ba0fa8e2d5de2bb5887a35d7b3aecc9f`, with 8301 / 8513 / 8031 events. Recovery on seed 1847, split at 47, replayed 572. No `captivity-released` falls inside those 72 ticks. The first releases are event tick 118 (Sable Morrow, 1847), 155 (Mina Vale, 2718), and 96 (Sable Morrow, 4096). Mina is already captive at tick 72, captured at event tick 71, sequence 8402.
 
+## Decision
+
+Decision: option (b), deriving the release record in the reducer (`applyEvent`) at apply time, from the world still holding the prisoner. This keeps the spec's "no new event" line literally (no new event type, no new payload field) and leaves the event-log bytes and golden hashes unchanged. Option (a), a `releaseSighting` payload field on `captivity-released`, remains the fallback if (b) cannot match recovery. The Sable (tick 119, snapshot 114) and Mina (from the tick-72 snapshot) split cases are the recovery tests.
+
 ## The failure
 
 `stateHash` is sha256 of `canonicalJson(WorldState)`. The event log is counted, not hashed. Payloads live in `data_json`. `WorldStore.recover` loads the latest snapshot and applies later events through `applyEvent` only. A snapshot is written when `world.tick` is a multiple of `ticksPerDay` (6), or after 5,000 events.
@@ -44,6 +48,6 @@ The beside-`emit` write is the failure above. It holds when the latest snapshot 
 
 ## Recommendation
 
-Use (a). This event is already what makes the release replayable, and the prison record is one more fact from the same moment. If the payload must stay byte-for-byte as it is, use the in-reducer derivation in (b): it also recovered, and it left the fixture and the event-array hash in place. Leave the record off a live-only write.
+Superseded by the Decision above. The earlier recommendation was to use (a). This event is already what makes the release replayable, and the prison record is one more fact from the same moment. If the payload must stay byte-for-byte as it is, use the in-reducer derivation in (b): it also recovered, and it left the fixture and the event-array hash in place. Leave the record off a live-only write.
 
-**Question.** Does "no new event" allow a `releaseSighting` field on the existing `captivity-released` event, or must that payload stay as it is?
+**Question.** No longer needed. The earlier question was whether "no new event" allows a `releaseSighting` field on the existing `captivity-released` event, or whether that payload must stay as it is.
