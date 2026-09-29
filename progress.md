@@ -95,6 +95,8 @@ Backfilled from the commit graph on 2026-09-25. **Attribution caveat:** commits 
 ### 2026-09-29 — M27: Close an unanswered completion report
 - **Agent:** Open Era Engineer (Cursor cloud agent) | **Branch:** `feature/confirm-unanswered-orders` | **Playtest:** pending, [order-confirmation-001](docs/playtests/order-confirmation-001.md)
 - A free autonomous issuer confirms a completion on the next tick. An idle human, a captive issuer, or a missing issuer waits one day, then the order closes as silent. The holder's relationship toward the issuer takes the victory deltas, except on a pressure order. Golden hashes were regenerated. Tick-72 counts are 8301 / 8516 / 8031. Recovery stays 572. An at-sea contract refusal no longer carries a placeholder score of 0; that change did not move the hashes.
+- Verified — Blind session [order-confirmation-001](docs/playtests/order-confirmation-001.md) on seed 1847: `PROMOTE`. The three promotion readings matched the plan.
+- Links    — [order-confirmation-001](docs/playtests/order-confirmation-001.md) `PROMOTE`
 
 ### 2026-09-29 — M26: Offer a paid provisions delivery
 - **Agent:** Open Era Engineer (Cursor cloud agent) | **Branch:** `feature/offer-contract` | **Playtest:** [offer-contract-001](docs/playtests/offer-contract-001.md) `PROMOTE`. The sailed haul is [offer-contract-002](docs/playtests/offer-contract-002.md) `PROMOTE`
