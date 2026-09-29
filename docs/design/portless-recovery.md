@@ -269,6 +269,70 @@ Seed 2718, same ambition, stopped after tick 40, is the pile-on check. Cinder Ke
 2. **The town comes back with the soldiers the fight left. Should the captain also leave some of their own troops there?** Default: no. On these runs the fight left 3 to 6, never zero. Leaving up to 10 more, and never dropping the captain below 25, pushes a town of 6 past 15. The town is then legal to raid again, and on these runs it was often lost within a few ticks.
 3. **Is 8 the right number of soldiers for a faction with no port?** Default: 8. At 5 the return on the three losses above is one tick, which is the no-floor failure without the empty town. At 8 a town already that strong still falls the same day, and a lost fight can drop a town back under 8. Seed 1847 is still without a port at tick 1200 for that reason. A higher line was not measured.
 
+## Seed 1847 late stretch under floor 8
+
+The floor of 8 was patched into `buildCandidates` locally and taken back out. Same runner as the appendix: `createPrototypeWorld` plus `runTick`, no commands, seed 1847, 1200 ticks, Node v24.21.0, ICU 78.3. The landless stretches are 77–80 (3), 334–364 (30), 498–501 (3), and 1129 onward (71). That is the row in Measured alternatives. Through tick 72 the hash and the count stay on the fixture, `d7eb02eb…`, 8275 events.
+
+This stretch is not the wait for a closed gate. The gate opens, the captains take it, and the fights lose. Crown Harbor is legal the whole time and is a separate absence.
+
+Tick 1128 is an immediate victory by Ada Sorn (`character-13`, World Government) on Glassport, the last Free Tide port: attacker score 111.68, defender 44.277, one phase, garrison left 6, stability 41.05, surrender offered to her. She claims it on tick 1129 at garrison 6. That claim is the start of the stretch. Cinder Key is already World Government. Crown Harbor's end state that tick is garrison 12.
+
+### Raids on Cinder Key
+
+One raid in the ticks just before the stretch, then four during it. All five are major battles (`battle-started`, three phases available) that end after phase 1. Each phase is an attacker advantage on the roll. Each battle resolves as a defender victory. Surrender is not offered. Health stays in the high 90s, and the attackers still have hundreds of troops, so the fight is not ending on health or on an empty party.
+
+| Tick | Attacker | Troops | Garrison | Power / defense | Scores | Phase morale | Garrison after |
+| ---: | --- | ---: | ---: | --- | --- | ---: | ---: |
+| 1085 | Pax Ash | 313 | 15 |  | 660.739 / 34.303 | 3 | 12 |
+| 1129 | Mina Vale | 312 | 13 | 294.681 / 27.88 | 350.452 / 27.146 | 3 | 10 |
+| 1129 | Corin Hale | 405 | 10 | 525.242 / 24.4 | 570.495 / 24.558 | 3 | 8 |
+| 1129 | Esme Dusk | 286 | 8 | 334.496 / 22.08 | 329.083 / 26.28 | 3 | 6 |
+| 1178 | Esme Dusk | 283 | 8 | 330.622 / 22.08 | 389.307 / 22.555 | 3.04 | 6 |
+
+Pax's raid is tick 1085, while Free Tide still holds Glassport, so the ordinary gate of 15 is the one that opened. That start line has troops and garrison; the scores are on the resolution. He is captive at Cinder Key when the stretch starts, and he is released on tick 1169. Mina and Corin are captured on their tick-1129 defeats and are still captive at tick 1199. Esme withdraws to Verdant Cay both times. Stability after the tick-1129 fights is 56.6, then 52.6, then 48.6. After tick 1178 it is 46.07.
+
+The loss is the major-battle morale test, not the garrison comparison. `resolveBattlePhase` adds 3 morale on an attacker advantage. These captains enter at morale 0, or 0.04 for Esme's second raid, so the phase ends at 3 or 3.04. A major battle ends when morale is at most 12, and the attacker wins only when morale is above 12. The score never gets a second phase. An immediate battle would have compared the scores and given the attacker the victory. These parties are major because troops plus garrison are past 120.
+
+Surrender does not run. It is offered only after an attacker victory, and only then does it read garrison and `surrenderStabilityLimit`. At a garrison of 6 that limit is 80. The stabilities above are inside it. Ada's immediate victory on the tick before the stretch is the contrast: she does get the offer, at garrison 6 and stability 41.05.
+
+The garrison is not reset to 6 by a separate rule. One winning phase uses intensity 0.34 and a ratio capped at 3, so the defender loss rate is `(0.28 + 0.12 × 3) × 0.34` = 0.2176. From 8 that removes 2 and leaves 6. From 10 it removes 2 and leaves 8. From 13 it removes 3 and leaves 10. From 15 it removes 3 and leaves 12. Tick 1129 is three of those chips in id order, 13 to 10 to 8 to 6. The same chip is why a later raid that opens at 8 leaves 6.
+
+Glassport does the same thing inside the stretch, and it is why that port never becomes the retake either. Finn Frost on tick 1159, 434 troops, garrison 8, power 391.024 against 30.76, scores 426.88 / 28.152, phase morale 3, garrison left 6, stability 51.9. He withdraws to Verdant Cay. Bram Tern on tick 1197, 438 troops, garrison 8, power 486.203 against 30.76, scores 524.566 / 36.219, phase morale 3, garrison left 6, stability 49.04. He is captured there.
+
+### Why morale is 0
+
+Upkeep runs before the decision. On the tick-1129 raids Mina, Corin, and Esme are eating nothing, and so are Finn and Bram on theirs: demand 1.52, 1.9, 1.4, 1.944, and 1.944, consumed 0, morale already 0. The shortage drain is `shortage × 2.4`, about 3.4 to 4.7, and rest only adds 3. The next upkeep puts them back at 0. For the twenty ticks before the Mina, Corin, Finn, and Bram raids the decision is almost all `rest`, and morale at the decision is still 0. Dax Pike's `buy-provisions` on tick 1147 scores −1000 while travel to Glassport is affordable, so the shelf is under 1 unit, not the purse. Esme's tick-1178 raid is fed (shortage 0, demand 1.388) and her morale is still 0.04, because work subtracts 0.35 and she has been working.
+
+### The gate after the loss
+
+Once the port is at 6, the floor does what it says. Cinder Key's interval is 31. It is 6 from tick 1129, 7 at tick 1147, and 8 at the start of tick 1178, which is the tick Esme raids it back to 6. The next gain would be tick 1209. Glassport's interval is 19: 6 after Ada, 7 at 1140, 8 at 1159 (Finn, back to 6), 7 at 1178, 8 at 1197 (Bram, back to 6). End state through tick 1199 never shows either port at 8 or more, because the raid is on the growth tick.
+
+Dax Pike and Mara Calder stand on Cinder Key for all 71 ticks, with 433 troops and with 323 rising to 363. Every one of their stretch decisions is blocked only by `garrison-under-8`. They never see the 8. On tick 1129 they are behind Mina, Corin, and Esme in id order, and the third fight has already left 6. On tick 1178 Esme is ahead of them and leaves 6 before their decision. No stretch decision is blocked by `battle-open`. Cooldown never binds by itself: 12 decisions are cooldown and `garrison-under-8` together, 11 of them Bram's, from the Crown Harbor fight on tick 1122.
+
+### Crown Harbor
+
+Crown Harbor is at or above 8 for all 71 ticks. End-of-tick garrison: 12 from the stretch open through tick 1132, then 13, 14, 15, 16, 17, 18, 19 on ticks 1133, 1144, 1155, 1166, 1177, 1188, and 1199. The interval is 11. It is at or above 15 for 45 ticks, 1155 through 1199.
+
+It had already passed 15 once, just before the stretch. Tick 1122 regrows it from 14 to 15. Bram Tern is on that beach with 451 troops, power 498.492 against 56.25, money 0, morale 0. He raids. The phase scores 387.422 / 59.925 and ends at morale 3. Defender victory, garrison 12, stability 53.34, no surrender. He withdraws. Free Tide still holds Glassport that tick, so this was the ordinary gate of 15, and it is the same morale loss. From tick 1129 he is on Glassport with 438 troops and no money, and he never sails back.
+
+During the stretch the only Free Tide captain on Crown Harbor is Zara Gale. She sails there twice, departing ticks 1177 and 1191, four ticks each, and she is ashore for ticks 1181–1183 (garrison 17) and 1195–1197 (garrison 18). Six decisions, all blocked only by `troops-under-25`. She has 23 troops. She trades and leaves. At tick 1162 her purse is 16250.53, so the voyage is not a refusal. No other Free Tide captain is on that beach, and none is sailing there, on any tick when the garrison is past 8 or past 15.
+
+Travel toward Crown Harbor is built whenever a captain is ashore somewhere else. Across the 392 ashore decisions in the stretch it is the best voyage 32 times, second 137 times, and third 217 times. It wins the decision twice, both Zara's departures. The purse check refuses it once: Esme Dusk on tick 1195, at Glassport, money 11.33 against a quote of 12 for 4 ticks, and she sails to Cinder Key instead. The other five purse refusals in the stretch are three to Glassport and two to Verdant Cay, all Esme, all a few coins short. Plans do not target the port. 348 decisions have no plan target. The other 44 target the faction `world-government`, not Crown Harbor.
+
+### Where the captains are
+
+392 ashore decisions in the 71 ticks. By action: rest 251, work 60, trade-local 26, travel 21, buy-provisions 17, recruit 11, raid 6. All six raid offers are taken. By place: Cinder Key 178, Glassport 137, Verdant Cay 71, Crown Harbor 6. By goal: expand-influence 142, serve-faction 105, material-security 75, recover-strength 70.
+
+On a hostile beach the raid block is `garrison-under-8` alone 263 times, that gate plus `troops-under-25` 34 times, cooldown plus the gate 12 times, `troops-under-25` alone 6 times (all Zara on Crown Harbor), and offered 6 times. Verdant Cay is neutral, so those 71 decisions have no raid gate.
+
+Pax Ash is captive through tick 1168, then recruits on Glassport from an empty party and reaches Cinder Key late, still under the floor, 227 troops at tick 1199. Mina Vale and Corin Hale never act again in the stretch. Finn Frost raids Glassport and spends the rest of the stretch on Verdant Cay, 421 troops, no hostile beach. Esme Dusk is the only captain who raids twice. Dax and Mara never leave Cinder Key. Bram never leaves Glassport until he is captured. Zara, at 23 troops, is the only one who goes to Crown Harbor.
+
+### Conclusion
+
+This is not the garrison-gate problem the early stretches are. There, a captain is already on the beach and the raid is unbuilt until the garrison climbs. Here the floor opens and the raid is taken. The attacker score is ten times the defense or more, and the battle is a defender victory because morale is at most 12 after one phase. The phase then leaves 6, and only then does the floor close until the next growth tick. The troops are not short, except Zara's 23. The purse blocks one voyage to Crown Harbor in 392 decisions. The captains who could take Crown Harbor do not go: two of them have no money and rest where they are, and the others' winning action is rest or work on the small ports.
+
+The same defeat is already in the unmodified gate, outside the fixture. On that run the first defender victory whose attacker score is higher is tick 550 on 1847 (Esme Dusk, Crown Harbor), tick 620 on 2718 (Pax Ash, Cinder Key), and tick 298 on 4096 (Esme Dusk, Glassport, scores 192.971 / 48.5, garrison left 13, one phase). None of those is inside 72 ticks. Tick 298 is the one-phase loss this note already records. Changing that morale test would be a combat rule, not the landless floor. It was not patched. The recommendation above is unchanged.
+
 ## Appendix
 
 Node v24.21.0, ICU 78.3. From this branch after the merge of `fef137b286bec0d7ee1e96fe88f8ee420ca5b653`, with dependencies installed:
