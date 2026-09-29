@@ -170,3 +170,218 @@ Do not mark this file `PROMOTE` until a blind operator has run it.
 `REVISE` if the row's `observedTick` moves during the hold with no new capture, or if Cinder Key's live garrison appears on the port list.
 
 `ABANDON` if tick 72 does not show Mina captive at Crown Harbor under World Government. That capture is sequence 8402. A miss means this seed no longer makes it.
+
+## Session
+
+Blind operator. One process. No `POST /api/commands`. No `beforeSequence` page. The fallback was not needed: sequence 8402 was on the tick-72 page, and sequence 18482 was on the tick-156 page.
+
+`git rev-parse HEAD` before the first request: `7286e3189eaf6050822590c2e5be569dd539af83`. Branch `feature/captive-intelligence`. The plan names reading code `34d8de9`. This session did not inspect history. Node `v24.21.0` (`nvm` 24.21.0). The image `node` on `PATH` was `v22.14.0` at `/exec-daemon/node`, so the session put the nvm bin first. `npm ci` because `node_modules` was missing. Then `npm run dashboard -- --reset --seed 2718` on `http://127.0.0.1:4317`.
+
+### Tick 0
+
+`GET /api/health` HTTP 200.
+
+```json
+{"ok":true,"tick":0,"events":0}
+```
+
+`GET /api/state?limit=200` HTTP 200. State `tick` 0, `day` 0. `eventPage` count 0, total 0, hasMore false, oldestSequence null, newestSequence null, cursor null. `events` length 0.
+
+`player.id` `prototype-player`, `player.characterId` `character-01`, `player.displayName` `Prototype Commander`.
+
+Mara Vane (`character-01`): `locationId` `crown-harbor`, `travel` null, `captiveIntel` null, `releaseSighting` null.
+
+Mina Vale (`character-15`): `captiveIntel` null, `releaseSighting` null. Also on this read, and not named by the plan: `locationId` `cinder-key`, `travel` null, `troops` null, `partyPower` null, `money` null, `captivity` null.
+
+No character had a non-null `captiveIntel`. No character had a non-null `releaseSighting`.
+
+### Advance to tick 72
+
+`POST /api/advance` HTTP 200. Body `{"ticks":72}`.
+
+Response scalars: `ok` true, `tick` 72, `day` 12, `ticksAdvanced` 72, `eventSequence` 8513. Flags on that body: `combatUpdated` false, `attentionUpdated` false, `pausedForBattle` false.
+
+`GET /api/state?limit=200` HTTP 200. State `tick` 72, `day` 12.
+
+`eventPage`: `count` 200, `total` 8513, `hasMore` true, `oldestSequence` 8314, `newestSequence` 8513, `cursor` 8314. The `events` array is newest-first, 8513 down to 8314.
+
+Sequence 8402 is on that page:
+
+| Field | Observed |
+| --- | --- |
+| `sequence` | 8402 |
+| `tick` | 71 |
+| `day` | 11.83 |
+| `type` | `character-captured` |
+| `actorId` | `character-15` |
+| `targetId` | `world-government` |
+| `settlementId` | `crown-harbor` |
+| `summary` | `Mina Vale: character captured` |
+| `payloadWithheld` | true |
+| `data` | null |
+
+`briefing.attentionCount` 4. `briefing.items` length 10. Item `event:8402` summary: `Mina Vale was captured at Crown Harbor after failed retreat`. That item's `day` is 11.83, `characterId` `character-15`, `settlementId` `crown-harbor`. The string `12` and the string `60.244` are not in any briefing summary on this page, and they are not in the feed summary.
+
+The other nine briefing summaries on this page:
+
+1. `The hold is empty and 0.492 provisions per tick cannot be found. That costs health 0.394 and morale 1.181 per tick. Morale gains nothing while the shortage lasts, so it will not recover on its own. Crown Harbor is alongside and sells provisions.`
+2. `Verdant Cay's report predates your arrival and has never been refreshed.`
+3. `Cinder Key's report predates your arrival and has never been refreshed.`
+4. `1 routine order updates: 1 confirmed. No command decision is required.`
+5. `Esme Dusk accepted Glassport's surrender and established a claim`
+6. `Mina Vale accepted Cinder Key's surrender and established a claim`
+7. `Vale Drake accepted Cinder Key's surrender and established a claim`
+8. `Vale Drake won at Cinder Key`
+9. `Sable Morrow won at Cinder Key`
+
+Mara Vane (`character-01`): `locationId` `crown-harbor`, `travel` null, `captiveIntel` null, `releaseSighting` null.
+
+Mina Vale (`character-15`):
+
+| Field | Observed |
+| --- | --- |
+| `locationId` | `crown-harbor` |
+| `travel` | null |
+| `troops.count` | 0 |
+| `troops.experience` | 0.19867861845996232 |
+| `troops.discipline` | 0.3837455657846294 |
+| `partyPower` | 0 |
+| `money` | 110.08 |
+| `captivity.scatteredTroops.count` | 12 |
+| `captivity.capturedTick` | 71 |
+| `captivity.captorFactionId` | `world-government` |
+| `captivity.settlementId` | `crown-harbor` |
+| `captivity.cause` | `failed-retreat` |
+| `releaseSighting` | null |
+
+Also on `captivity`, not listed as expected values: `mandatoryReleaseTick` 155, `displayedRisk` `high`, `releaseDestinationId` `glassport`, and `scatteredTroops` experience and discipline equal to the live troop experience and discipline above.
+
+`captiveIntel` (Mina is the only character whose row is not null):
+
+| Field | Observed |
+| --- | --- |
+| `characterId` | `character-15` |
+| `factionId` | `free-tide` |
+| `archetype` | `steward` |
+| `settlementId` | `crown-harbor` |
+| `leadership` | 25 |
+| `troops` | 12 |
+| `partyPower` | 60.244 |
+| `observedTick` | 71 |
+| `ageTicks` | 1 |
+| `source` | `direct` |
+| `confidence` | 1 |
+| `ports` | `[]` |
+
+The string `110.08` is not inside `captiveIntel`. The string `223` is not inside `captiveIntel`.
+
+Settlement `garrison` on this same read:
+
+| Settlement | `garrison` | `garrisonIntelligence` |
+| --- | --- | --- |
+| Crown Harbor | 223 | `source` `owned`, `observedTick` 72, `ageTicks` 0 |
+| Cinder Key | 131 | `source` `rumor`, `observedTick` 0, `ageTicks` 91 |
+| Glassport | 138 | `source` `faction-report`, `observedTick` 0, `ageTicks` 95 |
+
+No second sample was taken during the hold. The plan's only hold read is this one. `observedTick` is 71, the same as `captivity.capturedTick`. `ageTicks` is 1.
+
+### Advance to tick 156
+
+`POST /api/advance` HTTP 200. Body `{"ticks":84}`.
+
+Response scalars: `ok` true, `tick` 156, `day` 26, `ticksAdvanced` 84, `eventSequence` 18597. Flags: `combatUpdated` false, `attentionUpdated` false, `pausedForBattle` false.
+
+`GET /api/state?limit=200` HTTP 200. State `tick` 156, `day` 26.
+
+`eventPage`: `count` 200, `total` 18597, `hasMore` true, `oldestSequence` 18398, `newestSequence` 18597, `cursor` 18398. Newest-first, 18597 down to 18398. Sequence 8402 is not on this page. It was not paged.
+
+Sequence 18482 is on this page:
+
+| Field | Observed |
+| --- | --- |
+| `sequence` | 18482 |
+| `tick` | 155 |
+| `day` | 25.83 |
+| `type` | `captivity-released` |
+| `actorId` | `character-15` |
+| `targetId` | `world-government` |
+| `settlementId` | `crown-harbor` |
+| `summary` | `Mina Vale: captivity released` |
+| `payloadWithheld` | true |
+| `data` | null |
+
+`briefing.attentionCount` 4. `briefing.items` length 4. Item `event:18482` summary: `Mina Vale was released from Crown Harbor: 58.13 paid and 0 recorded as debt`. That item's `day` is 25.83. The feed summary does not contain `58.13`.
+
+The other three briefing summaries:
+
+1. `The hold is empty and 0.492 provisions per tick cannot be found. That costs health 0.394 and morale 1.181 per tick. Morale gains nothing while the shortage lasts, so it will not recover on its own. Crown Harbor is alongside and sells provisions.`
+2. `Verdant Cay's report predates your arrival and has never been refreshed.`
+3. `Cinder Key's report predates your arrival and has never been refreshed.`
+
+Mara Vane: `locationId` `crown-harbor`, `travel` null, `captiveIntel` null, `releaseSighting` null. `player.displayName` is still `Prototype Commander`.
+
+Mina Vale:
+
+| Field | Observed |
+| --- | --- |
+| `captivity` | null |
+| `captiveIntel` | null |
+| `releaseSighting` | null |
+| `troops` | null |
+| `partyPower` | null |
+| `money` | null |
+| `locationId` | null |
+| `travel.fromId` | `crown-harbor` |
+| `travel.toId` | `glassport` |
+| `travel.totalTicks` | 3 |
+| `travel.remainingTicks` | 2 |
+
+No character had a non-null `captiveIntel`. No character had a non-null `releaseSighting`. No character had a non-null `captivity`.
+
+## Findings
+
+### Matches
+
+Tick 0 health is the expected body. Mara is at Crown Harbor with `travel` null. Both `captiveIntel` and both `releaseSighting` values are null.
+
+The first advance returns `tick` 72, `day` 12, `ticksAdvanced` 72, `eventSequence` 8513. State tick and day match. The event page matches `count` 200, `total` 8513, `hasMore` true, `oldestSequence` 8314, `newestSequence` 8513, `cursor` 8314.
+
+Sequence 8402 is `character-captured`, actor `character-15`, target `world-government`, settlement `crown-harbor`, summary `Mina Vale: character captured`, `payloadWithheld` true, `data` null. The briefing sentence is `Mina Vale was captured at Crown Harbor after failed retreat`. `attentionCount` is 4 and `briefing.items` has 10 lines.
+
+At state tick 72 Mara is still at Crown Harbor, not traveling, with null `captiveIntel` and null `releaseSighting`. Mina is at Crown Harbor, not traveling, live `troops.count` 0, live `partyPower` 0, `money` 110.08, scattered troops 12, captured at tick 71 by `world-government` at Crown Harbor for `failed-retreat`, `releaseSighting` null. The captor row is troops 12, party power 60.244, leadership 25, `observedTick` 71, `ageTicks` 1, source `direct`, confidence 1, ports `[]`. She is the only character with a captor row. `110.08` is not inside the row. Crown Harbor garrison 223 is not inside the row.
+
+The second advance returns `tick` 156, `day` 26, `ticksAdvanced` 84, `eventSequence` 18597. State tick and day match. The event page matches `count` 200, `total` 18597, `hasMore` true, `oldestSequence` 18398, `newestSequence` 18597, `cursor` 18398.
+
+Sequence 18482 is `captivity-released`, actor `character-15`, target `world-government`, settlement `crown-harbor`, summary `Mina Vale: captivity released`, `payloadWithheld` true, `data` null. The briefing sentence is `Mina Vale was released from Crown Harbor: 58.13 paid and 0 recorded as debt`.
+
+At state tick 156 Mara is still at Crown Harbor with null travel and null `releaseSighting`. Mina's `captivity`, `captiveIntel`, and `releaseSighting` are null. Her live troops, power, money, and location are null. Travel is `crown-harbor` → `glassport`, 3 total, 2 remaining. No release record is visible on either character.
+
+The captured 12 stays on `captiveIntel` and is not written into live `troops.count`. Live power stays 0 beside row power 60.244. The port list is empty, so Cinder Key and Glassport are not on the row, and Crown Harbor's 223 is not on the row. The feed row and the briefing sentence do not carry the troop count. After release the captor row is gone, and this player's reading of Mina has no release record.
+
+`observedTick` at the one hold sample is 71, the capture tick. It was not seen to move. The plan does not take another sample during the hold.
+
+### Mismatches
+
+Settlement `garrison` at tick 72 is Crown Harbor 223, which matches, and Cinder Key 131 and Glassport 138, where the plan names 7 and 7. Cinder Key's 131 is labeled `garrisonIntelligence.source` `rumor`, `observedTick` 0, `ageTicks` 91. Glassport's 138 is `faction-report`, `observedTick` 0, `ageTicks` 95. Those two numbers are not on `captiveIntel.ports`, which is `[]`. This is not the revise trigger. The revise trigger is Cinder Key's live garrison appearing on the port list.
+
+Nothing else in the named checkpoints disagreed with the plan. Extra captivity fields were present (`mandatoryReleaseTick` 155, `displayedRisk` `high`, `releaseDestinationId` `glassport`). The plan did not forbid them.
+
+### Player-facing notes
+
+While Mina is held, one card shows three troop figures: live `troops.count` 0, `captivity.scatteredTroops.count` 12, and `captiveIntel.troops` 12 with `partyPower` 60.244. Live `partyPower` is 0, but live experience and discipline are still filled (the same figures as the scattered troops). The feed and the briefing never say 12 or 60.244, so a player who reads only those sentences never learns the captured strength. The row is there, and nothing points at it.
+
+The capture feed line is `Mina Vale: character captured`. She is the actor and World Government is only `targetId`. The line does not say who took her. The briefing adds the place and `after failed retreat`, and still does not name the captor.
+
+The release feed line is `Mina Vale: captivity released`. The paid 58.13 and the 0 debt are only in the briefing. After that, her card has no location, no troops, no power, no money, no captivity, no captor row, and no release record. The only lasting trace on this player's screen, besides the briefing sentence, is the voyage Crown Harbor to Glassport with 2 of 3 ticks left.
+
+`captiveIntel.ports` is an empty array on a row whose `source` is `direct` and whose `confidence` is 1. It reads as a finished reading with no ports, which is what this seed is supposed to show. It does not read as a withheld list.
+
+`attentionCount` 4 against 10 briefing lines at tick 72 is the open readability item the plan already sets aside. At tick 156 the count and the list are both 4. `player.displayName` stays `Prototype Commander` at ticks 0, 72, and 156.
+
+Cinder Key's garrison label is a tick-0 rumor whose `ageTicks` is 91 at world tick 72, and Glassport's is a tick-0 faction report whose `ageTicks` is 95. Both ages are older than the world. The briefing already says Cinder Key's report predates arrival. That labeling is confusing next to a field simply called `garrison`, and it is why the 7 the plan names is not the number on the wire. It is separate from the captor row.
+
+## Verdict
+
+PROMOTE
+
+Tick 72 shows 60.244 on the captor row, live power 0, and an empty port list. Tick 156 has no captor row. Sequence 8402 is withheld on the first page. Sequence 18482 is withheld on the second page. Both briefing sentences match. Mina's travel is `crown-harbor` → `glassport` with 2 of 3 left. `observedTick` did not move off the capture tick at the hold sample, and Cinder Key's garrison is not on the port list, so neither revise trigger fired. Tick 72 does show Mina captive at Crown Harbor under World Government, so this is not abandon. The garrison numbers 131 and 138, where the plan names 7 and 7, are recorded above and do not fail that bar.
