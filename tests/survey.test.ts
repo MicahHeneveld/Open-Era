@@ -5,7 +5,7 @@ import { dashboardState, fullEventFeed, projectEventFeed } from "../src/dashboar
 import { directObservation } from "../src/sim/agency.ts";
 import { combatForecast } from "../src/sim/combat.ts";
 import { ACTION_CAPABILITIES, COMMAND_LIMITS, submitCommand } from "../src/sim/commands.ts";
-import { passageCost, quotedPassage, runTick, travelDuration } from "../src/sim/engine.ts";
+import { passageCost, quotedPassage, runTick, runTicks, travelDuration } from "../src/sim/engine.ts";
 import { createPrototypeWorld } from "../src/sim/scenario.ts";
 import { applyEvent } from "../src/sim/state.ts";
 import type { Character, Settlement, SettlementGround, SettlementKnowledge, SimEvent, StandingOrder, WorldState } from "../src/sim/types.ts";
@@ -593,10 +593,46 @@ test("a remote garrison carries the report's tick and age, and a negative tick i
   assert.ok(shown.garrisonIntelligence.observedTick >= 0);
   assert.equal(shown.garrisonIntelligence.observedTick, shown.intelligence?.observedTick);
   assert.equal(shown.garrisonIntelligence.ageTicks, shown.intelligence?.ageTicks);
+  assert.equal(
+    shown.garrisonIntelligence.ageTicks,
+    world.tick - shown.garrisonIntelligence.observedTick,
+    "the shown age is the world tick minus the shown tick",
+  );
   assert.ok(shown.combatForecast, "the forecast is the other surface that ages this report");
-  assert.equal(shown.garrisonIntelligence.ageTicks, shown.combatForecast.intelligence.ageTicks);
-  assert.ok(shown.garrisonIntelligence.ageTicks > 0, "a backdated rumor is old on day one, not fresh");
+  assert.equal(
+    shown.combatForecast.intelligence.ageTicks,
+    Math.max(0, world.tick - commander.knowledge[port.id].observedTick),
+    "the forecast band still ages from the raw tick",
+  );
+  assert.equal(shown.garrisonIntelligence.ageTicks, 0, "on day one the floored tick is 0, so the shown age is 0");
   assert.ok(shown.intelligence && shown.intelligence.observedTick >= 0, "settlement intelligence must not print a tick before the world");
+});
+
+test("a garrison age equals the world tick minus the tick the player is shown", () => {
+  const world = createPrototypeWorld(2718);
+  runTicks(world, 72);
+  assert.equal(world.tick, 72);
+  const state = dashboardState(world, [], fullEventFeed([])) as { settlements: PanelSettlement[] };
+  const shown = (id: string): PanelSettlement => state.settlements.find((entry) => entry.id === id)!;
+
+  const cinder = shown("cinder-key");
+  assert.equal(cinder.garrison, 131);
+  assert.ok(cinder.garrisonIntelligence);
+  assert.ok(cinder.intelligence);
+  assert.equal(cinder.garrisonIntelligence.source, "rumor");
+  assert.equal(cinder.garrisonIntelligence.observedTick, 0);
+  assert.equal(cinder.garrisonIntelligence.ageTicks, world.tick - cinder.garrisonIntelligence.observedTick);
+  assert.equal(cinder.intelligence.ageTicks, world.tick - cinder.intelligence.observedTick);
+
+  const glass = shown("glassport");
+  assert.equal(glass.garrison, 138);
+  assert.ok(glass.garrisonIntelligence);
+  assert.ok(glass.intelligence);
+  assert.equal(glass.garrisonIntelligence.source, "faction-report");
+  assert.equal(glass.garrisonIntelligence.observedTick, 0);
+  assert.equal(glass.garrisonIntelligence.ageTicks, world.tick - glass.garrisonIntelligence.observedTick);
+  assert.equal(glass.intelligence.ageTicks, world.tick - glass.intelligence.observedTick);
+  assert.equal(glass.garrisonIntelligence.ageTicks, glass.intelligence.ageTicks);
 });
 
 test("standing on an island, the forecast names the same fortification the panel shows", () => {

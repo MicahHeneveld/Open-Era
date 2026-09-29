@@ -190,6 +190,24 @@ test("a character outside the commander's observation exposes identity only", ()
   assert.equal(projected.seaSighting, null);
   assert.equal(projected.seaSightings, null);
 
+  const liveTroops = stranger.troops.count;
+  stranger.troops = { ...stranger.troops, count: 0 };
+  stranger.captivity = {
+    captorFactionId: commander.factionId === "free-tide" ? "world-government" : "free-tide",
+    settlementId: "glassport",
+    capturedTick: 4,
+    mandatoryReleaseTick: 88,
+    cause: "failed-retreat",
+    displayedRisk: "low",
+    scatteredTroops: { count: 22, experience: stranger.troops.experience, discipline: stranger.troops.discipline },
+    releaseDestinationId: null,
+  };
+  const heldByAnother = project(world, commander, stranger);
+  assert.equal(heldByAnother.captiveIntel, null, "a distant prisoner of another faction has no captor row");
+  assert.equal(heldByAnother.troops, null);
+  stranger.captivity = null;
+  stranger.troops = { ...stranger.troops, count: liveTroops };
+
   // A different leg is still not a meeting. The course is already public.
   commander.locationId = null;
   commander.travel = { fromId: "cinder-key", toId: "verdant-cay", totalTicks: 4, remainingTicks: 4 };
@@ -345,10 +363,30 @@ test("territory the commander's faction controls counts as observed", () => {
   outsider.locationId = ownedSettlement.id;
   outsider.travel = null;
 
+  outsider.troops = { ...outsider.troops, count: 0 };
+  outsider.captivity = {
+    captorFactionId: commander.factionId,
+    settlementId: ownedSettlement.id,
+    capturedTick: 4,
+    mandatoryReleaseTick: 88,
+    cause: "failed-retreat",
+    displayedRisk: "low",
+    scatteredTroops: { count: 40, experience: outsider.troops.experience, discipline: outsider.troops.discipline },
+    releaseDestinationId: null,
+  };
+  world.tick = 5;
+
   const projected = project(world, commander, outsider);
   assert.equal(projected.intelligence.tier, "co-located");
   assert.deepEqual(projected.troops, outsider.troops);
+  assert.equal((projected.troops as { count: number }).count, 0);
+  assert.equal(projected.partyPower, 0);
   assert.equal(projected.plan, null, "territory reveals presence, not motive");
+  const intel = projected.captiveIntel as { troops: number; partyPower: number; leadership: number };
+  assert.equal(intel.troops, 40, "the captured strength stays on captiveIntel");
+  assert.equal(intel.leadership, outsider.skills.leadership);
+  assert.notEqual(intel.partyPower, 0);
+  assert.notEqual(intel.troops, (projected.troops as { count: number }).count);
 });
 
 test("only the commander's own orders are projected", () => {

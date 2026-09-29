@@ -122,8 +122,10 @@ Mara: still `crown-harbor` → `glassport`, remaining 1 of 4. `locationId` null.
 | `character-07` | Toma Reef | `arriving` | true | `cinder-key` → `glassport` | 1 | 17 | 42 | 94.151 | `world-government` |
 | `character-13` | Ada Sorn | `overtaking` | true | `crown-harbor` → `glassport` | 1 of 3 | 18 | 35 | 81.529 | `world-government` |
 | `character-24` | Sable Sorn | `passing` | false | `glassport` → `crown-harbor` | 2 of 4 | 14 | 36 | 100.168 | null |
-| `character-28` | Vale Gale | `passing` | false | `glassport` → `crown-harbor` | 2 of 4 | 14 | 46 | 95.505 | null |
+| `character-28` | Vale Gale | `passing` | false | `glassport` → `crown-harbor` | 1 of 3 | 14 | 46 | 95.505 | null |
 | `character-30` | Kessa Dusk | `arriving` | true | `verdant-cay` → `glassport` | 1 | 13 | 48 | 99.012 | null |
+
+Correction after the blind session: Vale Gale was on a 3-tick voyage, so her card reads 1 of 3; the sea row was unaffected.
 
 Every one of those rows has `observedTick` 3, `ageTicks` 0, `confidence` 1, `source` `direct`. Sable's card has `troops` null, `partyPower` null, `cargo` null, `money` null, and `seaSightings` null.
 
