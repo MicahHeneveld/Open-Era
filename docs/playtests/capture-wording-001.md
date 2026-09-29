@@ -18,7 +18,7 @@ Three short sessions, each its own process. The sentences are derived when the s
 
 ## Hypothesis and ambition
 
-**Hypothesis.** The player's name reads Mara Vane. A capture names the faction that took the prisoner and does not say "outscore". A ship on the same leg but outside her stretch is named, with no troop count. When a port record and a sea row share a card, the sea count is called by the row's kind and the port record stays "Sighted troops".
+**Hypothesis.** The player's name reads Mara Vane. A capture names the faction that took the prisoner and does not say "outscore". A ship on the same leg but outside her stretch is named, with no troop count. When a port record and a sea row share a card, the sea count is called by the row's kind and the port record stays "Sighted troops". The same capture and release sentences are the ones beside a captor row and a release.
 
 **Ambition.** Session 1 sails Crown Harbor to Glassport and reads the sea sentences. Session 2 surveys Cinder Key and meets Sable on the way to Glassport. Session 3 lets seed 4096 run to the Glassport dock capture and reads Rook's sentence.
 
@@ -107,14 +107,66 @@ A new process. `npm run dashboard -- --reset --seed 4096`. Send no commands.
 
 Stop.
 
+## Captor row and release record
+
+These are the M33 cases. No commands. A new process per seed. This API is Mara's projection. A prison record lives on the released captain and is null on Mara's reading of that captain.
+
+### Seed 2718, Mina Vale held
+
+`npm run dashboard -- --reset --seed 2718`.
+
+`POST /api/advance` `{"ticks":72}`. State tick 72.
+
+Mina Vale (`character-15`):
+
+- `captiveIntel.troops` 12. `partyPower` 60.244. `leadership` 25. `ports` is `[]`. `observedTick` 71. `ageTicks` 1.
+- `captivity.cause` `failed-retreat`. `captivity.causeLabel` is null. Live `troops.count` is 0.
+- `skillsNote` is null. Leadership is on the captor row, so the card does not say it is withheld.
+
+Sequence 8402, event tick 71, `character-captured`. `actorId` `character-15`. `targetId` `world-government`. `settlementId` `crown-harbor`. `payloadWithheld` true. `data` null. Summary:
+
+`World Government took Mina Vale at Crown Harbor after failed retreat`
+
+The briefing item `event:8402` uses that sentence. It does not say she was captured, and it does not say `outscore`.
+
+### Seed 2718, Mina Vale released
+
+Continue that process. `POST /api/advance` `{"ticks":84}`. State tick 156. The release was written at event tick 155.
+
+- `captiveIntel` is null.
+- `releaseSighting` is null on Mara's reading of Mina.
+- Her travel is `crown-harbor` to `glassport`, 2 of 3 ticks left.
+
+Sequence 18482, event tick 155, `captivity-released`. `payloadWithheld` true. `data` null. Summary:
+
+`Mina Vale was released from Crown Harbor: 58.13 paid and 0 recorded as debt`
+
+The sentence does not say `Loyalty fell`. The debt is 0. The briefing item `event:18482` uses that sentence.
+
+Stop.
+
+### Seed 1847, Sable Morrow released
+
+A new process. `npm run dashboard -- --reset --seed 1847`. No commands.
+
+`POST /api/advance` `{"ticks":119}`. State tick 119. The release was written at event tick 118.
+
+Sequence 13680, event tick 118, `captivity-released`. `actorId` `character-04`. `settlementId` `cinder-key`. `payloadWithheld` true. `data` null. Summary:
+
+`Sable Morrow was released from Cinder Key: 13.4 paid and 103.21 recorded as debt. Loyalty fell`
+
+The briefing item `event:13680` uses that sentence. Mara's reading of Sable leaves `releaseSighting` null.
+
+Stop.
+
 ## Quiet readings already measured
 
-These are not a fourth session unless the three above all matched and you still have the process. On seed 1847 with no commands, state tick 595 reads `Check-in · 7 need attention, and 3 background lines are listed with them.` The starvation line says `That costs health 0.205 per tick. Morale is already 0, so the shortage does not lower it.` World Government's `seatSummary` is `Jun Marrow covers Mara Vane's seat in World Government while Mara Vane is held. The orders stay Mara Vane's.` Pax Ash's `skills` is null and `skillsNote` is still null at that tick, because he is still where Mara can see him. At state tick 679 his `skillsNote` is `Pax Ash's leadership is withheld on this card. The reading is distant (reputation), so skills stay off the card.` Mara's `loyaltyNote` names the seat reading `0.767927391717676` and the stored adjustment `-0.04`. Sequence 88540 says `Mara Vane was released from Crown Harbor: 108 paid and 72.25 recorded as debt. Loyalty fell. Mara Vane holds the seat of World Government again`.
+These are not another session unless the sessions above all matched and you still have the process. On seed 1847 with no commands, state tick 595 reads `Check-in · 7 need attention, and 3 background lines are listed with them.` The starvation line says `That costs health 0.205 per tick. Morale is already 0, so the shortage does not lower it.` World Government's `seatSummary` is `Jun Marrow covers Mara Vane's seat in World Government while Mara Vane is held. The orders stay Mara Vane's.` Pax Ash's `skills.leadership` is 75 and `skillsNote` is null at that tick, because he is still where Mara can see him. At state tick 679 his `skillsNote` is `Pax Ash's leadership is withheld on this card. The reading is distant (reputation), so skills stay off the card.` Mara's `loyaltyNote` names the seat reading `0.767927391717676` and the stored adjustment `-0.04`. Sequence 88540 says `Mara Vane was released from Crown Harbor: 108 paid and 72.25 recorded as debt. Loyalty fell. Mara Vane holds the seat of World Government again`.
 
 ## Verdict
 
-`PROMOTE` if all three sessions match the sentences above, including `Mara Vane` on `player.displayName`, Ada's tick-2 sentence, Zara named with no troop count, Sable's sea count called `sharing` beside a port record that stays `Sighted troops`, and Rook's sentence with no `outscore` while `cause` stays `outscore-loss`.
+`PROMOTE` if all three sessions match the sentences above, including `Mara Vane` on `player.displayName`, Ada's tick-2 sentence, Zara named with no troop count, Sable Morrow's sea count called `sharing` beside a port record that stays `Sighted troops`, and Rook's sentence with no `outscore` while `cause` stays `outscore-loss`. Also promote when Mina Vale's tick-72 sentence is `World Government took Mina Vale at Crown Harbor after failed retreat` beside `captiveIntel` troops 12, her event-tick-155 release does not say `Loyalty fell`, and Sable Morrow's state-tick-119 release ends with `Loyalty fell`.
 
-`REVISE` if a sentence names the prisoner as the one who captured, says `outscore`, gives Zara or Orin a troop count, labels the sea count `Sighted troops`, or `player.displayName` is still `Prototype Commander`.
+`REVISE` if a sentence names the prisoner as the one who captured, says `outscore`, gives Zara or Orin a troop count, labels the sea count `Sighted troops`, or `player.displayName` is still `Prototype Commander`. Also revise if Mina's capture still says she was captured, if her paid release says `Loyalty fell`, or if Sable Morrow's unpaid release omits `Loyalty fell`.
 
 `ABANDON` if the dock capture, the sea row, or the stored cause moved. Those are not wording. Glassport changing hands at sequence 59637, or `cause` anything other than `outscore-loss`, is abandon.
