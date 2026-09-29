@@ -217,6 +217,39 @@ test("dialogue output cannot mutate gameplay even when a provider proposes actio
   assert.deepEqual(reply.inferredPlayerTags, ["commanding"]);
 });
 
+test("a message that asks for a delivery leaves proposed actions unsubmitted and creates no contract", async () => {
+  class DeliveryProvider implements DialogueProvider {
+    readonly name = "delivery-test-provider";
+    async respond(_context: DialogueContext): Promise<DialogueResponse> {
+      return {
+        text: "I can haul that grain.",
+        playerTags: ["commercial"],
+        proposedActions: [{
+          type: "offer-contract",
+          characterId: "character-17",
+          quantity: 10,
+          destinationId: "crown-harbor",
+          price: 18,
+        }],
+      };
+    }
+  }
+
+  const { world, thread } = directThread(createPrototypeWorld(1847), "character-17");
+  const sent = sendConversationMessage(world, {
+    playerId: "prototype-player",
+    threadId: thread.id,
+    body: "Please deliver 10 provisions to Crown Harbor for 18.",
+  });
+  assert.equal(sent.ok, true);
+  world.tick = sent.value.replies[0].dueTick;
+  await resolveDueReplies(world, new DeliveryProvider());
+  const reply = world.conversationMessages.at(-1)!;
+  assert.equal(reply.discardedActionCount, 1);
+  assert.equal(world.pendingCommands.length, 0);
+  assert.equal(world.contracts, undefined);
+});
+
 test("pending and completed replies survive snapshot recovery", async () => {
   const directory = mkdtempSync(join(tmpdir(), "open-era-conversations-"));
   const databasePath = join(directory, "world.sqlite");

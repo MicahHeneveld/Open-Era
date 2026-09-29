@@ -55,7 +55,7 @@ One type: pay a carrier to land provisions on a named shelf by a deadline. `trad
 
 No autonomous proposer here. Replies drop `proposedActions`, and these runs open no thread. A proposer keyed on an empty shelf would fire inside the fixture: Crown Harbor is empty from tick 64 on seed 4096. That version rides with the re-baseline.
 
-**The score.** Deterministic. No new RNG draw. Hard gates on the carrier's tick. If `travelDuration` (0 when already there) exceeds the ticks left, refuse. If the hold is short and the purse cannot buy the shortfall at `marketPrice` where they stand, refuse. Those emit `contract-refused` with the gate and do not touch a relationship.
+**The score.** Deterministic. No new RNG draw. Hard gates on the carrier's tick. A carrier already at sea, or with no `locationId`, refuses with gate `travel` and the reason `The carrier is already at sea.` before any score. `travelDuration` returns 1 when `locationId` is null, and that 1 is not the voyage; there is no provisions price at sea, so that path must not reach the margin. A docked carrier whose haul does not fit the ticks left refuses with the same gate and `The voyage does not fit the deadline.` Already standing at the shelf is 0 ticks, not `travelDuration`'s floor of 2. If the hold is short and the purse cannot buy the shortfall at `marketPrice` where they stand, refuse with gate `purse`. Those emit `contract-refused` with the gate and do not touch a relationship. Scoring is reached only while they are standing. `resourcePrice` clamps scarcity to at least 0.55 against a provisions base of 1.8, so that price is at least 0.99 and `costBasis` is positive for every quantity of at least 1.
 
 Past the gates the weights match `assessStandingOrder`, including its missing-relationship defaults (trust 0.35, respect 0.35, grievance 0, obligation 0). Risk is 0.25 when they already stand at the destination or it is neutral or theirs, and 0.88 when the haul sails to another faction's port. Those are the trade-supplies and pressure risks. Margin is new: `costBasis = quantity * marketPrice` where they stand, clamped to −0.25..0.25. Commerce weighs 0.30 because a contract has no order priority.
 
@@ -75,7 +75,7 @@ threshold     = round(0.54 + ambition * 0.08)
 
 Applied to tick 0 of seed 1847, this is arithmetic on the opening state, not an event the sim emitted. Zara Gale (`character-17`, Free Tide merchant) stands at Crown Harbor with 32 provisions, money 93, commerce 0.894, ambition 0.265, caution 0.496, and a seeded tie to Mara (trust 0.665, respect 0.693, grievance 0.123, obligation 0.210). Provisions are 1.47. Ten units at price 18 have cost basis 14.7 and margin 0.224. Factors 0.268, 0.224, 0.093, 0.111, −0.022, 0.017, −0.020. Score 0.671 against 0.561: accept. Price 8 clamps the margin at −0.25 and scores 0.197: refuse.
 
-**Escrow.** On accept the buyer's money falls by the price and the carrier's does not. The price sits on the contract, in neither purse and not in a treasury. The event carries both purses the way `market-trade` carries `characterMoney`. Fulfilment pays the carrier from it. Refusal, and cancel while offered, move nothing. Cancel after accept, and carrier breach, return it to the buyer. A `DebtObligation` would not collect it: the runs below never reduce `remainingValue`.
+**Escrow.** The price leaves the offerer's purse when the offer is applied, not when the command is queued and not again when it is accepted. Debiting only on accept, then returning nothing on a refusal, would destroy the coins sitting in escrow, so refusal, cancel, and breach each return that escrow once. It sits on the contract, in neither purse and not in a treasury. The event carries both purses the way `market-trade` carries `characterMoney`. Fulfilment pays the carrier from that escrow, once. Refusal, cancel while offered, cancel after accept, and carrier breach return it to the buyer, once. A score refusal and a cancel while offered write no relationship. A `DebtObligation` would not collect it: the runs below never reduce `remainingValue`.
 
 **Fulfilment and breach.** `contract-fulfilled` requires `accepted`, the carrier at the destination and not traveling, the tick before the deadline, and a hold that covers the quantity. The grain moves onto `settlement.stocks.provisions`. No `market-trade`, no `tradeTax`. Nine against ten does not count, and there is no remainder. At `world.tick >= deadlineTick`, the same test `expireStandingOrders` uses, the contract is `breached`, the grain stays aboard, and the escrow returns. No RNG on either judgment.
 
@@ -136,39 +136,17 @@ The player verb and the identity rule do not. A reverted guard in `validateStand
 
 ## Playtest
 
-Follow `docs/playtests/TEMPLATE.md`. Dashboard HTTP JSON only, as in [informed-commitment-002](../playtests/informed-commitment-002.md). This section is the order-identity half only. The paid delivery (`offer-contract`, escrow, fulfilment) is M26 and is not in this tree; sending it returns `unknown-type`. The tick table above, Glassport then Cinder Key by tick 8, is the old double-mint on the pre-M22 hashes. It is not the run to play.
+The operator plan is [offer-contract-001](../playtests/offer-contract-001.md). It has not been run. The order-identity playtest (Ada, one order, no escrow) is a different session and is not this run.
 
-Measured on this branch, seed 1847, Node v24.21.0. Mara Vane (`character-01`) starts at Crown Harbor. `party.hold.money` and her character `money` are 108. Ada Sorn (`character-13`, explorer) starts there. Her one order is `character-01:order:character-13`, directive `explore`, no `targetId`, priority 0.78, status `pending`, revision 1. Zara Gale (`character-17`) stands there with cargo provisions 32, and her `standingOrders` on Mara's panel is empty: Pax Ash's order is not projected.
+Measured on this branch against the dashboard HTTP API, seed 1847, Node v24.21.0, before a blind operator plays it. The note's older table (Glassport then Cinder Key by tick 8, Zara still on 93 when the grain moves) is not this world. Scoring waits one tick, so a new offer is still `offered` after the first advance. Zara trades on her own during that tick, and she sails on the tick she delivers, so her purse after fulfilment is on the event, not on her character row.
 
-**Hypothesis.** A new instruction to Ada changes the order she already holds. It does not mint a second id.
+**Hypothesis.** Paying for a delivery takes the price into escrow when the offer is applied. A price Zara accepts lands 10 provisions on Crown Harbor and pays her from that escrow, once. A price Orin refuses returns his escrow, once, and does not pay him.
 
-**Start.** `npm run dashboard -- --reset --seed 1847`. The server listens on `http://127.0.0.1:4317`.
+**Start.** `npm run dashboard -- --reset --seed 1847`. The server listens on `http://127.0.0.1:4317`. `playerId` is `prototype-player`. Advance with `POST /api/advance` and `{"ticks":1}` (never more than 144). Read contract events from that response. Page older history with `GET /api/state?limit=200&beforeSequence=<eventPage.cursor>`.
 
-**Tick 0, before any advance.** `GET /api/state?limit=200`. Read `tick` 0, `party.hold.money` 108, and Ada's `characters[]` row (`id` `character-13`): `locationId` `crown-harbor`, `travel` null, one standing order as above.
+Send Orin's offer first, then Zara's. A second Zara offer before the tick is HTTP 400 `contract-already-queued`, error `An offer to this carrier is already queued`. After the first advance, repeating Zara's terms with `expiresInTicks` 11 is HTTP 400 `no-change`, error `The offer does not change the contract`. State tick 1: Mara's money is 82, both contracts are `offered`, escrows 8 and 18. State tick 2: Orin is `refused` and the 8 is back, Zara is `fulfilled`, Mara's money is 90, Crown Harbor provisions are 236.008, and that advance contains no `market-trade`.
 
-`POST /api/commands`
-
-```json
-{"playerId":"prototype-player","type":"issue-order","characterId":"character-13","directive":"explore","targetId":"cinder-key"}
-```
-
-HTTP 202. `command.id` is `command-00001`, `command.type` is `amend-order`, `command.orderId` is `character-01:order:character-13`, `command.majorChange` is true, `command.priority` is 0.78, `command.targetId` is `cinder-key`. State is still tick 0: `pendingCommands` length 1, and Ada's order is still revision 1 until the tick runs.
-
-**Advance 1.** `POST /api/advance` with `{"ticks":1}`. HTTP 200, `tick` 1, `ticksAdvanced` 1. Read the response `events` (do not wait for a later page). Expect, all with `tick` 0 and `payloadWithheld` false:
-
-- `standing-order-amended`, summary `Mara Vane materially revised the order; Ada Sorn must reassess it.`, `data.orderId` `character-01:order:character-13`
-- `player-command-resolved`, summary `Mara Vane: order amended`, same `orderId`
-- `standing-order-accepted`, summary `Ada Sorn accepted the explore order.`, same `orderId`
-
-No `standing-order-issued` anywhere in that array. `GET /api/state?limit=200` at tick 1 has `eventPage.total` 185 and `hasMore` false, so the same three events are on that single page (sequences 10, 11, and the acceptance just after). Ada: `locationId` null, `travel` `{fromId:"crown-harbor",toId:"cinder-key",totalTicks:4,remainingTicks:4}`, one order, revision 2, `targetId` `cinder-key`, status `active`, priority 0.78. No id `command-00001:standing-order`.
-
-**Same body again.** `POST /api/commands` with the same JSON. HTTP 400, `code` `no-change`, error `The amendment does not change the order`. Nothing is queued.
-
-**Advance 4, to tick 5.** `POST /api/advance` with `{"ticks":4}`. State `tick` 5. Ada `locationId` `cinder-key`, `travel` null, order still `active`, revision 2, `targetId` `cinder-key`. The advance events include `arrived` at event `tick` 4, summary `Ada Sorn: arrived`, `payloadWithheld` true. She has not reported yet.
-
-**Advance 1, to tick 6.** `POST /api/advance` with `{"ticks":1}`. State `tick` 6. Ada is still at `cinder-key`. The order status is `awaiting-confirmation`, revision 2, `targetId` `cinder-key`, `lastReport.kind` `completion`, `lastReport.tick` 5, summary `Ada Sorn considers the survey of Cinder Key complete and requests confirmation.` `briefing.items` contains `action` `confirm-order`, `characterId` `character-13`, `orderId` `character-01:order:character-13`, id `confirm:character-01:order:character-13`. The completion event is on the newest log page (`GET /api/state?limit=200`, event `tick` 5, sequence 637 when nothing else was sent). The tick-0 amendment is not on that page. Page with `?limit=200&beforeSequence=<eventPage.cursor>` until the page whose `oldestSequence` is 1 (the cursor that reaches it is `beforeSequence=105`). That page holds sequence 10.
-
-`PROMOTE` if Ada has that one order, revision 2, target `cinder-key`, the log has no `standing-order-issued`, the second identical issue is `no-change`, and the completion report at state tick 6 names the seeded id. `REVISE` if a second order id appears, if she is still on the untargeted explore at state tick 1, or if the report names `command-00001:standing-order`. `ABANDON` if the issue is rejected or the seeded order never changes. Do not score escrow or a shelf change; that delivery is not in this build.
+`PROMOTE` if those purses, escrows, the shelf, and the two contract ids match. `REVISE` if Zara is paid before the grain moves, if Orin's 8 stays out of Mara's purse, if the shelf does not gain 10, or if a `market-trade` is the delivery. `ABANDON` if `offer-contract` is `unknown-type`, or if the offer never leaves the purse and never changes the shelf. The exact bodies and readings are in the playtest file.
 
 ## Questions for Micah
 

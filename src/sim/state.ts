@@ -8,6 +8,7 @@ import type {
   SettlementKnowledge,
   SimEvent,
   StandingOrder,
+  SupplyContract,
   WorldState,
 } from "./types.ts";
 
@@ -596,6 +597,28 @@ export function applyEvent(world: WorldState, event: SimEvent): void {
       break;
     case "metrics-recorded":
       break;
+    case "contract-offered":
+    case "contract-amended":
+    case "contract-accepted":
+    case "contract-refused":
+    case "contract-fulfilled":
+    case "contract-breached":
+    case "contract-cancelled": {
+      const contract = event.data.contract as SupplyContract;
+      world.contracts ??= {};
+      world.contracts[contract.id] = contract;
+      const buyer = world.characters[contract.buyerId];
+      const carrier = world.characters[contract.carrierId];
+      if (buyer && typeof event.data.buyerMoney === "number") buyer.money = event.data.buyerMoney;
+      if (carrier && typeof event.data.carrierMoney === "number") carrier.money = event.data.carrierMoney;
+      if (event.type === "contract-fulfilled") {
+        const shelf = world.settlements[contract.destinationId];
+        if (!shelf || !carrier) throw new Error("Contract fulfilment is missing a shelf or a carrier");
+        shelf.stocks = resourcesFrom(event.data, "settlementStocks");
+        carrier.cargo = resourcesFrom(event.data, "carrierCargo");
+      }
+      break;
+    }
     default:
       throw new Error(`Unknown event type: ${event.type}`);
   }

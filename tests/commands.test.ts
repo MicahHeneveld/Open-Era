@@ -19,6 +19,26 @@ function retireOpenOrders(character: Character): void {
   }
 }
 
+/** A plan that plan review will leave alone unless the amendment clears it. */
+function holdPlan(character: Character, orderId: string): string {
+  const goal = character.goals.find((candidate) => candidate.kind === "material-security");
+  if (!goal) throw new Error(`${character.id} has no material-security goal`);
+  const id = `${character.id}:plan:sentinel`;
+  character.plan = {
+    id,
+    goalId: goal.id,
+    intent: goal.label,
+    preferredActions: ["rest"],
+    createdTick: 0,
+    reviewAfterTick: 999,
+    reason: "held for the amendment check",
+    orderId,
+  };
+  character.cargo.provisions = 500;
+  character.health = 100;
+  return id;
+}
+
 test("the human-controlled character never receives autonomous decisions", () => {
   const world = createPrototypeWorld(1847);
   const result = runTick(world);
@@ -344,16 +364,6 @@ test("an order awaiting confirmation stays the open order, and a further issue a
   assert.ok(seeded);
   seeded.status = "awaiting-confirmation";
 
-  const explicit = submitCommand(world, {
-    playerId: "prototype-player",
-    type: "amend-order",
-    characterId: recipient.id,
-    orderId: seededId,
-    priority: 0.9,
-  });
-  assert.equal(explicit.ok, false);
-  assert.equal(explicit.ok === false ? explicit.code : null, "order-not-amendable");
-
   const issued = submitCommand(world, {
     playerId: "prototype-player",
     type: "issue-order",
@@ -403,6 +413,158 @@ test("an order awaiting confirmation stays the open order, and a further issue a
   assert.equal(keptOrder.status, "active");
   assert.equal(keptOrder.targetId, "crown-harbor");
   assert.equal(officer.standingOrders.some((candidate) => candidate.id === "command-00001:standing-order"), false);
+});
+
+test("an explicit amend-order on an awaiting-confirmation order follows the same rules as issue-order", () => {
+  const seededId = "character-01:order:character-04";
+
+  const major = createPrototypeWorld(1847);
+  const majorRecipient = major.characters["character-04"];
+  const majorOrder = majorRecipient.standingOrders.find((order) => order.id === seededId)!;
+  majorOrder.status = "awaiting-confirmation";
+  const sentinel = holdPlan(majorRecipient, seededId);
+  const majorAmend = submitCommand(major, {
+    playerId: "prototype-player",
+    type: "amend-order",
+    characterId: majorRecipient.id,
+    orderId: seededId,
+    directive: "explore",
+    targetId: "verdant-cay",
+  });
+  assert.equal(majorAmend.ok, true);
+  if (majorAmend.ok && majorAmend.command.type === "amend-order") {
+    assert.equal(majorAmend.command.majorChange, true);
+    assert.equal(majorAmend.command.orderId, seededId);
+  }
+  const majorTick = runTick(major);
+  const amendedEvent = majorTick.events.find((event) =>
+    event.type === "standing-order-amended" && event.data.orderId === seededId
+  );
+  assert.ok(amendedEvent);
+  assert.equal(amendedEvent.data.majorChange, true);
+  assert.equal((amendedEvent.data.order as { status: string; directive: string }).status, "pending");
+  assert.equal((amendedEvent.data.order as { directive: string }).directive, "explore");
+  assert.notEqual(majorRecipient.plan?.id, sentinel);
+
+  const priority = createPrototypeWorld(1847);
+  const priorityRecipient = priority.characters["character-04"];
+  const priorityOrder = priorityRecipient.standingOrders.find((order) => order.id === seededId)!;
+  priorityOrder.status = "awaiting-confirmation";
+  const prioritySentinel = holdPlan(priorityRecipient, seededId);
+  const priorityAmend = submitCommand(priority, {
+    playerId: "prototype-player",
+    type: "amend-order",
+    characterId: priorityRecipient.id,
+    orderId: seededId,
+    priority: 0.9,
+  });
+  assert.equal(priorityAmend.ok, true);
+  if (priorityAmend.ok && priorityAmend.command.type === "amend-order") {
+    assert.equal(priorityAmend.command.majorChange, false);
+  }
+  runTick(priority);
+  const keptPriority = priorityRecipient.standingOrders.find((order) => order.id === seededId)!;
+  assert.equal(keptPriority.revision, 2);
+  assert.equal(keptPriority.status, "awaiting-confirmation");
+  assert.equal(keptPriority.priority, 0.9);
+  assert.equal(keptPriority.directive, "protect");
+  assert.equal(keptPriority.targetId, "crown-harbor");
+  assert.equal(priorityRecipient.plan?.id, prioritySentinel);
+
+  const deadline = createPrototypeWorld(1847);
+  const deadlineRecipient = deadline.characters["character-04"];
+  const deadlineOrder = deadlineRecipient.standingOrders.find((order) => order.id === seededId)!;
+  deadlineOrder.status = "awaiting-confirmation";
+  const deadlineSentinel = holdPlan(deadlineRecipient, seededId);
+  const deadlineAmend = submitCommand(deadline, {
+    playerId: "prototype-player",
+    type: "amend-order",
+    characterId: deadlineRecipient.id,
+    orderId: seededId,
+    expiresInTicks: 48,
+  });
+  assert.equal(deadlineAmend.ok, true);
+  if (deadlineAmend.ok && deadlineAmend.command.type === "amend-order") {
+    assert.equal(deadlineAmend.command.majorChange, false);
+  }
+  runTick(deadline);
+  const keptDeadline = deadlineRecipient.standingOrders.find((order) => order.id === seededId)!;
+  assert.equal(keptDeadline.status, "awaiting-confirmation");
+  assert.equal(keptDeadline.expiresTick, 48);
+  assert.equal(keptDeadline.directive, "protect");
+  assert.equal(deadlineRecipient.plan?.id, deadlineSentinel);
+
+  const identical = createPrototypeWorld(1847);
+  const identicalRecipient = identical.characters["character-04"];
+  const identicalOrder = identicalRecipient.standingOrders.find((order) => order.id === seededId)!;
+  identicalOrder.status = "awaiting-confirmation";
+  const unchanged = submitCommand(identical, {
+    playerId: "prototype-player",
+    type: "amend-order",
+    characterId: identicalRecipient.id,
+    orderId: seededId,
+    directive: identicalOrder.directive,
+    targetId: identicalOrder.targetId,
+    priority: identicalOrder.priority,
+  });
+  assert.equal(unchanged.ok, false);
+  assert.equal(unchanged.ok === false ? unchanged.code : null, "no-change");
+  assert.equal(identical.pendingCommands.length, 0);
+});
+
+test("two issuers may each queue an issue-order to the same officer, and one issuer may not", () => {
+  const world = createPrototypeWorld(1847);
+  const recipient = world.characters["character-04"];
+  retireOpenOrders(recipient);
+  const other = world.characters["character-02"];
+  assert.equal(other.factionId, recipient.factionId);
+  const prototype = world.players["prototype-player"];
+  world.players["second-player"] = {
+    ...prototype,
+    id: "second-player",
+    displayName: "Second Commander",
+    characterId: other.id,
+    reportingOfficerId: null,
+  };
+
+  const first = submitCommand(world, {
+    playerId: "prototype-player",
+    type: "issue-order",
+    characterId: recipient.id,
+    directive: "protect",
+    targetId: "glassport",
+  });
+  assert.equal(first.ok, true);
+  if (first.ok) assert.equal(first.command.type, "issue-order");
+
+  const repeat = submitCommand(world, {
+    playerId: "prototype-player",
+    type: "issue-order",
+    characterId: recipient.id,
+    directive: "explore",
+    targetId: "verdant-cay",
+  });
+  assert.equal(repeat.ok, false);
+  assert.equal(repeat.ok === false ? repeat.code : null, "order-already-queued");
+
+  const secondIssuer = submitCommand(world, {
+    playerId: "second-player",
+    type: "issue-order",
+    characterId: recipient.id,
+    directive: "protect",
+    targetId: "crown-harbor",
+  });
+  assert.equal(secondIssuer.ok, true);
+  if (secondIssuer.ok) assert.equal(secondIssuer.command.type, "issue-order");
+
+  const queued = world.pendingCommands.filter((command) =>
+    command.type === "issue-order" && command.characterId === recipient.id
+  );
+  assert.equal(queued.length, 2);
+  assert.deepEqual(
+    queued.map((command) => command.playerId).sort(),
+    ["prototype-player", "second-player"],
+  );
 });
 
 test("the issuer confirms a character's completion report before an order closes", () => {
@@ -702,4 +864,112 @@ test("two different standing orders may still be changed in the same tick", () =
     orderId: order.id,
   }));
   assert.deepEqual(cancellations.map((result) => result.ok), [true, true]);
+});
+
+function offerToZara(world: ReturnType<typeof createPrototypeWorld>, price = 18, expiresInTicks = 12) {
+  return submitCommand(world, {
+    playerId: "prototype-player",
+    type: "offer-contract",
+    characterId: "character-17",
+    quantity: 10,
+    destinationId: "crown-harbor",
+    price,
+    expiresInTicks,
+  });
+}
+
+test("an offer across factions queues once, and a second offer from the same buyer does not", () => {
+  const world = createPrototypeWorld(1847);
+  const buyer = world.characters["character-01"];
+  const carrier = world.characters["character-17"];
+  assert.equal(buyer.factionId, "world-government");
+  assert.equal(carrier.factionId, "free-tide");
+  assert.notEqual(buyer.factionId, carrier.factionId);
+
+  const first = offerToZara(world);
+  assert.equal(first.ok, true);
+  if (first.ok) {
+    assert.equal(first.command.type, "offer-contract");
+    assert.equal(first.command.characterId, "character-17");
+    assert.equal("contractId" in first.command, false);
+  }
+  assert.equal(buyer.money, 108);
+
+  const second = offerToZara(world);
+  assert.deepEqual(second, {
+    ok: false,
+    code: "contract-already-queued",
+    error: "An offer to this carrier is already queued",
+  });
+  assert.equal(world.pendingCommands.length, 1);
+});
+
+test("an open offer can be restated, identical terms are no-change, and accepted terms are frozen", () => {
+  const world = createPrototypeWorld(1847);
+  const carrier = world.characters["character-17"];
+  const offered = offerToZara(world, 18, 12);
+  assert.equal(offered.ok, true);
+  runTick(world);
+  carrier.locationId = "crown-harbor";
+  carrier.travel = null;
+  const contract = Object.values(world.contracts ?? {})[0];
+  assert.equal(contract.status, "offered");
+  assert.equal(contract.deadlineTick, 12);
+
+  const same = offerToZara(world, 18, contract.deadlineTick - world.tick);
+  assert.deepEqual(same, {
+    ok: false,
+    code: "no-change",
+    error: "The offer does not change the contract",
+  });
+
+  const revised = offerToZara(world, 20, contract.deadlineTick - world.tick);
+  assert.equal(revised.ok, true);
+  if (revised.ok && revised.command.type === "offer-contract") {
+    assert.equal(revised.command.contractId, contract.id);
+  }
+
+  carrier.locationId = "crown-harbor";
+  carrier.travel = null;
+  carrier.cargo.provisions = 9;
+  runTick(world);
+  assert.equal(world.contracts?.[contract.id].status, "accepted");
+  const frozen = offerToZara(world, 22, 12);
+  assert.deepEqual(frozen, {
+    ok: false,
+    code: "terms-frozen",
+    error: "The accepted terms are frozen",
+  });
+});
+
+test("cancelling an offer returns the escrow and writes no relationship", () => {
+  const world = createPrototypeWorld(1847);
+  const buyer = world.characters["character-01"];
+  const offered = offerToZara(world, 18, 12);
+  assert.equal(offered.ok, true);
+  runTick(world);
+  const contract = Object.values(world.contracts ?? {})[0];
+  assert.equal(contract.status, "offered");
+  assert.equal(buyer.money, 90);
+  assert.equal(contract.escrow, 18);
+
+  const cancel = submitCommand(world, {
+    playerId: "prototype-player",
+    type: "cancel-contract",
+    characterId: "character-17",
+    contractId: contract.id,
+  });
+  assert.equal(cancel.ok, true);
+  const settled = runTick(world);
+  assert.equal(world.contracts?.[contract.id].status, "cancelled");
+  assert.equal(world.contracts?.[contract.id].escrow, 0);
+  assert.equal(world.contracts?.[contract.id].settled, true);
+  assert.equal(buyer.money, 108);
+  assert.equal(
+    settled.events.filter((event) =>
+      event.type === "relationship-changed" &&
+      String(event.data.trigger).startsWith("supply contract")
+    ).length,
+    0,
+  );
 });

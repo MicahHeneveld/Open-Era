@@ -7,6 +7,7 @@ import {
   projectCharacter,
   projectEvent,
   projectFactions,
+  projectSupplyContracts,
   visibleStandingOrders,
 } from "../src/dashboard/visibility.ts";
 import { createPrototypeWorld } from "../src/sim/scenario.ts";
@@ -499,4 +500,116 @@ test("unattributed settlement events still follow control of the ground", () => 
 
   const foreignProduction: SimEvent = { ...production, sequence: 2, settlementId: foreign.id };
   assert.equal(eventPayloadVisible(world, commander, foreignProduction), false);
+});
+
+test("a contract's price is visible only to the two parties", () => {
+  const { world, commander } = fixture();
+  const carrier = world.characters["character-17"];
+  assert.equal(carrier.name, "Zara Gale");
+  assert.notEqual(carrier.factionId, commander.factionId);
+  const price = 41;
+  world.contracts = {
+    "command-00001:contract": {
+      id: "command-00001:contract",
+      buyerId: commander.id,
+      carrierId: carrier.id,
+      good: "provisions",
+      quantity: 10,
+      destinationId: "crown-harbor",
+      price,
+      escrow: price,
+      settled: false,
+      deadlineTick: 12,
+      issuedTick: 0,
+      acceptedTick: null,
+      status: "offered",
+      revision: 1,
+      observedTick: 0,
+    },
+  };
+  const contract = world.contracts["command-00001:contract"];
+
+  const own = projectSupplyContracts(world, commander);
+  assert.equal(own.length, 1);
+  assert.equal(own[0].source, "own-character");
+  assert.equal(own[0].price, price);
+  assert.equal(own[0].quantity, 10);
+  assert.equal(own[0].escrow, price);
+  assert.equal(own[0].destinationId, "crown-harbor");
+  assert.equal(own[0].status, "offered");
+  assert.equal(own[0].ageTicks, 0);
+  const carrierView = projectSupplyContracts(world, carrier);
+  assert.equal(carrierView[0].source, "own-character");
+  assert.equal(carrierView[0].price, price);
+
+  const mate = peer(world, commander);
+  makeUnobserved(mate);
+  assert.equal(mate.factionId, commander.factionId);
+  assert.notEqual(mate.id, commander.id);
+  const reported = projectSupplyContracts(world, mate);
+  assert.equal(reported.length, 1);
+  assert.equal(reported[0].source, "faction-report");
+  assert.equal(reported[0].status, "offered");
+  assert.equal(reported[0].destinationId, "crown-harbor");
+  assert.equal(reported[0].price, null);
+  assert.equal(reported[0].quantity, null);
+  assert.equal(reported[0].escrow, null);
+  const beforeEdit = JSON.stringify(reported);
+  contract.price = 99;
+  contract.escrow = 99;
+  contract.quantity = 50;
+  assert.equal(JSON.stringify(projectSupplyContracts(world, mate)), beforeEdit);
+  contract.price = price;
+  contract.escrow = price;
+  contract.quantity = 10;
+
+  const bystander = world.characters["character-23"];
+  assert.equal(bystander.factionId, null);
+  makeUnobserved(bystander);
+  assert.deepEqual(projectSupplyContracts(world, bystander), []);
+
+  bystander.locationId = "crown-harbor";
+  carrier.locationId = "crown-harbor";
+  carrier.travel = null;
+  const live = project(world, bystander, carrier);
+  assert.equal(live.intelligence.tier, "co-located");
+  assert.equal(live.money, round(carrier.money, 2));
+  assert.deepEqual(projectSupplyContracts(world, bystander), []);
+
+  const offered: SimEvent = {
+    sequence: 1,
+    tick: 0,
+    type: "contract-offered",
+    actorId: commander.id,
+    targetId: carrier.id,
+    settlementId: "crown-harbor",
+    data: {
+      buyerId: commander.id,
+      carrierId: carrier.id,
+      price,
+      quantity: 10,
+      escrow: price,
+      destinationId: "crown-harbor",
+      contract,
+    },
+  };
+  assert.equal(world.settlements["crown-harbor"].factionId, mate.factionId);
+  assert.equal(eventPayloadVisible(world, commander, offered), true);
+  assert.equal(eventPayloadVisible(world, carrier, offered), true);
+  assert.equal(eventPayloadVisible(world, mate, offered), false);
+  assert.equal(eventPayloadVisible(world, bystander, offered), false);
+  const withheld = projectEvent(
+    world,
+    mate,
+    offered,
+    `${commander.name} offered ${price} to land 10 provisions at Crown Harbor.`,
+  );
+  assert.equal(withheld.payloadWithheld, true);
+  assert.equal(withheld.data, null);
+  assert.equal(withheld.summary, `${commander.name}: contract offered`);
+  assert.equal(String(withheld.summary).includes(String(price)), false);
+
+  const view = dashboardState(world, [], fullEventFeed([])) as { contracts: Array<{ price: number | null }> };
+  assert.equal(view.contracts.length, 1);
+  assert.equal(view.contracts[0].price, price);
 });

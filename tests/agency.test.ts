@@ -1,9 +1,14 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { assessStandingOrder, judgeOrderCompletion, reviewPlan } from "../src/sim/agency.ts";
+import { submitCommand } from "../src/sim/commands.ts";
+import { AT_SEA_REASON, VOYAGE_REASON, assessSupplyContract } from "../src/sim/contracts.ts";
+import { projectEventFeed } from "../src/dashboard/view-model.ts";
 import { runTick, runTicks } from "../src/sim/engine.ts";
 import { DeterministicRng } from "../src/sim/rng.ts";
 import { createPrototypeWorld } from "../src/sim/scenario.ts";
+import { clamp, round, stateHash } from "../src/sim/state.ts";
+import type { Relationship, SimEvent, WorldState } from "../src/sim/types.ts";
 
 test("characters begin with rooted goals, beliefs, relationships, and faction orders", () => {
   const world = createPrototypeWorld(1847);
@@ -378,6 +383,346 @@ test("accepted orders report temporary deviations, resumptions, and completion j
     );
   }));
 });
+
+const VICTORY = { trust: 0.012, respect: 0.028, fear: -0.005, grievance: -0.006, obligation: -0.01 };
+const DEFEAT = { trust: -0.025, respect: -0.008, fear: 0.018, grievance: 0.035, obligation: 0.015 };
+
+function offerDelivery(
+  world: WorldState,
+  price: number,
+  quantity = 10,
+  expiresInTicks = 12,
+) {
+  return submitCommand(world, {
+    playerId: "prototype-player",
+    type: "offer-contract",
+    characterId: "character-17",
+    quantity,
+    destinationId: "crown-harbor",
+    price,
+    expiresInTicks,
+  });
+}
+
+function contractEvents(events: SimEvent[]): SimEvent[] {
+  return events.filter((event) => event.type.startsWith("contract-"));
+}
+
+function pinCarrier(world: WorldState): void {
+  const carrier = world.characters["character-17"];
+  carrier.locationId = "crown-harbor";
+  carrier.travel = null;
+}
+
+test("Zara accepts price 18 and refuses price 8 at the opening factors, and scoring does not advance the rng", () => {
+  const world = createPrototypeWorld(1847);
+  const mara = world.characters["character-01"];
+  const zara = world.characters["character-17"];
+  assert.equal(zara.name, "Zara Gale");
+  assert.equal(zara.locationId, "crown-harbor");
+  assert.equal(zara.cargo.provisions, 32);
+  assert.equal(zara.money, 93);
+  assert.equal(mara.money, 108);
+  const rng = world.rngState;
+  const hash = stateHash(world);
+  const terms = {
+    buyerId: mara.id,
+    quantity: 10,
+    destinationId: "crown-harbor",
+    deadlineTick: 12,
+  };
+  const accept = assessSupplyContract(world, zara, { ...terms, price: 18 });
+  const refuse = assessSupplyContract(world, zara, { ...terms, price: 8 });
+
+  assert.equal(accept.accepted, true);
+  assert.equal(accept.gate, null);
+  assert.equal(accept.score, 0.671);
+  assert.equal(accept.threshold, 0.561);
+  assert.equal(accept.costBasis, 14.7);
+  assert.equal(accept.travelTicks, 0);
+  assert.deepEqual(accept.factors, {
+    commerce: 0.268,
+    margin: 0.224,
+    trust: 0.093,
+    respect: 0.111,
+    grievance: -0.022,
+    obligation: 0.017,
+    perceivedRisk: -0.02,
+  });
+  assert.equal(refuse.accepted, false);
+  assert.equal(refuse.gate, "score");
+  assert.equal(refuse.score, 0.197);
+  assert.equal(refuse.factors.margin, -0.25);
+  assert.equal(refuse.threshold, 0.561);
+  assert.equal(world.rngState, rng);
+  assert.equal(stateHash(world), hash);
+  assert.equal(Object.keys(world.contracts ?? {}).length, 0);
+});
+
+test("a carrier already at sea refuses under the travel gate and the escrow returns once", () => {
+  const world = createPrototypeWorld(1847);
+  const mara = world.characters["character-01"];
+  const corin = world.characters["character-16"];
+  assert.equal(corin.name, "Corin Hale");
+  assert.equal(corin.locationId, "glassport");
+  assert.equal(corin.travel, null);
+  const submission = submitCommand(world, {
+    playerId: "prototype-player",
+    type: "offer-contract",
+    characterId: "character-16",
+    quantity: 10,
+    destinationId: "crown-harbor",
+    price: 30,
+    expiresInTicks: 24,
+  });
+  assert.equal(submission.ok, true);
+
+  const offered = runTick(world);
+  const contract = Object.values(world.contracts ?? {})[0];
+  assert.ok(contract);
+  assert.equal(contract.status, "offered");
+  assert.equal(contract.escrow, 30);
+  assert.equal(contract.settled, false);
+  assert.equal(mara.money, 78);
+  assert.equal(offered.events.some((event) => event.type === "contract-refused"), false);
+  assert.equal(offered.events.some((event) => event.type === "contract-accepted"), false);
+
+  corin.locationId = null;
+  corin.travel = { fromId: "glassport", toId: "cinder-key", totalTicks: 2, remainingTicks: 2 };
+  const judged = runTick(world);
+  const refusal = judged.events.find((event) => event.type === "contract-refused");
+  assert.ok(refusal);
+  assert.equal(refusal.data.gate, "travel");
+  assert.notEqual(refusal.data.gate, "score");
+  assert.equal(refusal.data.reason, AT_SEA_REASON);
+  assert.equal(refusal.data.escrow, 0);
+  assert.equal(refusal.data.buyerMoney, 108);
+  assert.equal(world.contracts?.[contract.id].status, "refused");
+  assert.equal(world.contracts?.[contract.id].settled, true);
+  assert.equal(world.contracts?.[contract.id].escrow, 0);
+  assert.equal(mara.money, 108);
+  assert.equal(
+    judged.events.filter((event) => event.type === "contract-refused").length,
+    1,
+  );
+  const feed = projectEventFeed(world, mara.id, [refusal]);
+  assert.equal(
+    feed[0].summary,
+    "Corin Hale refused the provisions contract. The carrier is already at sea.",
+  );
+
+  const again = runTick(world);
+  assert.equal(again.events.some((event) => event.type === "contract-refused"), false);
+  assert.equal(mara.money, 108);
+});
+
+test("scoring a contract always has a positive cost basis", () => {
+  const world = createPrototypeWorld(1847);
+  const mara = world.characters["character-01"];
+  const docked = Object.values(world.characters).filter((character) => character.locationId && !character.travel);
+  assert.ok(docked.length > 0);
+  for (const carrier of docked) {
+    for (const price of [8, 18, 30]) {
+      const assessment = assessSupplyContract(world, carrier, {
+        buyerId: mara.id,
+        quantity: 10,
+        price,
+        destinationId: "crown-harbor",
+        deadlineTick: 720,
+      });
+      if (assessment.gate === null || assessment.gate === "score" || assessment.gate === "purse") {
+        assert.ok(
+          assessment.costBasis > 0,
+          `${carrier.id} price ${price} gate ${assessment.gate} costBasis ${assessment.costBasis}`,
+        );
+      }
+      if (assessment.gate === "travel") {
+        assert.equal(assessment.reason, VOYAGE_REASON);
+        assert.ok(assessment.costBasis > 0, `${carrier.id} voyage refusal still has a market price`);
+      }
+    }
+  }
+
+  const corin = world.characters["character-16"];
+  corin.locationId = null;
+  corin.travel = { fromId: "glassport", toId: "cinder-key", totalTicks: 2, remainingTicks: 2 };
+  const atSea = assessSupplyContract(world, corin, {
+    buyerId: mara.id,
+    quantity: 10,
+    price: 30,
+    destinationId: "crown-harbor",
+    deadlineTick: 720,
+  });
+  assert.equal(atSea.gate, "travel");
+  assert.equal(atSea.reason, AT_SEA_REASON);
+  assert.notEqual(atSea.gate, "score");
+  assert.equal(atSea.costBasis, 0);
+
+  corin.locationId = "glassport";
+  corin.travel = null;
+  const tooShort = assessSupplyContract(world, corin, {
+    buyerId: mara.id,
+    quantity: 10,
+    price: 30,
+    destinationId: "crown-harbor",
+    deadlineTick: world.tick + 1,
+  });
+  assert.equal(tooShort.gate, "travel");
+  assert.equal(tooShort.reason, VOYAGE_REASON);
+  assert.ok(tooShort.costBasis > 0);
+  assert.ok(tooShort.travelTicks > tooShort.ticksLeft);
+});
+
+test("fulfilling a delivery of 10 adds 10 provisions to Crown Harbor, pays the carrier from escrow, and is not a market-trade", () => {
+  const world = createPrototypeWorld(1847);
+  const mara = world.characters["character-01"];
+  const zara = world.characters["character-17"];
+  const submission = offerDelivery(world, 18);
+  assert.equal(submission.ok, true);
+  assert.equal(mara.money, 108, "escrow is taken when the offer is applied, not when it is queued");
+  assert.equal(Object.keys(world.contracts ?? {}).length, 0);
+
+  const offered = runTick(world);
+  const contractId = contractEvents(offered.events)[0]?.data.contractId as string
+    ?? Object.keys(world.contracts ?? {})[0];
+  const contract = world.contracts?.[contractId];
+  assert.ok(contract);
+  assert.equal(contract.status, "offered");
+  assert.equal(contract.escrow, 18);
+  assert.equal(contract.settled, false);
+  assert.equal(mara.money, 90);
+  assert.equal(offered.events.some((event) => event.type === "contract-accepted"), false);
+  assert.equal(offered.events.some((event) => event.type === "contract-fulfilled"), false);
+
+  const carrierMoney = zara.money;
+  const cargo = zara.cargo.provisions;
+  const shelfBefore = world.settlements["crown-harbor"].stocks.provisions;
+  const landed = runTick(world);
+  const accepted = landed.events.find((event) => event.type === "contract-accepted");
+  const fulfilled = landed.events.find((event) => event.type === "contract-fulfilled");
+  const upkeep = landed.events.find((event) =>
+    event.settlementId === "crown-harbor" &&
+    (event.type === "settlement-upkeep" || event.type === "settlement-shortage")
+  );
+  assert.ok(accepted);
+  assert.ok(fulfilled);
+  const shelf = upkeep ? (upkeep.data.stocks as { provisions: number }).provisions : shelfBefore;
+  assert.equal(accepted.data.buyerMoney, 90);
+  assert.equal(accepted.data.carrierMoney, carrierMoney);
+  assert.equal(accepted.data.escrow, 18);
+  assert.equal(fulfilled.data.buyerMoney, 90);
+  assert.equal(fulfilled.data.carrierMoney, round(carrierMoney + 18, 2));
+  assert.equal(fulfilled.data.escrow, 0);
+  assert.equal(
+    (fulfilled.data.settlementStocks as { provisions: number }).provisions,
+    round(shelf + 10),
+  );
+  assert.equal(
+    (fulfilled.data.carrierCargo as { provisions: number }).provisions,
+    round(cargo - 10),
+  );
+  assert.equal(world.contracts?.[contract.id].status, "fulfilled");
+  assert.equal(world.contracts?.[contract.id].settled, true);
+  assert.equal(world.contracts?.[contract.id].escrow, 0);
+  assert.equal(mara.money, 90);
+  assert.equal(
+    landed.events.filter((event) => event.type === "market-trade" && event.data.contractId !== undefined).length,
+    0,
+  );
+  assert.equal(
+    landed.events.filter((event) =>
+      event.type === "relationship-changed" && event.data.trigger === "supply contract fulfilled"
+    ).length,
+    2,
+  );
+  const again = runTick(world);
+  assert.equal(again.events.some((event) => event.type === "contract-fulfilled"), false);
+});
+
+test("a hold of 9 does not fulfil a delivery of 10", () => {
+  const world = createPrototypeWorld(1847);
+  const zara = world.characters["character-17"];
+  const submission = offerDelivery(world, 18);
+  assert.equal(submission.ok, true);
+  runTick(world);
+  pinCarrier(world);
+  zara.cargo.provisions = 9;
+  const judged = runTick(world);
+  const contract = Object.values(world.contracts ?? {})[0];
+  assert.equal(contract.status, "accepted");
+  assert.equal(contract.escrow, 18);
+  assert.equal(contract.settled, false);
+  assert.equal(judged.events.some((event) => event.type === "contract-accepted"), true);
+  assert.equal(judged.events.some((event) => event.type === "contract-fulfilled"), false);
+});
+
+test("a passed deadline returns the escrow and writes the defeat deltas", () => {
+  const world = createPrototypeWorld(1847);
+  const mara = world.characters["character-01"];
+  const zara = world.characters["character-17"];
+  const submission = offerDelivery(world, 18, 10, 1);
+  assert.equal(submission.ok, true);
+  runTick(world);
+  pinCarrier(world);
+  const beforeBuyer = mara.relationships[zara.id];
+  const beforeCarrier = zara.relationships[mara.id];
+  const carrierMoney = zara.money;
+  const cargo = zara.cargo.provisions;
+  const judged = runTick(world);
+  const contract = Object.values(world.contracts ?? {})[0];
+  const breached = judged.events.find((event) => event.type === "contract-breached");
+  assert.ok(breached);
+  assert.equal(contract.status, "breached");
+  assert.equal(contract.escrow, 0);
+  assert.equal(contract.settled, true);
+  assert.equal(breached.data.buyerMoney, 108);
+  assert.equal(breached.data.carrierMoney, carrierMoney);
+  assert.equal(breached.data.escrow, 0);
+  assert.equal(breached.data.carrierCargo, undefined);
+  assert.equal(mara.money, 108);
+  assert.ok(Math.abs(zara.cargo.provisions - cargo) < 1, "the grain stays aboard");
+  assert.equal(judged.events.some((event) => event.type === "contract-fulfilled"), false);
+  assert.equal(
+    judged.events.filter((event) => event.type === "market-trade" && event.data.contractId !== undefined).length,
+    0,
+  );
+
+  const shifts = judged.events.filter((event) =>
+    event.type === "relationship-changed" && event.data.trigger === "supply contract breached"
+  );
+  assert.equal(shifts.length, 2);
+  assertRelationshipShift(shifts, mara.id, zara.id, beforeBuyer, false, world.tick - 1);
+  assertRelationshipShift(shifts, zara.id, mara.id, beforeCarrier, false, world.tick - 1);
+});
+
+function assertRelationshipShift(
+  events: SimEvent[],
+  fromId: string,
+  toId: string,
+  prior: Relationship | undefined,
+  victory: boolean,
+  tick: number,
+): void {
+  const event = events.find((candidate) => candidate.actorId === fromId && candidate.data.characterId === toId);
+  assert.ok(event, `${fromId} -> ${toId}`);
+  const next = event.data.relationship as Relationship;
+  const base = prior ?? {
+    trust: 0.28,
+    affinity: 0.25,
+    respect: 0.28,
+    fear: 0.08,
+    grievance: 0,
+    obligation: 0,
+  };
+  const delta = victory ? VICTORY : DEFEAT;
+  assert.equal(next.trust, round(clamp(base.trust + delta.trust, 0, 1)));
+  assert.equal(next.respect, round(clamp(base.respect + delta.respect, 0, 1)));
+  assert.equal(next.fear, round(clamp(base.fear + delta.fear, 0, 1)));
+  assert.equal(next.grievance, round(clamp(base.grievance + delta.grievance, 0, 1)));
+  assert.equal(next.obligation, round(clamp(base.obligation + delta.obligation, 0, 1)));
+  assert.equal(next.affinity, base.affinity ?? 0.25);
+  assert.equal(next.lastChangedTick, tick);
+}
 
 test("an active protect order does not complete once the target's faction has changed", () => {
   const world = createPrototypeWorld(1847);
