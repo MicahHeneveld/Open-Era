@@ -91,7 +91,7 @@ Those two numbers stay as seen. They are not recomputed from live experience, di
 
 ### Left as it is
 
-`locationId` and `travel` stay public at every tier. The co-located tier stays exact, including the faction-port clause. Taking either down is open questions 3 and 4. The map reads `locationId`, and so does the play that finds an officer already at Cinder Key. The sighting stores the port for a later redaction. Until then the pin is live and the sighting is the troop count. Writing the list from `directObservation` is the other candidate.
+`locationId` and `travel` stay public at every tier. The co-located tier stays exact, including the faction-port clause. Taking either down is open questions 3 and 5. The map reads `locationId`, and so does the play that finds an officer already at Cinder Key. The sighting stores the port for a later redaction. Until then the pin is live and the sighting is the troop count. Writing the list from `directObservation` is the other candidate.
 
 ### Where it shows
 
