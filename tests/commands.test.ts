@@ -593,6 +593,112 @@ test("the issuer confirms a character's completion report before an order closes
   ));
 });
 
+test("with no command, the issuer's tick-0 report closes as issuer-silent at tick 6", () => {
+  const world = createPrototypeWorld(1847);
+  const mara = world.characters["character-01"];
+  const firstTick = runTick(world);
+  const report = firstTick.events.find((event) =>
+    event.type === "standing-order-completion-reported" && event.data.issuerId === mara.id
+  );
+  assert.ok(report);
+  const recipient = world.characters[report.actorId!];
+  const order = recipient.standingOrders.find((candidate) => candidate.id === report.data.orderId)!;
+  assert.equal(order.status, "awaiting-confirmation");
+
+  const next = runTick(world);
+  assert.equal(order.status, "awaiting-confirmation");
+  assert.equal(next.events.some((event) =>
+    event.type === "standing-order-completed" && event.data.orderId === order.id
+  ), false);
+
+  const events = [...next.events];
+  while (world.tick <= 6) events.push(...runTick(world).events);
+  const completed = events.filter((event) =>
+    event.type === "standing-order-completed" && event.data.orderId === order.id
+  );
+  assert.equal(completed.length, 1);
+  assert.equal(completed[0].tick, 6);
+  assert.equal(completed[0].data.reason, "issuer-silent");
+  assert.equal(completed[0].data.commandId, undefined);
+  assert.equal(completed[0].actorId, mara.id);
+  assert.equal(
+    completed[0].data.summary,
+    `${mara.name} did not answer ${recipient.name}'s completion report within a day, and the order closed.`,
+  );
+  assert.equal(order.status, "completed");
+  assert.equal(order.lastReport?.kind, "confirmed");
+});
+
+test("a cancel queued before the silent close leaves the order cancelled", () => {
+  const world = createPrototypeWorld(1847);
+  const firstTick = runTick(world);
+  const report = firstTick.events.find((event) =>
+    event.type === "standing-order-completion-reported" && event.data.issuerId === "character-01"
+  );
+  assert.ok(report);
+  const recipient = world.characters[report.actorId!];
+  const order = recipient.standingOrders.find((candidate) => candidate.id === report.data.orderId)!;
+  assert.equal(submitCommand(world, {
+    playerId: "prototype-player",
+    type: "cancel-order",
+    characterId: recipient.id,
+    orderId: order.id,
+  }).ok, true);
+  const cancelled = runTick(world);
+  assert.equal(order.status, "cancelled");
+  assert.equal(cancelled.events.some((event) =>
+    event.type === "standing-order-cancelled" && event.data.orderId === order.id
+  ), true);
+  assert.equal(cancelled.events.some((event) =>
+    event.type === "standing-order-completed" && event.data.orderId === order.id
+  ), false);
+  const later = runTick(world);
+  assert.equal(later.events.some((event) =>
+    event.type === "standing-order-completed" && event.data.orderId === order.id
+  ), false);
+});
+
+test("a captive issuer is refused on submit, and the report still closes after a day", () => {
+  const world = createPrototypeWorld(1847);
+  const mara = world.characters["character-01"];
+  const firstTick = runTick(world);
+  const report = firstTick.events.find((event) =>
+    event.type === "standing-order-completion-reported" && event.data.issuerId === mara.id
+  );
+  assert.ok(report);
+  const recipient = world.characters[report.actorId!];
+  const order = recipient.standingOrders.find((candidate) => candidate.id === report.data.orderId)!;
+  mara.captivity = {
+    captorFactionId: "free-tide",
+    settlementId: "cinder-key",
+    capturedTick: world.tick,
+    mandatoryReleaseTick: world.tick + 14 * world.ticksPerDay,
+    cause: "major-defeat",
+    displayedRisk: "high",
+    scatteredTroops: { count: 30, experience: 0.5, discipline: 0.6 },
+    releaseDestinationId: "crown-harbor",
+  };
+  const submission = submitCommand(world, {
+    playerId: "prototype-player",
+    type: "confirm-order",
+    characterId: recipient.id,
+    orderId: order.id,
+  });
+  assert.equal(submission.ok, false);
+  assert.equal(submission.ok === false ? submission.code : null, "character-captive");
+  assert.equal(order.status, "awaiting-confirmation");
+
+  const events = [];
+  while (world.tick <= 6) events.push(...runTick(world).events);
+  const completed = events.filter((event) =>
+    event.type === "standing-order-completed" && event.data.orderId === order.id
+  );
+  assert.equal(completed.length, 1);
+  assert.equal(completed[0].tick, 6);
+  assert.equal(completed[0].data.reason, "issuer-silent");
+  assert.equal(order.status, "completed");
+});
+
 test("an uncompleted timed order expires and no longer drives the character's plan", () => {
   const world = createPrototypeWorld(1847);
   const recipient = world.characters["character-04"];

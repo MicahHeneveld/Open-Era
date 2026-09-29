@@ -384,6 +384,111 @@ test("accepted orders report temporary deviations, resumptions, and completion j
   }));
 });
 
+test("a free autonomous issuer confirms the report on the next tick without drawing rng", () => {
+  const world = createPrototypeWorld(1847);
+  const reported = runTick(world);
+  const report = reported.events.find((event) =>
+    event.type === "standing-order-completion-reported" && event.data.issuerId === "character-14"
+  );
+  assert.ok(report);
+  const holder = world.characters[report.actorId!];
+  const order = holder.standingOrders.find((candidate) => candidate.id === report.data.orderId)!;
+  const issuer = world.characters["character-14"];
+  assert.equal(order.status, "awaiting-confirmation");
+  assert.equal(issuer.controller.kind, "autonomous");
+  assert.equal(issuer.captivity, null);
+
+  const held = structuredClone(world);
+  for (const character of Object.values(held.characters)) {
+    for (const waiting of character.standingOrders) {
+      if (waiting.status === "awaiting-confirmation") waiting.statusChangedTick = held.tick;
+    }
+  }
+  const closed = runTick(world);
+  runTick(held);
+  const completion = closed.events.find((event) =>
+    event.type === "standing-order-completed" && event.data.orderId === order.id
+  );
+  assert.ok(completion);
+  assert.equal(completion.data.reason, "issuer-judgment");
+  assert.equal(completion.actorId, issuer.id);
+  assert.equal(completion.targetId, holder.id);
+  assert.equal(completion.data.commandId, undefined);
+  assert.equal(closed.events.some((event) => event.type === "player-command-resolved" && event.data.orderId === order.id), false);
+  assert.equal(order.status, "completed");
+  assert.equal(world.rngState, held.rngState);
+});
+
+test("a pressure completion writes no relationship, and a protect completion writes the victory deltas once", () => {
+  const victory = { trust: 0.012, respect: 0.028, fear: -0.005, grievance: -0.006, obligation: -0.01 };
+
+  const pressureWorld = createPrototypeWorld(1847);
+  const esme = pressureWorld.characters["character-19"];
+  const pax = pressureWorld.characters["character-14"];
+  assert.equal(esme.name, "Esme Dusk");
+  const pressure = esme.standingOrders.find((order) => order.directive === "pressure" && order.issuerId === pax.id);
+  assert.ok(pressure);
+  pressure.status = "awaiting-confirmation";
+  pressure.adherence = "following";
+  pressure.statusChangedTick = -1;
+  const pressureTick = runTick(pressureWorld);
+  assert.equal(pressure.status, "completed");
+  assert.equal(pressureTick.events.some((event) =>
+    event.type === "standing-order-completed" &&
+    event.data.orderId === pressure.id &&
+    event.data.reason === "issuer-judgment"
+  ), true);
+  assert.equal(pressureTick.events.some((event) =>
+    event.type === "relationship-changed" && event.data.trigger === "order confirmed"
+  ), false);
+
+  const protectWorld = createPrototypeWorld(1847);
+  const zara = protectWorld.characters["character-17"];
+  const issuer = protectWorld.characters["character-14"];
+  assert.equal(zara.name, "Zara Gale");
+  const protect = zara.standingOrders[0];
+  assert.ok(protect);
+  protect.directive = "protect";
+  protect.targetId = "cinder-key";
+  protect.issuerId = issuer.id;
+  protect.status = "awaiting-confirmation";
+  protect.adherence = "following";
+  protect.statusChangedTick = -1;
+  const prior = zara.relationships[issuer.id];
+  assert.ok(prior);
+  const protectTick = runTick(protectWorld);
+  const completion = protectTick.events.find((event) =>
+    event.type === "standing-order-completed" && event.data.orderId === protect.id
+  );
+  const relationship = protectTick.events.find((event) =>
+    event.type === "relationship-changed" &&
+    event.data.trigger === "order confirmed" &&
+    event.actorId === zara.id
+  );
+  assert.ok(completion);
+  assert.equal(completion.data.reason, "issuer-judgment");
+  assert.ok(relationship);
+  const written = relationship.data.relationship as Relationship;
+  assert.equal(written.trust, round(clamp(prior.trust + victory.trust, 0, 1)));
+  assert.equal(written.respect, round(clamp(prior.respect + victory.respect, 0, 1)));
+  assert.equal(written.fear, round(clamp(prior.fear + victory.fear, 0, 1)));
+  assert.equal(written.grievance, round(clamp(prior.grievance + victory.grievance, 0, 1)));
+  assert.equal(written.obligation, round(clamp(prior.obligation + victory.obligation, 0, 1)));
+  assert.equal(written.affinity, prior.affinity);
+  assert.equal(protect.status, "completed");
+
+  const again = runTick(protectWorld);
+  assert.equal(again.events.some((event) =>
+    event.type === "relationship-changed" &&
+    event.data.trigger === "order confirmed" &&
+    event.actorId === zara.id &&
+    event.targetId === issuer.id
+  ), false);
+  assert.equal(again.events.some((event) =>
+    event.type === "standing-order-completed" && event.data.orderId === protect.id
+  ), false);
+});
+
 const VICTORY = { trust: 0.012, respect: 0.028, fear: -0.005, grievance: -0.006, obligation: -0.01 };
 const DEFEAT = { trust: -0.025, respect: -0.008, fear: 0.018, grievance: 0.035, obligation: 0.015 };
 

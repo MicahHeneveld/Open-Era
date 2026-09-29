@@ -10,6 +10,7 @@ import {
   projectSupplyContracts,
   visibleStandingOrders,
 } from "../src/dashboard/visibility.ts";
+import { runTick } from "../src/sim/engine.ts";
 import { createPrototypeWorld } from "../src/sim/scenario.ts";
 import { round, stateHash } from "../src/sim/state.ts";
 import type { Character, SimEvent, WorldState } from "../src/sim/types.ts";
@@ -301,6 +302,57 @@ test("only the commander's own orders are projected", () => {
     "another chain of command must not become visible",
   );
   assert.deepEqual(visibleStandingOrders(commander, commander), commander.standingOrders);
+});
+
+test("an order confirmation is visible only to the issuer and the holder's own relationship", () => {
+  const world = createPrototypeWorld(1847);
+  const mara = world.characters["character-01"];
+  const zara = world.characters["character-17"];
+  const pax = world.characters["character-14"];
+  assert.equal(zara.name, "Zara Gale");
+  assert.equal(pax.name, "Pax Ash");
+  runTick(world);
+  const judged = runTick(world);
+  const completed = judged.events.find((event) =>
+    event.type === "standing-order-completed" && event.targetId === zara.id
+  );
+  assert.ok(completed);
+  assert.equal(completed.data.reason, "issuer-judgment");
+  assert.equal(completed.actorId, pax.id);
+  const relationship = judged.events.find((event) =>
+    event.type === "relationship-changed" &&
+    event.data.trigger === "order confirmed" &&
+    event.actorId === zara.id &&
+    event.targetId === pax.id
+  );
+  assert.ok(relationship);
+
+  assert.equal(
+    visibleStandingOrders(mara, zara).some((order) => order.issuerId === pax.id),
+    false,
+  );
+  assert.equal(eventPayloadVisible(world, mara, completed), false);
+  assert.equal(eventPayloadVisible(world, pax, completed), true);
+  assert.equal(eventPayloadVisible(world, zara, relationship), true);
+  assert.equal(projectEvent(world, zara, relationship, "rich").payloadWithheld, false);
+  assert.equal(
+    (projectEvent(world, zara, relationship, "rich").data as { trigger: string }).trigger,
+    "order confirmed",
+  );
+
+  assert.equal(eventPayloadVisible(world, mara, relationship), false);
+  const distant = world.characters["character-15"];
+  assert.notEqual(distant.id, pax.id);
+  assert.notEqual(distant.id, zara.id);
+  assert.notEqual(distant.factionId, mara.factionId);
+  makeUnobserved(distant);
+  assert.equal(characterVisibilityTier(world, mara, distant), "distant");
+  assert.equal(eventPayloadVisible(world, distant, completed), false);
+  assert.equal(eventPayloadVisible(world, distant, relationship), false);
+  const withheld = projectEvent(world, distant, completed, "rich summary");
+  assert.equal(withheld.data, null);
+  assert.equal(withheld.payloadWithheld, true);
+  assert.equal(projectEvent(world, distant, relationship, "rich summary").data, null);
 });
 
 test("foreign faction strength is withheld while the commander's own is exact", () => {
