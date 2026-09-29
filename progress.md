@@ -216,10 +216,10 @@ Backfilled from the commit graph on 2026-09-25. **Attribution caveat:** commits 
 ## Entries
 
 ### 2026-09-29 — Player buy-provisions quotes its cost and stops at the depth cap
-- **Agent:** Cursor | **Branch:** `feature/buy-provisions-player-fixes` | **Commits:** this entry's commit | **Type:** Behavior
+- **Agent:** Cursor | **Branch:** `feature/buy-provisions-player-fixes` | **Commits:** `12a7c66`. `8f5b97e` merges `origin/main` at `2eef285` (the captive-intelligence note). | **Type:** Behavior
 - **Changed** — The player's `buy-provisions` quotes the unit price and the total on the accepted command and on the resolution events. A top-up that would clear more than `marketDepth` (28.8 provisions) is refused with that ceiling. A short purse is refused with the bill, not with the 2-money floor. A shelf under 1 names the stock. Autonomous `buy-provisions` is the old uncapped fill, and it still scores −1000 under a shelf of 1.
 - **Why** — The one-click top-up could spend a whole purse and called that spend "2 money". The share-of-stock cap already bound `buy-resource` and `trade-local`. The merged provisioning note leaves captains uncapped, because the buys that empty the small ports are already under 28.8.
-- **Verified** — `npm run typecheck` clean. **212 tests**. `./scripts/evaluate-milestone.sh buy-provisions-player` passed. Tick-72 hashes stayed `cb04ba5d…` / `bd7d8cc4…` / `20975bf4…` (8301, 8513, 8031). Split recovery replayed 572 events. No `golden:update`.
+- **Verified** — `npm run typecheck` clean. **212 tests**. `./scripts/evaluate-milestone.sh buy-provisions-player` passed, and again after the merge of `2eef285`. Tick-72 hashes stayed `cb04ba5d…` / `bd7d8cc4…` / `20975bf4…` (8301, 8513, 8031). Split recovery replayed 572 events. No `golden:update`.
 - **Left open** — The low-food briefing can still say a full top-up would buy the resupply target when that gap is past 28.8. The blind session is [buy-provisions-001](docs/playtests/buy-provisions-001.md). Not-in-port text is still the shared traveling and no-location sentences.
 - **Links** — [autonomous provisioning](docs/design/autonomous-provisioning.md), [battle morale](docs/design/battle-morale.md), [buy-provisions-001](docs/playtests/buy-provisions-001.md)
 
