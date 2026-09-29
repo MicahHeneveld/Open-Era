@@ -207,3 +207,52 @@ This voyage was run through `submitCommand` and `runTick` in the harness, separa
 5. **Two ships that reach the same port next tick, from different islands. Does that count?** Default: yes. That is the arriving case. "One tick left" is not a distance, so they may still be far apart on the water.
 6. **A prisoner, or a captain just let out.** Default: a prisoner is in port and is not a sea sighting. A captain who has been released and is sailing is an ordinary ship. The row does not say they were a prisoner. Who is anchored, including a prisoner, stays a survey.
 7. **Does this change a battle forecast, what an autonomous captain does, who wins a fight, or who sits in command?** Default: no. It is a reading on the commander's screen. The planner, the port forecast, the outscore rule, and the command seat do not read it.
+
+## Addendum: after M30, M29.1 and M31
+
+2026-09-29. Main is `d76a0a0588c3d777fd1b0ec58859b09fa51ab4d3` (PR #58). That commit contains `e68281b` (PR #56, M30). `npm test` passed, 216 tests, Node v24.21.0, ICU 78.3. The committed 72-tick fixture reproduced, including the recovery replay of 572 events:
+
+| Seed | State hash | Events |
+| ---: | --- | ---: |
+| 1847 | `cb04ba5d392d8b1c868cc97e54cb21b21ec171edd546bb70d0d7aba86cc69c11` | 8301 |
+| 2718 | `bd7d8cc44d5fa21022ecb8f8086e13dfbb9475eb025b5ae53f87e2991f90035c` | 8513 |
+| 4096 | `20975bf480e5aa11eeafe1ce39c36cf5ba0fa8e2d5de2bb5887a35d7b3aecc9f` | 8031 |
+
+The harness patched the dock rule and the −0.04 scar the way [loyalty scar, remeasured](loyalty-scar-remeasure.md) describes, and reproduced that note's tree (2) at tick 1200: `95bd71dc877f4e12c77ba2f07a2f10f8e076fc32deaf997dd4cf5e4fa7d011b5` / `55d48cbbdeb6e562ca4002d6e22a713a9977175e06e0383b36a3af015e53c57d` / `f5355c1a254bd3df4924fd784da645b770cf01bafe6d73d8d9c99a82446715df`, with 164313 / 165434 / 164691 events. The patch was removed. No source change is in this commit.
+
+The read is still taken from `travel` after `runTick`. It does not read `actingCommanderId` or `loyaltyAdjustment`. Character-ticks with both `captivity` and `travel`: 0, 0, 0. Rows whose observer was captive: 0, 0, 0. Rows whose subject was captive: 0, 0, 0.
+
+The sample captain is the autonomous character with the most rows. Toma Hale still leads seed 1847. Seeds 2718 and 4096 are now Toma Reef and Bram Tern. Mara is the human. On 4096 she still has no sea tick. On 1847 and 2718 the dock rule captures her, `releaseTravel` puts her back on a voyage, and she has one ordinary row after that release.
+
+| Seed | Captain | Sea ticks | Rows | Distinct parties | Earliest tick | Passing | Sharing | Overtaking | Arriving | Arriving flag |
+| ---: | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| 1847 | Toma Hale (`character-27`) | 602 | 400 | 23 | 1 | 126 | 163 | 67 | 44 | 107 |
+| 2718 | Toma Reef (`character-07`) | 497 | 236 | 25 | 3 | 82 | 64 | 55 | 35 | 74 |
+| 4096 | Bram Tern (`character-22`) | 583 | 373 | 24 | 4 | 125 | 62 | 130 | 56 | 94 |
+| 1847 | Mara Vane | 3 | 1 | 1 | 680 | 1 | 0 | 0 | 0 | 0 |
+| 2718 | Mara Vane | 3 | 1 | 1 | 1121 | 0 | 0 | 0 | 1 | 1 |
+| 4096 | Mara Vane | 0 | 0 | 0 | | 0 | 0 | 0 | 0 | 0 |
+
+Mara's row on 1847 is tick 680, passing Niko Crow (`character-23`, unaffiliated), `verdant-cay` → `crown-harbor`, sailors 16, troops 33, party power 75.939. She is on `crown-harbor` → `verdant-cay`, remaining 2 of 4. Her row on 2718 is tick 1121, arriving, Bram Tern (`character-22`, Free Tide), `cinder-key` → `verdant-cay`, sailors 9, troops 28, party power 93.3. She is on `crown-harbor` → `verdant-cay`, remaining 1 of 4. Both holds kept her in port. The row does not say she had been a prisoner.
+
+Zero-troop rows for the three sample captains: 4, 1, 3. Toma Hale's 400 rows are 305 faction subjects and 95 unaffiliated. Toma Reef's 236 are 77 World Government, 74 the other faction, and 85 unaffiliated. Bram Tern's 373 are 93 Free Tide, 139 the other faction, and 141 unaffiliated. Episode length for those captains: median 1 and minimum 1 on every seed, maximum 5, 4, and 4, means 1.619, 1.405, and 1.492.
+
+Live rows at ticks 72, 400, and 1200. Mara is 0 at each of those ticks. Her release row is not one of them. Toma Hale: 1, 0, 1. Toma Reef: 1, 0, 0. Bram Tern: 0, 0, 0.
+
+| Seed | Pair-ticks at sea | Same leg, spans overlap | Opposite, spans overlap | Arriving only | Same leg, no overlap | Opposite, no overlap |
+| ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| 1847 | 21776 | 1073 | 604 | 395 | 1501 | 1612 |
+| 2718 | 17461 | 621 | 479 | 328 | 1125 | 1221 |
+| 4096 | 21130 | 978 | 679 | 351 | 1756 | 1801 |
+
+Meetings are 2072, 1428, and 2008. Same-leg pairs that do not overlap still have median progress gap 0.5 on every seed, and mean gap 0.441, 0.461, and 0.442. The mean gap of every same-leg pair is 0.271, 0.310, and 0.302. Character-ticks with `travel` set: 6730, 6184, and 6995. Departure snapshots: 2290, 2102, and 2299. Rows whose subject had just retreated or withdrawn: 6, 10, and 3. Rows whose subject was released on that tick: 6, 2, and 1. The events underneath are `battle-retreated` 7, 19, 4; `post-defeat-withdrawal-started` 5, 7, 5; `captivity-released` 12, 8, 6; `captivity-escaped` 0, 0, 0.
+
+Kept lists, harness only. Toma Hale at tick 72 is 15 remembered, buckets 1 / 3 / 11 / 0, min 0, max 70, median 46. At tick 400 he is 23, 0 / 4 / 4 / 15, min 9, max 384, median 157. Those two match the lists above, because the dock rule's first capture on this seed is event tick 498. At tick 1200 he is 23, 1 / 1 / 5 / 16, min 0, max 1174, median 409. Toma Reef at tick 1200 is 25 remembered, 0 / 0 / 3 / 22, min 22, max 1197, median 714. Bram Tern at tick 1200 is 24, 0 / 1 / 4 / 19, min 4, max 1196, median 610.5. Mara's kept list is empty at ticks 72 and 400 on every seed. At tick 1200 it is one row on 1847 (age 520) and one on 2718 (age 79), and empty on 4096. The proposal still does not keep the row.
+
+The four covers on this tree, while the seat was filled: Jun Marrow and Dax Pike, twice, have 0 sea ticks. Ada Sorn, covering Mara on seed 2718 from the snapshot at tick 1035 through 1118, has 3 sea ticks and 0 rows. She is a sighter because `travel` is set. The seat id is not an input, and neither is the scar.
+
+The commanded playtest still matches. Seed 1847, travel to Glassport before the first tick. At tick 2 Mara is `crown-harbor` → `glassport`, remaining 2 of 4, and Ada Sorn is the same leg, remaining 2 of 3: kind `overtaking`, `arriving` false, sailors 18, troops 35, party power 81.529, `observedTick` 2. Ada's projected `troops` and `partyPower` are null. At tick 3 Sable Sorn is still the passing, `glassport` → `crown-harbor`, remaining 2 of 4, sailors 14, troops 36, party power 100.168. At tick 4 Mara is at Glassport, `travel` is null, and the sea list is empty.
+
+Hash. The read-only pass matches the fixture on all three seeds and matches the tree (2) tick-1200 hashes and event counts above. Writing the row onto every observer for 72 ticks, under `seaSightings`, leaves the event counts at 8301 / 8513 / 8031 and moves the hash. Entries are 420, 384, and 312, on 29, 29, and 28 characters. Mara's entries are 0. The hashes are `208fa11d41e1e90b8f5224d6e74871fea97c00cfdc151e16b9e370d3ab21e90a`, `afd5d5b9dde890a1bc03490c6c1cf2a6686c5437ff424d6540c5b5be88db081c`, and `3cd3b1fd9abbd1289965a776b18c93eba024d1f39f36b1a5ebae9ce7bca66ca4`. Through tick 72 the contact counts are the ones already in this note, because that window is before the first outscore capture and before the first scar.
+
+**Verdict: no change.** The derivation, the tests, and the playtest still describe this tree. A captive is still in port, so a captive still has no sea row. A captain just released is still an ordinary ship, which is why the headless census now includes Mara's two release rows. The acting commander and the scar are not inputs. Storing the row still moves the fixture. The proposal still leaves it off the world.
