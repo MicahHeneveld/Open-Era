@@ -556,6 +556,78 @@ Answer by number, for example "4: yes" or "4: keep the default." The default is 
 
 **Source:** [Autonomous orders](autonomous-orders.md#questions-for-micah) question 7
 
+## Sea sightings
+
+### 54. Two ships on the same route, a long way apart. Do you learn the other crew's strength?
+
+**Default:** No. You learn it when the stretch of water each ship crossed this tick overlaps, or when both will dock at the same port on the next tick. The ships this rule leaves out, on the same route, were about half a voyage apart.
+
+**If you pick the other way:** You would learn the other crew's strength even when the ships are a long way apart on the same route. Those ships were about half a voyage apart.
+
+**Status:** Default: no
+
+**Source:** [Sea sightings](sea-sightings.md#questions-for-micah) question 1
+
+### 55. After the ships separate, do you keep the count?
+
+**Default:** No. The count is worked out when the state is read, and it is gone when the ships are no longer together. Writing it onto every captain changed all three 72-tick hashes. A kept list was already mostly 18 ticks old or older by tick 72.
+
+**If you pick the other way:** You would keep the count after the ships separate. Writing it onto every captain changed all three 72-tick hashes. A kept list was already mostly 18 ticks old or older by tick 72.
+
+**Status:** Default: no
+
+**Source:** [Sea sightings](sea-sightings.md#questions-for-micah) question 2
+
+### 56. What do you learn about the ship?
+
+**Default:** Who they are, their faction, how many sailors, how many troops, and their party power, plus the heading the map already shows. The hold, the purse, health, skills, and orders stay hidden. There is no separate number of ships. One party is one voyage, and sailors are the crew.
+
+**If you pick the other way:** You would also learn the hold, the purse, health, skills, or orders, or a separate number of ships. Those stay hidden. One party is one voyage, and sailors are the crew.
+
+**Status:** Default: who, faction, sailors, troops, party power, and heading
+
+**Source:** [Sea sightings](sea-sightings.md#questions-for-micah) question 3
+
+### 57. The map already shows where every ship is going. Leave that as it is?
+
+**Default:** Yes. This channel adds the strength of a ship you actually meet. It leaves the public course in place.
+
+**If you pick the other way:** The map would stop showing where every ship is going. This channel leaves the public course in place and adds the strength of a ship you actually meet.
+
+**Status:** Default: yes
+
+**Source:** [Sea sightings](sea-sightings.md#questions-for-micah) question 4
+
+### 58. Two ships that reach the same port next tick, from different islands. Does that count?
+
+**Default:** Yes. That is the arriving case. "One tick left" is not a distance, so they may still be far apart on the water.
+
+**If you pick the other way:** Two ships that reach the same port next tick, from different islands, would not count. "One tick left" is not a distance, so they may still be far apart on the water.
+
+**Status:** Default: yes
+
+**Source:** [Sea sightings](sea-sightings.md#questions-for-micah) question 5
+
+### 59. A prisoner, or a captain just let out.
+
+**Default:** A prisoner is in port and is not a sea sighting. A captain who has been released and is sailing is an ordinary ship. The row does not say they were a prisoner. Who is anchored, including a prisoner, stays a survey.
+
+**If you pick the other way:** A prisoner would be a sea sighting, or the row would say a sailing captain had been a prisoner. A prisoner is in port, and who is anchored, including a prisoner, stays a survey.
+
+**Status:** Default: prisoner in port; released captain is a ship
+
+**Source:** [Sea sightings](sea-sightings.md#questions-for-micah) question 6
+
+### 60. Does this change a battle forecast, what an autonomous captain does, who wins a fight, or who sits in command?
+
+**Default:** No. It is a reading on the commander's screen. The planner, the port forecast, the outscore rule, and the command seat do not read it.
+
+**If you pick the other way:** It would change a battle forecast, what an autonomous captain does, who wins a fight, or who sits in command. The planner, the port forecast, the outscore rule, and the command seat do not read it.
+
+**Status:** Default: no
+
+**Source:** [Sea sightings](sea-sightings.md#questions-for-micah) question 7
+
 ## Already settled
 
 The [progress log](../../progress.md) (reconnaissance brief, 2026-09-29) answered reconnaissance questions 1–8. Reconnaissance question 1 is no: a survey or an officer's look stores population, walls, and who was anchored. Reconnaissance question 2 keeps confidence and the original date on that handoff. Reconnaissance questions 3–8 stay put: public sea courses, a live garrison from your other ports, no captives or informants. [Party sightings](party-sightings.md#left-open) repeats those. A foreign price is that dated report, not a live quote ([World simulation](world-simulation.md#player-trade)). An idle player with money still starves if they give no orders ([Port provisions](port-provisions.md#the-idle-commander)). Unpaid ransom is questions 22–29 ([Captivity debts](captivity-debts.md#questions-for-micah)). A landless raid once a town has 8 soldiers, and no troops left behind on the claim, is questions 30–32 ([Portless recovery](portless-recovery.md#questions-for-micah)). A higher score is the attacker's victory when morale is 12 or under, a close fight included and the short retake accepted, rest does not refill the hold, and the capture die is still rolled, is questions 33–37 ([Battle morale](battle-morale.md#questions-for-micah)). Someone else covers the seat while the commander is in prison and hands it back on release, the cover is the highest leadership plus loyalty with the lower id winning a tie and trust is not used, you cannot name someone else or keep the cover after release, everyone including a rival sees who holds the seat, and if that cover is captured the next person steps up for the whole 14 days, is questions 38–42 ([Political layer](political-layer.md#questions-for-micah)). A character released still owing ransom loses 0.04 loyalty once, a paid release changes nothing, orders, plans and work keep using the starting loyalty, and you see loyalty only for your own faction, is questions 43–45 ([Loyalty drift](loyalty-drift.md#questions-for-micah)). Battered-port surrender, fed garrisons, and refusing an unpaid voyage are built. The first hour is a test, not a choice. The one-click food buy is a known bug queued for engineering: the button will show the cost, apply the share-of-stock cap, and its refusal text will be fixed ([World simulation](world-simulation.md#player-trade); [progress log](../../progress.md#open-items)).
