@@ -1,6 +1,6 @@
 # Reconnaissance and earned estimates
 
-**Status: Open.** This is an investigation brief, not a decision record. The section on current behavior describes `main` at `8c97d34` as read from source. Everything under a **Proposal** heading is a proposal for the owner to accept, change or reject. Nothing here is decided until it moves into [world simulation](world-simulation.md) or [autonomous characters](autonomous-characters.md).
+**Status: Open, except the recommended first slice.** This is an investigation brief, not a decision record. The section on current behavior describes `main` at `8c97d34` as read from source. Everything under a **Proposal** heading is a proposal for the owner to accept, change or reject, except the [recommended first slice](#recommended-first-slice-survey), which is built. The rest is not decided until it moves into [world simulation](world-simulation.md) or [autonomous characters](autonomous-characters.md).
 
 ## The problem
 
@@ -109,17 +109,19 @@ Each of these is based on reading the code, not on running it:
 - **Dwarf Fortress.** Rumors start with witnesses and spread from person to person. "No false rumors will ever spread" except about secret identities. There are six levels of knowing where an artifact is, from holding it, through "hearing … so-and-so was holding it at a location recently", to no idea. Knowledge fades over weeks and years ([DF Wiki: Rumor](https://www.dwarffortresswiki.org/index.php/Rumor)). Takeaway: this is close to Open Era's direct / report / rumor ladder, and it errs by leaving things out rather than inventing them.
 - **Europa Universalis IV.** Diplomats build spy networks over time. An unmaintained network decays by 1 per month, and discovery becomes possible from size 25. The covert action Infiltrate Administration (cost 40, diplomatic tech 30) lifts the fog of war from the target nation ([EU4 Wiki: Espionage](https://eu4.paradoxwikis.com/Espionage)). Takeaway: intelligence as an investment that grows and decays is useful. Lifting fog wholesale is what Open Era should avoid, because it hands over truth.
 
-## Recommended first slice: survey (proposal)
+## Recommended first slice: survey
+
+**Built in M18** (`5343663` on `feature/survey`). The five changes, the projection table, and the validation list below are in the code. The playtest is [informed-commitment-002](../playtests/informed-commitment-002.md). Out of scope, the other candidate channels, and the open questions stay proposals.
 
 **Hypothesis.** A commander can learn a never-visited settlement's garrison, population and fortification before sailing, by paying for a survey. The result shows as a dated report with a named source, and the truth can't be recovered any other way.
 
 ### Changes
 
-1. **Store a dated ground record.** Add an optional `ground?: { population, fortification, observedTick, source }` to `SettlementKnowledge`. Ground has its own age because the rest of the entry keeps refreshing. `directObservation` must carry `ground` forward from the previous entry. Otherwise the next arrival or daily refresh would erase it, since the reducer replaces whole entries. Leave the field out rather than setting it to null, and don't bump `WorldState.version`.
-2. **Add a `survey` verb.** Add `survey` to `PlayerAction` and `ACTION_CAPABILITIES`, targeting the current settlement, which must not be held by the commander's faction. It resolves in `resolveDecision` and emits `knowledge-updated` with reason `survey`: a direct record plus `ground` with `source: "direct"`. Passive presence stays present-tense for ground, as `view-model.ts` intends. A durable survey costs a tick of action.
-3. **Deliver an officer's survey.** When `judgeOrderCompletion` accepts an `explore` order that has a `targetId`, also emit `knowledge-updated` for the issuer (`actorId` = issuer, so `eventPayloadVisible` shows it only to them). It carries the officer's present observation of the target, including ground, with `source: "faction-report"` and `observedTick` set to the report tick. The officer's own map stays hidden, because the faction tier projects `knowledge: null`.
-4. **Use ground records in the remote forecast.** `combatForecast` should read `ground` in place of the zeroed `knownFortification` and `knownPopulation`, and add a revealed factor naming the survey's age. The input is the stored record, never the true settlement.
-5. **Projection-only fixes.** Settle hazard 3 by deciding remote hostility from `knowledge.factionId`. Settle hazard 2 by sending null instead of zero.
+1. **Built. Store a dated ground record.** Optional `ground?: { population, fortification, observedTick, source }` on `SettlementKnowledge`. Ground has its own age because the rest of the entry keeps refreshing. `directObservation` carries `ground` forward from the previous entry. Otherwise the next arrival or daily refresh would erase it, since the reducer replaces whole entries. The field is left out rather than set to null, and `WorldState.version` stays 5.
+2. **Built. Add a `survey` verb.** `survey` is on `PlayerAction` and `ACTION_CAPABILITIES`, targeting the current settlement, which must not be held by the commander's faction. It resolves in `resolveDecision` and emits `knowledge-updated` with reason `survey`: a direct record plus `ground` with `source: "direct"`. Passive presence stays present-tense for ground. A durable survey costs a tick of action.
+3. **Built. Deliver an officer's survey.** When `judgeOrderCompletion` accepts an `explore` order that has a `targetId`, the tick also emits `knowledge-updated` for the issuer (`actorId` = issuer, so `eventPayloadVisible` shows it only to them). It carries the officer's present observation of the target, including ground, with `source: "faction-report"` and `observedTick` set to the report tick. Reason `explore-report`. An explore order with no `targetId` delivers nothing. The officer's own map stays hidden, because the faction tier projects `knowledge: null`.
+4. **Built. Use ground records in the remote forecast.** `combatForecast` reads `ground` in place of the zeroed `knownFortification` and `knownPopulation`, and adds a revealed factor naming the survey's age (`surveyed ground is N ticks old`). The input is the stored record, never the true settlement. Standing there still uses the settlement itself.
+5. **Built. Projection-only fixes.** Remote hostility for `forecastAvailable` comes from `knowledge.factionId`. Own-faction ports and the island the commander is standing on still use the faction that is actually there. A settlement with no report projects stocks, prices, population, fortification, and `groundIntelligence` as null rather than zero. M17 had already nulled stocks and prices.
 
 ### Projection
 
@@ -142,9 +144,9 @@ Unit tests:
 - A remote forecast doesn't move when the true fortification or population is changed after the survey. This is the anti-leak test.
 - No projected field is zero where it should be unknown.
 
-Playtest: rerun the informed-commitment ambition against a never-visited port, deciding from an officer's survey, then repeat that session's adversarial inversion protocol.
+Playtest: [informed-commitment-002](../playtests/informed-commitment-002.md) reran the informed-commitment ambition against a never-visited port, deciding from an officer's survey, then repeated that session's adversarial inversion protocol.
 
-Its own follow-up question stays open: does commitment improve, or was the uncertainty carrying the tension?
+The follow-up question has an answer in that session, and it is not a change to this brief. Commitment got more accurate and less tense. A lot of the tension in the first session was the width of a band that did not know the walls.
 
 ### Golden hashes
 
@@ -157,7 +159,7 @@ The expectation is that the golden hashes stay **byte-identical**, so a moved ha
 
 ### Out of scope
 
-Party sightings, informants, captives and faction aggregates. They are the next slices, reusing the same record shape and delivery path.
+Still a proposal. Party sightings, informants, captives and faction aggregates were not built. They are the next slices, reusing the same record shape and delivery path.
 
 ## The trade question
 
