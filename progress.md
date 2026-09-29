@@ -88,8 +88,10 @@ Git remains the complete history. This file exists for three things git does not
 Backfilled from the commit graph on 2026-09-25. **Attribution caveat:** commits do not record which agent authored them. Milestones M1–M11 are attributed to the ChatGPT partner from session context, not from the repository, and should not be read as verified provenance.
 
 ### 2026-09-29 — M26: Offer a paid provisions delivery
-- **Agent:** Open Era Engineer (Cursor cloud agent) | **Branch:** `feature/offer-contract` | **Playtest:** [offer-contract-001](docs/playtests/offer-contract-001.md) `PROMOTE`. The sailed haul is pending, [offer-contract-002](docs/playtests/offer-contract-002.md)
+- **Agent:** Open Era Engineer (Cursor cloud agent) | **Branch:** `feature/offer-contract` | **Playtest:** [offer-contract-001](docs/playtests/offer-contract-001.md) `PROMOTE`. The sailed haul is [offer-contract-002](docs/playtests/offer-contract-002.md) `PROMOTE`
 - `offer-contract` takes the price into escrow when the offer is applied and settles it once. One open contract per buyer and carrier. Nothing offers a haul on its own. An awaiting-confirmation order can be amended explicitly, and a queued `issue-order` is matched to the same issuer. Golden hashes were not regenerated. Tick-72 counts stay 8275 / 8489 / 8003.
+- Verified — Blind session [offer-contract-002](docs/playtests/offer-contract-002.md) on seed 1847: `PROMOTE`. Both beats matched the plan's readings.
+- Links    — [offer-contract-002](docs/playtests/offer-contract-002.md) `PROMOTE`
 
 ### 2026-09-29 — M25: Order identity
 - **Agent:** Open Era Engineer (Cursor cloud agent) | **Branch:** `feature/order-identity` | **Playtest:** pending, [order-identity-001](docs/playtests/order-identity-001.md)

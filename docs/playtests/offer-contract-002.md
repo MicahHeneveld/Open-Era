@@ -163,3 +163,96 @@ Event `tick` 1, sequence 192, `contract-refused`, `payloadWithheld` false:
 `gate` is `travel`, not `score`. `costBasis` 0 is the sea, where there is no market, and it is not a score. No `relationship-changed` event on that response carries a supply-contract trigger.
 
 State: purse 108, and Mara's `money` 108. Contract escrow 0, status `refused`. Corin still on the same voyage, `remainingTicks` 1, `money` null. Crown Harbor `stocks.provisions` 226.008. Nothing was delivered. Stop. Do not advance again. The escrow has already come back once.
+
+## Session / Findings
+
+Blind session on `feature/offer-contract` at `1c67904bf6429acebf5f2fcc32d4b1dc2d051560`, Node v24.21.0. Dashboard started with `npm run dashboard -- --reset --seed 1847` on `http://127.0.0.1:4317`, and started again the same way before beat 2. Every command body and every advance was the one in the plan. Nothing below was retuned.
+
+**Verdict: PROMOTE.** Both beats matched the readings. Toma was not paid before the grain moved, he accepted while still leaving Cinder Key, the landing event added 10 provisions, the 40 left the purse once and reached him once, Corin's refusal gate was `travel`, and both escrows settled once. `offer-contract` was accepted, not `unknown-type`.
+
+### Beat 1 transcript
+
+Health after reset: HTTP 200, `{"ok":true,"tick":0,"events":0}`.
+
+**Tick 0, before any command.** `GET /api/state?limit=200` HTTP 200.
+
+| Reading | Expected | Actual |
+| --- | --- | --- |
+| `tick` | 0 | 0 |
+| `party.hold.money` | 108 | 108 |
+| `contracts` | `[]` | `[]` |
+| Glassport `stocks.provisions` | 145 | 145 |
+| `eventPage.total` | 0 | 0 (`hasMore` false) |
+| Mara `locationId` / `travel` / `money` | `crown-harbor`, null, 108 | `crown-harbor`, null, 108 |
+| Toma `locationId` / `travel` / `money` / `cargo` | `cinder-key`, null, null, null | `cinder-key`, null, null, null |
+
+**The offer.** `POST /api/commands` with the plan body. HTTP 202. `command.id` `command-00001`, `command.characterId` `character-07`, `command.price` 40, `command.expiresTick` 24, `command.quantity` 10, `command.destinationId` `glassport`. No `contractId` on the command. State still tick 0, purse 108, `contracts` `[]`. The log's one event was sequence 1, `player-command-accepted`, summary `Command queued for Mara Vane`.
+
+**Advance to state tick 1.** HTTP 200, `tick` 1, `ticksAdvanced` 1. On the response, event `tick` 0, `payloadWithheld` false, newest first among the contract lines:
+
+- sequence 11, `player-command-resolved`, summary `Mara Vane: contract offered`, `data.outcome` `contract-offered`, `data.contractId` `command-00001:contract`
+- sequence 10, `contract-offered`, summary `Mara Vane offered 40 to land 10 provisions at Glassport.`, `data.buyerMoney` 68, `data.carrierMoney` 236, `data.escrow` 40, `data.price` 40, `data.quantity` 10, `data.destinationId` `glassport`, `data.contract.id` `command-00001:contract`, status `offered`
+
+State: `tick` 1, `party.hold.money` 68, Mara `money` 68. One contract, `command-00001:contract`, `source` `own-character`, `carrierId` `character-07`, `status` `offered`, `price` 40, `quantity` 10, `escrow` 40, `destinationId` `glassport`, `deadlineTick` 24, `revision` 1, `ageTicks` 1. Toma `locationId` `cinder-key`, `travel` null, `money` null, `cargo` null. Glassport `stocks.provisions` 146.011. `eventPage.total` 185, `hasMore` false.
+
+**Advance to state tick 2.** HTTP 200, `tick` 2, `ticksAdvanced` 1. Event `tick` 1, sequence 192, `contract-accepted`, `payloadWithheld` false, summary `Toma Reef accepted the provisions contract.` `data.contract.id` `command-00001:contract`, `data.buyerMoney` 68, `data.carrierMoney` 254.43, `data.escrow` 40, `data.score` 0.703, `data.threshold` 0.576, `data.costBasis` 31.1, `data.travelTicks` 2, `data.ticksLeft` 23, `data.factors.commerce` 0.283, `data.factors.margin` 0.25, `data.factors.trust` 0.069, `data.factors.respect` 0.127, `data.factors.grievance` -0.007, `data.factors.obligation` 0.013, `data.factors.perceivedRisk` -0.032.
+
+State: `tick` 2, purse 68, Mara `money` 68. Contract `status` `accepted`, `escrow` 40, `ageTicks` 1, `observedTick` 1. Toma `locationId` null, `travel` `{"fromId":"cinder-key","toId":"glassport","totalTicks":2,"remainingTicks":2}`, `money` null, `cargo` null. Glassport `stocks.provisions` 147.022. `eventPage.total` 270, `hasMore` true, `cursor` 71.
+
+**Advance to state tick 3.** HTTP 200, `tick` 3, `ticksAdvanced` 1. That response had no `contract-fulfilled` and no `contract-refused`. State: purse 68, Mara `money` 68, contract `accepted`, escrow 40. Toma `locationId` null, `travel` `{"fromId":"cinder-key","toId":"glassport","totalTicks":2,"remainingTicks":1}`, `money` null, `cargo` null. Glassport `stocks.provisions` 148.034. `eventPage.total` 361, `cursor` 162.
+
+**Advance to state tick 4.** HTTP 200, `tick` 4, `ticksAdvanced` 1. Still no `contract-fulfilled`. State: purse 68, contract `accepted`, escrow 40. Toma `locationId` `glassport`, `travel` null, `money` 248.43, `cargo.provisions` 26.288. Glassport `stocks.provisions` 154.966. `eventPage.total` 473, `cursor` 274.
+
+**Advance to state tick 5.** HTTP 200, `tick` 5, `ticksAdvanced` 1. Event `tick` 4, newest first:
+
+- sequence 482, `relationship-changed`, summary `Toma Reef: relationship changed`, `payloadWithheld` true, `data` null
+- sequence 481, `relationship-changed`, summary `Mara Vane: relationship changed`, `payloadWithheld` false, `data.trigger` `supply contract fulfilled`, `data.characterId` `character-07`, `data.relationship.trust` 0.292, `data.relationship.respect` 0.308, `data.relationship.fear` 0.075, `data.relationship.grievance` 0, `data.relationship.obligation` 0, `data.relationship.affinity` 0.25, `data.relationship.lastChangedTick` 4
+- sequence 480, `contract-fulfilled`, `payloadWithheld` false, summary `Toma Reef landed 10 provisions at Glassport.`, `data.buyerMoney` 68, `data.carrierMoney` 288.43, `data.escrow` 0, `data.quantity` 10, `data.settlementStocks.provisions` 164.966, `data.carrierCargo.provisions` 16.288, `data.contract.id` `command-00001:contract`, status `fulfilled`
+
+The same response also had sequence 511, `market-trade`, summary `Toma Reef: market trade`, `payloadWithheld` true. That is a `market-trade`. The delivery is sequence 480, `contract-fulfilled`.
+
+State: `tick` 5, `party.hold.money` 68, Mara `money` 68. Contract `command-00001:contract` status `fulfilled`, `escrow` 0, `price` 40, `revision` 1. Toma `locationId` `glassport`, `travel` null, `money` 316.66, `cargo.provisions` 15.864. Glassport `stocks.provisions` 180.926. `eventPage.total` 590, `hasMore` true, `cursor` 391.
+
+Stopped. Did not advance again.
+
+### Beat 2 transcript
+
+Server stopped and started again with `npm run dashboard -- --reset --seed 1847`. Health HTTP 200, `{"ok":true,"tick":0,"events":0}`.
+
+**Tick 0.** Purse 108. `contracts` `[]`. Crown Harbor `stocks.provisions` 220. Corin Hale `character-16`: `locationId` `glassport`, `travel` null, `money` 117, `cargo.provisions` 19.
+
+**The offer.** HTTP 202. `command.id` `command-00001`, `command.price` 30, `command.expiresTick` 24, `command.characterId` `character-16`, `command.quantity` 10, `command.destinationId` `crown-harbor`. The response was not a `carrier-traveling` rejection.
+
+**Advance to state tick 1.** HTTP 200, `tick` 1, `ticksAdvanced` 1. Event `tick` 0, `payloadWithheld` false:
+
+- sequence 11, `player-command-resolved`, summary `Mara Vane: contract offered`, `data.contractId` `command-00001:contract`
+- sequence 10, `contract-offered`, summary `Mara Vane offered 30 to land 10 provisions at Crown Harbor.`, `data.buyerMoney` 78, `data.carrierMoney` 117, `data.escrow` 30, `data.quantity` 10
+
+State: purse 78, Mara `money` 78. Contract `command-00001:contract` `offered`, escrow 30, `deadlineTick` 24. Corin `locationId` null, `money` null, `cargo` null, `travel` `{"fromId":"glassport","toId":"cinder-key","totalTicks":2,"remainingTicks":2}`. Crown Harbor `stocks.provisions` 226.008.
+
+**Advance to state tick 2.** HTTP 200, `tick` 2, `ticksAdvanced` 1. Event `tick` 1, sequence 192, `contract-refused`, `payloadWithheld` false:
+
+- summary `Corin Hale refused the provisions contract. The carrier is already at sea.`
+- `data.gate` `travel`
+- `data.reason` `The carrier is already at sea.`
+- `data.score` 0, `data.threshold` 0.599, `data.costBasis` 0, `data.travelTicks` 2, `data.ticksLeft` 23
+- `data.buyerMoney` 108, `data.carrierMoney` 117, `data.escrow` 0, `data.quantity` 10
+- contract status `refused`, `settled` true
+
+The only `relationship-changed` on that response was sequence 266, summary `Orin Frost: relationship changed`, `payloadWithheld` true, `data` null. Its payload does not carry a supply-contract trigger.
+
+State: purse 108, Mara `money` 108. Contract escrow 0, status `refused`. Corin `locationId` null, `travel` `{"fromId":"glassport","toId":"cinder-key","totalTicks":2,"remainingTicks":1}`, `money` null, `cargo` null. Crown Harbor `stocks.provisions` 226.008. Stopped.
+
+### Mismatches
+
+None. Every quoted string, gate, reason, purse, escrow, location, voyage, visible purse and hold, destination shelf, and named event matched the plan, including punctuation.
+
+### Player-facing confusion
+
+The numbers matched, and a player still has to trust the event rather than the card.
+
+- At state tick 5 Toma's card reads `money` 316.66 and `cargo.provisions` 15.864. Sequence 480 reads `carrierMoney` 288.43 and `carrierCargo.provisions` 16.288. The trade that sits between those figures is sequence 511, summary `Toma Reef: market trade`, `payloadWithheld` true, so the feed does not show the arithmetic.
+- On the tick-4 advance, sequence 387 is summary `Toma Reef: arrived`, `payloadWithheld` true. The same response also has summaries `Toma Hale: market trade`, `Toma Hale: decision made`, `Toma Hale: goal progressed`, `Toma Hale: relationship changed`, and `Toma Hale: character upkeep`. The two names are easy to mix, and neither arrival nor that trade can be opened.
+- Glassport's shelf at state tick 5 is 180.926. The +10 is only on sequence 480 as `settlementStocks.provisions` 164.966. Checking the port after the tick does not show 164.966.
+- The queued-command summary is `Command queued for Mara Vane`. The price, the carrier, and the destination are on the command object, not in that sentence.
+- Beside Corin's refusal, sequence 266 is summary `Orin Frost: relationship changed` with `data` null. A player cannot tell from that line that the refusal did not change a relationship.
