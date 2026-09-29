@@ -30,10 +30,10 @@ Git remains the complete history. This file exists for three things git does not
 
 ## Current state
 
-- **Baseline:** `origin/main` at `d4470f4` (PR #54). This branch is `feature/commander-seat`. No pull request.
-- **Last verified:** `npm run typecheck` clean, **216 tests**, `./scripts/evaluate-milestone.sh commander-seat`. Node v24.21.0. Golden hashes were not regenerated.
+- **Baseline:** `origin/main` at `557ed84` (PR #57), merged. This branch is `feature/outscore-dock-capture`. No pull request.
+- **Last verified:** `npm run typecheck` clean, **223 tests**, `./scripts/evaluate-milestone.sh outscore-dock-capture` after that merge. Node v24.21.0. Golden hashes were not regenerated.
 - **Gate status:** Tick-72 hashes stay `cb04ba5d…` / `bd7d8cc4…` / `20975bf4…` (8301, 8513, 8031). Recovery 572.
-- **Headline risk:** over 1200 quiet ticks the seat fires 0 times on 1847, 2718, and 4096; the playtest captures Mara on seed 2718.
+- **Headline:** an outscore win spends its one capture roll on the senior losing officer on the dock. Cause `outscore-loss`. Over 1200 quiet ticks, captures are 12 / 8 / 6 and covers written are 3 / 1 / 0. First difference is event tick 498 / 871 / 475.
 - **Runtime:** Node 24.21.0, pinned by `.node-version`. ICU 78.3.
 
 ## Open items
@@ -107,6 +107,12 @@ Git remains the complete history. This file exists for three things git does not
 ## Milestones
 
 Backfilled from the commit graph on 2026-09-25. **Attribution caveat:** commits do not record which agent authored them. Milestones M1–M11 are attributed to the ChatGPT partner from session context, not from the repository, and should not be read as verified provenance.
+
+### 2026-09-29 — M29.1: Spend the outscore roll on the dock
+- **Agent:** Open Era Engineer (Cursor cloud agent) | **Branch:** `feature/outscore-dock-capture` | **Playtest:** pending, [outscore-dock-capture-001](docs/playtests/outscore-dock-capture-001.md)
+- An outscore win spends the capture roll it already draws on the senior losing officer standing on the port. The cause is `outscore-loss`. An empty dock spends the roll and takes nobody. Golden hashes were not regenerated. Tick-72 counts stay 8301 / 8513 / 8031.
+- Verified — typecheck, 223 tests, and `./scripts/evaluate-milestone.sh outscore-dock-capture` after merging `origin/main` at `557ed84`. The playtest reads Rook Tern's capture on seed 4096 at state tick 476. The blind session is not run.
+- Links    — [outscore-dock-capture-001](docs/playtests/outscore-dock-capture-001.md), [captures under M29](docs/design/captures-under-m29.md)
 
 ### 2026-09-29 — M30: Name the command seat
 - **Agent:** Open Era Engineer (Cursor cloud agent) | **Branch:** `feature/commander-seat` | **Playtest:** pending, [commander-seat-001](docs/playtests/commander-seat-001.md)
@@ -231,6 +237,14 @@ Backfilled from the commit graph on 2026-09-25. **Attribution caveat:** commits 
 - A player can name a good and a quantity and see the price before paying, on any of the four resources, with every limit quoted before it is hit. A voyage pays for itself (+113.27 on 108 starting money in playtest). Whether it out-earns working the same ticks is a separate, deferred milestone.
 
 ## Entries
+
+### 2026-09-29 — M29.1: Spend the outscore roll on the dock
+- **Agent:** Open Era Engineer (Cursor cloud agent) | **Branch:** `feature/outscore-dock-capture` | **Commits:** `aaf2c21`, `da4be06`, `503a384` merges `origin/main` at `557ed84`. This entry is the record commit. | **Type:** Behavior
+- **Changed** — On an outscore win, the roll `completeMajorBattle` already draws is spent at `captureChanceForRisk`. The prisoner is the losing faction's member on the port, free, not travelling, and not the attacker, highest leadership plus loyalty times 50, lower id on a tie. The captor is the attacker's faction. The cause is `outscore-loss`. An empty dock spends the roll and takes nobody. No second draw. The victory, the surrender offer, and the garrison are written before that roll. A captured seat holder still runs the existing cover. Open items gained three readability rows under the battle-feed rows.
+- **Why** — M29 drew that roll and discarded it, so the senior officer standing on the lost port was never the prisoner, and the command seat had nothing to cover on a quiet run.
+- **Verified** — Node v24.21.0. `npm run typecheck` clean. **223 tests**. `./scripts/evaluate-milestone.sh outscore-dock-capture` passed after the merge of `origin/main` at `557ed84`. Tick-72 hashes stayed `cb04ba5d392d8b1c868cc97e54cb21b21ec171edd546bb70d0d7aba86cc69c11` (1847, 8301), `bd7d8cc44d5fa21022ecb8f8086e13dfbb9475eb025b5ae53f87e2991f90035c` (2718, 8513), `20975bf480e5aa11eeafe1ce39c36cf5ba0fa8e2d5de2bb5887a35d7b3aecc9f` (4096, 8031). Split recovery replayed 572 events. No `golden:update`. Against `e68281b`, 1200 quiet ticks: captures 12 / 8 / 6 (outscore-loss 11 / 5 / 2, the rest the old holds). Covers written: Jun Marrow at 594, Dax Pike at 957 and 1058, Ada Sorn at 1034, and none on 4096. First divergent event is `character-captured` `outscore-loss` at event tick 498 / 871 / 475 (Jun Marrow, Rook Tern, Rook Tern). The dashboard path in [outscore-dock-capture-001](docs/playtests/outscore-dock-capture-001.md) was read on this tree: four advances to state tick 476, sequence 59637 withheld, briefing `Rook Tern was captured at Glassport after outscore loss`. The blind session is not run.
+- **Left open** — The blind session. The three new readability rows (the cover is unnamed, the escape line disagrees with `displayedRisk` `low`, `player.displayName` is `Prototype Commander`). Owner question 81 still says `Default: yes` rather than built. The day's-wage collector stays parked.
+- **Links** — [captures under M29](docs/design/captures-under-m29.md), [outscore-dock-capture-001](docs/playtests/outscore-dock-capture-001.md), [owner questions](docs/design/owner-questions.md) 81–86
 
 ### 2026-09-29 — Point the command-seat playtest at a forced vacancy
 - **Agent:** Open Era Engineer (Cursor cloud agent) | **Branch:** `feature/commander-seat` | **Commits:** `87a9638` merges `origin/main` at `d4470f4`. `3bc2575` rewrites the playtest. This entry is the record commit. | **Type:** Docs
