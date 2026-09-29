@@ -1,6 +1,6 @@
 # Captures under M29
 
-**Status: Open.** Proposal for the owner to accept, change, or reject. No rule was left in the tree. `origin/main` is `955ad72c38ceb793f1b20330b14660a67274ead9` (PR #53). That merge is docs only. M28, the landless raid floor at garrison 8, is built. M29, the outscore rule, is built. M30, the acting commander, M31, the unpaid-release scar, and M33, captive intelligence, are proposals. They were counted from these runs and were not written into the world.
+**Status: Open.** Proposal for the owner to accept, change, or reject. No rule was left in the tree. The runs were taken on `955ad72c38ceb793f1b20330b14660a67274ead9` (PR #53). Before this branch was pushed, `origin/main` moved to `d4470f440543107c7e82565d28a7b47f95a37b81` (PR #54, owner questions 74–80). That commit is docs only, and this branch merges it. The source under the runs is the same on both. M28, the landless raid floor at garrison 8, is built. M29, the outscore rule, is built. M30, the acting commander, M31, the unpaid-release scar, and M33, captive intelligence, are proposals. They were counted from these runs and were not written into the world.
 
 Runs are `createPrototypeWorld` plus `runTick`, no player commands, seeds 1847 / 2718 / 4096, 1200 ticks, Node v24.21.0, ICU 78.3. Tick numbers on events are the `tick` field. A figure at tick 72 or tick 1200 is the world after that many `runTick` calls. `npm test` on this tree passes, 213 tests. The committed 72-tick fixture reproduced, including the recovery replay of 572 events:
 
