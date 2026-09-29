@@ -224,6 +224,88 @@ Answer by number, for example "4: yes" or "4: keep the default." The default is 
 
 **Source:** [Game vision](game-vision.md#open-product-questions)
 
+## Captivity debts
+
+### 22. The prisoner cannot pay the whole ransom. Who pays the rest, and how often?
+
+**Default:** The prisoner, from the coins they are carrying, up to what one day of work pays them, once each day. Their faction's treasury does not pay it for them. Today the unpaid part is written down and never collected.
+
+**If you pick the other way:** The whole purse could be taken each day, the rest could come due as one sum, or their faction's treasury could pay the bill.
+
+**Status:** Accepted, not built (after M27)
+
+**Source:** [Captivity debts](captivity-debts.md#questions-for-micah) question 1
+
+### 23. Who receives that money?
+
+**Default:** The faction that held them when they were captured, into its treasury. This stays true after that faction loses its last port.
+
+**If you pick the other way:** The faction that holds the prison on the day of the payment could receive it, or a faction with no ports could stop receiving it.
+
+**Status:** Accepted, not built (after M27)
+
+**Source:** [Captivity debts](captivity-debts.md#questions-for-micah) question 2
+
+### 24. On release day, the coins they do have leave their purse and do not arrive anywhere. Should those coins go to the captor too?
+
+**Default:** Leave them as they are for now. This change moves only the later daily payments.
+
+**If you pick the other way:** The coins taken on release day would go to the captor's treasury as well.
+
+**Status:** Queued as a separate bug. Not part of the installment milestone.
+
+**Source:** [Captivity debts](captivity-debts.md#questions-for-micah) question 3
+
+### 25. The purse is empty on the day a payment is due. What happens?
+
+**Default:** That day passes. The debt stays. There is no extra penalty, no mark against their name, and no new reason to fight.
+
+**If you pick the other way:** A missed day could bring a penalty or a new fight, or the skipped days could be taken later.
+
+**Status:** Accepted, not built (after M27)
+
+**Source:** [Captivity debts](captivity-debts.md#questions-for-micah) question 4
+
+### 26. They are captured again while the first ransom is unpaid. What happens to it?
+
+**Default:** Payments wait until they are free. The first debt remains. A second short ransom is a second debt. The older one is paid first.
+
+**If you pick the other way:** The first debt could be wiped out, payments could continue in prison, or the newer debt could be paid first.
+
+**Status:** Accepted, not built (after M27)
+
+**Source:** [Captivity debts](captivity-debts.md#questions-for-micah) question 5
+
+### 27. They have already set money aside to pay for a grain delivery. Can the ransom take it?
+
+**Default:** No. That money is waiting for the grain. It is not in the purse, and only the purse is taken from.
+
+**If you pick the other way:** The ransom could take the money set aside for the grain, and that delivery would go unpaid.
+
+**Status:** Accepted, not built (after M27)
+
+**Source:** [Captivity debts](captivity-debts.md#questions-for-micah) question 6
+
+### 28. An officer says a job is done, and the report is waiting. Does signing it, or ignoring it, pay a ransom?
+
+**Default:** No. The signature closes a job. The ransom is owed to a faction.
+
+**If you pick the other way:** Signing the report, or letting the day close it, would also pay toward the ransom.
+
+**Status:** Accepted, not built (after M27)
+
+**Source:** [Captivity debts](captivity-debts.md#questions-for-micah) question 7
+
+### 29. Who is allowed to see the size of the debt?
+
+**Default:** The prisoner sees their own. The faction that is owed sees who owes it and how much, and does not see the purse. Anyone else can see that a payment happened and which faction was paid, and cannot see the amount.
+
+**If you pick the other way:** The faction that is owed could see the purse, or a bystander could see the amount.
+
+**Status:** Accepted, not built (after M27)
+
+**Source:** [Captivity debts](captivity-debts.md#questions-for-micah) question 8
+
 ## Already settled
 
-The [progress log](../../progress.md) (reconnaissance brief, 2026-09-29) answered reconnaissance questions 1–8. Reconnaissance question 1 is no: a survey or an officer's look stores population, walls, and who was anchored. Reconnaissance question 2 keeps confidence and the original date on that handoff. Reconnaissance questions 3–8 stay put: public sea courses, a live garrison from your other ports, no captives or informants. [Party sightings](party-sightings.md#left-open) repeats those. A foreign price is that dated report, not a live quote ([World simulation](world-simulation.md#player-trade)). An idle player with money still starves if they give no orders ([Port provisions](port-provisions.md#the-idle-commander)). Unpaid ransom is never collected. Battered-port surrender, fed garrisons, and refusing an unpaid voyage are built. The first hour is a test, not a choice. The one-click food buy is a known bug queued for engineering: the button will show the cost, apply the share-of-stock cap, and its refusal text will be fixed ([World simulation](world-simulation.md#player-trade); [progress log](../../progress.md#open-items)).
+The [progress log](../../progress.md) (reconnaissance brief, 2026-09-29) answered reconnaissance questions 1–8. Reconnaissance question 1 is no: a survey or an officer's look stores population, walls, and who was anchored. Reconnaissance question 2 keeps confidence and the original date on that handoff. Reconnaissance questions 3–8 stay put: public sea courses, a live garrison from your other ports, no captives or informants. [Party sightings](party-sightings.md#left-open) repeats those. A foreign price is that dated report, not a live quote ([World simulation](world-simulation.md#player-trade)). An idle player with money still starves if they give no orders ([Port provisions](port-provisions.md#the-idle-commander)). Unpaid ransom is questions 22–29 ([Captivity debts](captivity-debts.md#questions-for-micah)). Battered-port surrender, fed garrisons, and refusing an unpaid voyage are built. The first hour is a test, not a choice. The one-click food buy is a known bug queued for engineering: the button will show the cost, apply the share-of-stock cap, and its refusal text will be fixed ([World simulation](world-simulation.md#player-trade); [progress log](../../progress.md#open-items)).
