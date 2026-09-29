@@ -227,6 +227,73 @@ test("a claimed port is not claimed or raided again while its garrison stays und
   assert.ok(settlement.garrison < 15, `garrison recovered to ${settlement.garrison}`);
 });
 
+test("Crown Harbor left at garrison 6 and stability 0 reaches 15 and a hostile raid is offered", () => {
+  const world = createPrototypeWorld(1847);
+  const raider = world.characters["character-14"];
+  const settlement = world.settlements["crown-harbor"];
+  assert.equal(raider.factionId, "free-tide");
+  assert.notEqual(raider.factionId, settlement.factionId);
+  settlement.garrison = 6;
+  settlement.stability = 0;
+  settlement.stocks.provisions = 0;
+  raider.personality = {
+    ...raider.personality,
+    aggression: 0.99,
+    ambition: 0.99,
+    caution: 0,
+    curiosity: 0,
+    commerce: 0,
+  };
+  raider.troops.count = 120;
+  raider.plan = null;
+
+  let raidOffered = false;
+  let crossedAt: number | null = null;
+  const upkeepGarrison = new Map<number, number>();
+
+  while (world.tick <= 99) {
+    for (const character of Object.values(world.characters)) {
+      if (character.id === raider.id) continue;
+      character.lastBattleTick = world.tick;
+      if (character.locationId === settlement.id) {
+        character.locationId = "verdant-cay";
+        character.travel = null;
+      }
+    }
+    raider.locationId = settlement.id;
+    raider.travel = null;
+    raider.captivity = null;
+    raider.plan = null;
+    raider.lastBattleTick = -100;
+    const result = runTick(world);
+    for (const event of result.events) {
+      if (
+        (event.type === "settlement-upkeep" || event.type === "settlement-shortage") &&
+        event.settlementId === settlement.id
+      ) {
+        upkeepGarrison.set(event.tick, event.data.garrison as number);
+        assert.equal(event.type, "settlement-upkeep");
+        assert.equal(event.data.shortage, 0);
+      }
+      const candidates = event.data.candidates as Array<{ action?: string; targetId?: string }> | undefined;
+      if (
+        event.type === "decision-made" &&
+        event.actorId === raider.id &&
+        candidates?.some((candidate) => candidate.action === "raid" && candidate.targetId === settlement.id)
+      ) {
+        raidOffered = true;
+        crossedAt = event.tick;
+      }
+    }
+  }
+
+  assert.equal(upkeepGarrison.get(11), 7);
+  assert.equal(upkeepGarrison.get(88), 14);
+  assert.equal(upkeepGarrison.get(99), 15);
+  assert.equal(raidOffered, true);
+  assert.equal(crossedAt, 99);
+});
+
 test("satisfying the last ambition renews opening roots and leaves battle goals finished", () => {
   const world = createPrototypeWorld(1847);
   const character = world.characters["character-25"];

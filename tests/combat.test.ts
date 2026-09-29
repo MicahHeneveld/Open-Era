@@ -9,7 +9,7 @@ import { submitCommand } from "../src/sim/commands.ts";
 import { runTick } from "../src/sim/engine.ts";
 import { WorldStore } from "../src/sim/persistence.ts";
 import { createPrototypeWorld } from "../src/sim/scenario.ts";
-import { stateHash } from "../src/sim/state.ts";
+import { stateHash, surrenderStabilityLimit } from "../src/sim/state.ts";
 
 function prepareMajorBattle(seed = 1847) {
   const world = createPrototypeWorld(seed);
@@ -326,4 +326,36 @@ test("a completed major battle uses the same surrender limit", () => {
   assert.equal(garrisoned.battle.data.defenderGarrison, 16);
   assert.equal(garrisoned.battle.data.settlementStability, 20);
   assert.equal(garrisoned.settlement.surrender, null);
+});
+
+test("the ration floor does not read the surrender limit", () => {
+  const low = createPrototypeWorld(1847);
+  const high = createPrototypeWorld(1847);
+  const lowHarbor = low.settlements["crown-harbor"];
+  const highHarbor = high.settlements["crown-harbor"];
+  lowHarbor.garrison = 6;
+  highHarbor.garrison = 15;
+  lowHarbor.stability = 0;
+  highHarbor.stability = 0;
+  lowHarbor.stocks.provisions = 0;
+  highHarbor.stocks.provisions = 0;
+  assert.equal(surrenderStabilityLimit(lowHarbor.garrison), 80);
+  assert.equal(surrenderStabilityLimit(highHarbor.garrison), 30);
+  assert.notEqual(
+    surrenderStabilityLimit(lowHarbor.garrison),
+    surrenderStabilityLimit(highHarbor.garrison),
+  );
+
+  const lowTick = runTick(low);
+  const highTick = runTick(high);
+  const provisionsOf = (events: typeof lowTick.events, settlementId: string) => {
+    const produced = events.find((event) =>
+      event.type === "settlement-produced" && event.settlementId === settlementId
+    );
+    return (produced?.data.stocks as { provisions: number } | undefined)?.provisions;
+  };
+  assert.equal(provisionsOf(lowTick.events, lowHarbor.id), 5);
+  assert.equal(provisionsOf(highTick.events, highHarbor.id), 5);
+  assert.equal(lowHarbor.surrender, null);
+  assert.equal(highHarbor.surrender, null);
 });

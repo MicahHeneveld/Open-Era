@@ -165,18 +165,31 @@ function emit(world: WorldState, events: SimEvent[], draft: EventDraft): SimEven
  *
  * Shared with the published price drift, so the number on the board is the
  * change this same step would make if nobody traded.
+ *
+ * Provisions output is `max(penalized, min(unpenalized, demand))`. Unpenalized
+ * is `production.provisions * focusMultiplier`. Penalized is that times
+ * `workerCondition`. Demand is `round(population / 3600, 3)`, the same ration
+ * `consumedStocks` eats. The stability penalty cannot cut a field that can
+ * cover the ration, and a field that cannot cover it is not topped up.
  */
 export function producedStocks(settlement: {
   focus: ResourceKey;
   stability: number;
+  population: number;
   production: Resources;
   stocks: Resources;
 }): Resources {
   const stocks = cloneResources(settlement.stocks);
   const workerCondition = 0.7 + (settlement.stability / 100) * 0.3;
+  const provisionDemand = round(settlement.population / 3_600, 3);
   for (const resource of RESOURCE_KEYS) {
     const focusMultiplier = settlement.focus === resource ? 1.25 : 1;
-    stocks[resource] = round(stocks[resource] + settlement.production[resource] * focusMultiplier * workerCondition);
+    const unpenalized = settlement.production[resource] * focusMultiplier;
+    const penalized = unpenalized * workerCondition;
+    const output = resource === "provisions"
+      ? Math.max(penalized, Math.min(unpenalized, provisionDemand))
+      : penalized;
+    stocks[resource] = round(stocks[resource] + output);
   }
   return stocks;
 }
