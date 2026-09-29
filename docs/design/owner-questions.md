@@ -24,19 +24,9 @@ Answer by number, for example "4: yes" or "4: keep the default." The default is 
 
 **Source:** [World simulation](world-simulation.md#player-trade)
 
-### 3. Should the one-click food buy show its price and use the same market limit as a named purchase?
-
-**Default:** No. It spends without showing a cost, and it ignores the share-of-stock limit a named purchase already obeys. The refusal still cites a 2-money minimum as if that were the price.
-
-**If you pick the other way:** The button would show the cost and refuse a top-up the market will not clear.
-
-**Status:** Built on default
-
-**Source:** [World simulation](world-simulation.md#player-trade); [progress log](../../progress.md#open-items)
-
 ## Orders and officers
 
-### 4. You give someone a new job while they still have your old one. What happens?
+### 3. You give someone a new job while they still have your old one. What happens?
 
 **Default:** The new job replaces the old one. A finished, refused, cancelled, or expired job frees them. Today both stick, and the officer works the more important one first.
 
@@ -46,7 +36,7 @@ Answer by number, for example "4: yes" or "4: keep the default." The default is 
 
 **Source:** [Contracts](contracts.md#questions-for-micah) question 1; [Order confirmation](order-confirmation.md#questions-for-micah) question 5; [progress log](../../progress.md#open-items)
 
-### 5. An officer says the job is done, and you do not answer. How long does it stay open?
+### 4. An officer says the job is done, and you do not answer. How long does it stay open?
 
 **Default:** One day. You can still sign or cancel before then. After that it closes as finished. Today it stays open for the rest of the run, because nothing signs it for you.
 
@@ -56,7 +46,7 @@ Answer by number, for example "4: yes" or "4: keep the default." The default is 
 
 **Source:** [Order confirmation](order-confirmation.md#questions-for-micah) question 1
 
-### 6. A captain who is not you gives an order. Who signs the officer's report?
+### 5. A captain who is not you gives an order. Who signs the officer's report?
 
 **Default:** That captain, the next time the world advances, sooner than a day. They accept the report and do not reject it. Today only you can sign, and only your own orders.
 
@@ -66,7 +56,7 @@ Answer by number, for example "4: yes" or "4: keep the default." The default is 
 
 **Source:** [Order confirmation](order-confirmation.md#questions-for-micah) question 2
 
-### 7. You are in prison when the report arrives. Does the job wait until you are out?
+### 6. You are in prison when the report arrives. Does the job wait until you are out?
 
 **Default:** No. It closes after the same day. Prison lasts fourteen days. Today you cannot sign while captive, so the report waits.
 
@@ -76,7 +66,7 @@ Answer by number, for example "4: yes" or "4: keep the default." The default is 
 
 **Source:** [Order confirmation](order-confirmation.md#questions-for-micah) question 3
 
-### 8. Does a finished job change what the officer thinks of you?
+### 7. Does a finished job change what the officer thinks of you?
 
 **Default:** Yes, by the same small shift as a fight they win under your orders. A pressure job that just won is not counted twice. No money moves. Today, signing changes nothing.
 
@@ -86,7 +76,7 @@ Answer by number, for example "4: yes" or "4: keep the default." The default is 
 
 **Source:** [Order confirmation](order-confirmation.md#questions-for-micah) question 4
 
-### 9. Should time stop and wait for your signature, the way it stops in a battle?
+### 8. Should time stop and wait for your signature, the way it stops in a battle?
 
 **Default:** No. A day is the window, and advancing past it accepts the report. Today time does not stop, and it never accepts the report for you.
 
@@ -98,7 +88,7 @@ Answer by number, for example "4: yes" or "4: keep the default." The default is 
 
 ## Contracts and money
 
-### 10. Can you pay someone from another faction to haul grain?
+### 9. Can you pay someone from another faction to haul grain?
 
 **Default:** Yes, if you know them. Ordinary orders stay inside your faction. Today you cannot pay for a delivery, and an order outside your faction is refused.
 
@@ -108,7 +98,7 @@ Answer by number, for example "4: yes" or "4: keep the default." The default is 
 
 **Source:** [Contracts](contracts.md#questions-for-micah) question 2
 
-### 11. They deliver some of the grain, not all of it. Does that count?
+### 10. They deliver some of the grain, not all of it. Does that count?
 
 **Default:** No. The whole amount by the deadline, or the money comes back. Today any single market sale finishes a supply order, with no amount and no destination.
 
@@ -118,7 +108,7 @@ Answer by number, for example "4: yes" or "4: keep the default." The default is 
 
 **Source:** [Contracts](contracts.md#questions-for-micah) question 3
 
-### 12. You cancel after they agreed. Do they keep any money?
+### 11. You cancel after they agreed. Do they keep any money?
 
 **Default:** No. It comes back, and trust falls as after a lost fight. The price sits aside, in neither purse, until the grain lands. Today nothing is set aside.
 
@@ -128,7 +118,7 @@ Answer by number, for example "4: yes" or "4: keep the default." The default is 
 
 **Source:** [Contracts](contracts.md#questions-for-micah) question 4
 
-### 13. Should captains offer these hauls on their own?
+### 12. Should captains offer these hauls on their own?
 
 **Default:** No. They haul when you ask. Today no haul exists to offer.
 
@@ -138,7 +128,7 @@ Answer by number, for example "4: yes" or "4: keep the default." The default is 
 
 **Source:** [Contracts](contracts.md#questions-for-micah) question 5
 
-### 14. Does the port tax a delivery between two people?
+### 13. Does the port tax a delivery between two people?
 
 **Default:** No. Tax stays on market sales. The grain lands on the shelf and the carrier is paid from the money set aside.
 
@@ -148,7 +138,7 @@ Answer by number, for example "4: yes" or "4: keep the default." The default is 
 
 **Source:** [Contracts](contracts.md#questions-for-micah) question 6
 
-### 15. Who sees the price?
+### 14. Who sees the price?
 
 **Default:** The two people see price and amount. Their factions see the job, the destination, and whether it was kept, not the price. A bystander sees purses move. Everyone else sees nothing.
 
@@ -158,9 +148,9 @@ Answer by number, for example "4: yes" or "4: keep the default." The default is 
 
 **Source:** [Contracts](contracts.md#questions-for-micah) question 7
 
-### 16. You paid someone to land grain. Does that delivery wait for the signature used on ordinary jobs?
+### 15. You paid someone to land grain. Does that delivery wait for the signature used on ordinary jobs?
 
-**Default:** No. The grain arriving is the delivery. Questions 5–9 apply only to ordinary jobs.
+**Default:** No. The grain arriving is the delivery. Questions 4–8 apply only to ordinary jobs.
 
 **If you pick the other way:** The grain would sit until you signed.
 
@@ -170,7 +160,7 @@ Answer by number, for example "4: yes" or "4: keep the default." The default is 
 
 ## Ports and provisions
 
-### 17. When a port is unstable, can its fields fall below what the people eat?
+### 16. When a port is unstable, can its fields fall below what the people eat?
 
 **Default:** No, if the fields can grow the ration. Unrest would cut the surplus, not the meal. Today the whole harvest is cut, Crown Harbor can empty, and the garrison stops regrowing after a claim sets stability back to 55.
 
@@ -182,7 +172,7 @@ Answer by number, for example "4: yes" or "4: keep the default." The default is 
 
 ## Factions
 
-### 18. When a faction loses its last port, does the faction remain?
+### 17. When a faction loses its last port, does the faction remain?
 
 **Default:** Yes. People, treasury, tax, and orders stay, and the next port is taken by accepting a surrender. The game already does this.
 
@@ -192,17 +182,17 @@ Answer by number, for example "4: yes" or "4: keep the default." The default is 
 
 **Source:** [Landless faction](landless-faction.md#recommendation-proposal)
 
-### 19. Someone was told to keep a port safe, then the port changes hands. Does a day there still finish the job?
+### 18. Someone was told to keep a port safe, then the port changes hands. Does a day there still finish the job?
 
-**Default:** No. It finishes only while the port is still theirs. Today a day on the spot is enough. Usual runs never show that. Forcing the last port away does.
+**Default:** No. It finishes only while the port is still theirs. A day on the spot completes the job only while their faction still holds the port.
 
 **If you pick the other way:** A lost port could still be reported as successfully guarded.
 
-**Status:** Accepted, not built (M23)
+**Status:** Built on default
 
 **Source:** [Landless faction](landless-faction.md#recommendation-proposal)
 
-### 20. After you take a port, do the people stay, leave, or have to be occupied?
+### 19. After you take a port, do the people stay, leave, or have to be occupied?
 
 **Default:** You own it as soon as you claim the surrender. There is no occupation and no population vote. A fed port regrows soldiers, and that is the whole aftermath.
 
@@ -214,7 +204,7 @@ Answer by number, for example "4: yes" or "4: keep the default." The default is 
 
 ## Who the game is for
 
-### 21. Should one kind of player feel at home first?
+### 20. Should one kind of player feel at home first?
 
 **Default:** No favorite is chosen. Wealth, discovery, office, a home, a crew, and overthrow all count. The most satisfying week is still a change in who holds power.
 
@@ -224,7 +214,7 @@ Answer by number, for example "4: yes" or "4: keep the default." The default is 
 
 **Source:** [Game vision](game-vision.md#open-product-questions)
 
-### 22. While a human is offline in an enemy port, are they as safe as at home?
+### 21. While a human is offline in an enemy port, are they as safe as at home?
 
 **Default:** This build has no offline play. The long-term note gives an absent human ordinary protection, and still leaves enemy ground undecided.
 
@@ -236,4 +226,4 @@ Answer by number, for example "4: yes" or "4: keep the default." The default is 
 
 ## Already settled
 
-The [progress log](../../progress.md) (reconnaissance brief, 2026-09-29) answered reconnaissance questions 1–8. Question 1 is no: a survey or an officer's look stores population, walls, and who was anchored. Question 2 keeps confidence and the original date on that handoff. Questions 3–8 stay put: public sea courses, a live garrison from your other ports, no captives or informants. [Party sightings](party-sightings.md#left-open) repeats those. A foreign price is that dated report, not a live quote ([World simulation](world-simulation.md#player-trade)). An idle player with money still starves if they give no orders ([Port provisions](port-provisions.md#the-idle-commander)). Unpaid ransom is never collected. Battered-port surrender, fed garrisons, and refusing an unpaid voyage are built. The first hour is a test, not a choice.
+The [progress log](../../progress.md) (reconnaissance brief, 2026-09-29) answered reconnaissance questions 1–8. Question 1 is no: a survey or an officer's look stores population, walls, and who was anchored. Question 2 keeps confidence and the original date on that handoff. Questions 3–8 stay put: public sea courses, a live garrison from your other ports, no captives or informants. [Party sightings](party-sightings.md#left-open) repeats those. A foreign price is that dated report, not a live quote ([World simulation](world-simulation.md#player-trade)). An idle player with money still starves if they give no orders ([Port provisions](port-provisions.md#the-idle-commander)). Unpaid ransom is never collected. Battered-port surrender, fed garrisons, and refusing an unpaid voyage are built. The first hour is a test, not a choice. The one-click food buy is a known bug queued for engineering: the button will show the cost, apply the share-of-stock cap, and its refusal text will be fixed ([World simulation](world-simulation.md#player-trade); [progress log](../../progress.md#open-items)).
