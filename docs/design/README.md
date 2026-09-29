@@ -12,6 +12,7 @@ These documents capture the decisions made during the initial design conversatio
 - [Garrison recovery](garrison-recovery.md) — Built in M20: a fed settlement under its population ceiling regains one soldier on a world-tick interval
 - [Landless faction](landless-faction.md) — Open / proposal: a faction that loses its last port remains, and takes the next one by the existing claim
 - [Port provisions](port-provisions.md) — Open / proposal: Crown Harbor's ration outruns its fields once stability slips, and the claim leaves a port that cannot regrow
+- [Contracts](contracts.md) — Open / proposal: a paid provisions delivery the sim would enforce, once a standing order is one job rather than two
 - [Generated mockups](../assets/mockups/README.md) — all 13 image concepts produced during the conversation
 - [Development and playtest pipeline](../development-pipeline.md) — branch roles, automated gates, adaptive player protocol, and promotion rules
 - [Roadmap](../roadmap.md) — documented systems that are not built, and whether their deferral is recorded anywhere
