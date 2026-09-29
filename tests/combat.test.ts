@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 import { dashboardState, fullEventFeed } from "../src/dashboard/view-model.ts";
-import { combatForecast, isMajorBattle, selectRetreatDestination, settlementDefensePower } from "../src/sim/combat.ts";
+import { captureChanceForRisk, combatForecast, isMajorBattle, selectRetreatDestination, settlementDefensePower } from "../src/sim/combat.ts";
 import { submitCommand } from "../src/sim/commands.ts";
 import { runTick } from "../src/sim/engine.ts";
 import { WorldStore } from "../src/sim/persistence.ts";
@@ -737,6 +737,332 @@ test("a flipped outscore victory consumes the defeat path's capture roll and no 
   wonReplay.between(-0.22, 0.22);
   assert.equal(isolatedWon.world.rngState, wonReplay.state);
   assert.notEqual(isolatedWon.world.rngState, isolatedFlip.world.rngState);
+});
+
+/**
+ * The seed-1847 scripted major draws one capture roll, about 0.524, after the
+ * two phase rolls. Health 39 ends the phase at 37, and morale 9 ends at 12, so
+ * capture risk is raised twice to severe (0.55) and that roll is a hit. A
+ * higher starting health stays at high (0.3) and the same roll misses.
+ */
+function hittingOutscore() {
+  return prepareScriptedMajor({
+    troops: 110,
+    garrison: 18,
+    fortification: 1,
+    stability: 44,
+    morale: 9,
+    health: 39,
+  });
+}
+
+function placeOnDock(
+  world: WorldState,
+  id: string,
+  leadership: number,
+  loyalty: number,
+) {
+  const character = world.characters[id];
+  character.captivity = null;
+  character.factionId = "free-tide";
+  character.locationId = "cinder-key";
+  character.travel = null;
+  character.skills.leadership = leadership;
+  character.personality.loyalty = loyalty;
+  return character;
+}
+
+function scriptedCaptureRoll(startState: number): { roll: number; stateAfterRoll: number } {
+  const replay = new DeterministicRng(startState);
+  replay.between(0, 0);
+  replay.between(-0.22, 0.22);
+  const roll = replay.next();
+  return { roll, stateAfterRoll: replay.state };
+}
+
+test("an outscore win captures the senior losing officer on the dock at the drawn roll", () => {
+  const prepared = hittingOutscore();
+  const { world, commander, settlement } = prepared;
+  quietExcept(world, new Set([commander.id, "character-16", "character-22", "character-19"]));
+  const senior = placeOnDock(world, "character-22", 90, 0.9);
+  const junior = placeOnDock(world, "character-16", 40, 0.5);
+  const absent = placeOnDock(world, "character-19", 99, 0.99);
+  absent.locationId = "glassport";
+  const travelling = world.characters["character-20"];
+  travelling.captivity = null;
+  travelling.factionId = "free-tide";
+  travelling.locationId = "cinder-key";
+  travelling.travel = { fromId: "cinder-key", toId: "glassport", totalTicks: 4, remainingTicks: 4 };
+  travelling.skills.leadership = 99;
+  travelling.personality.loyalty = 0.99;
+  const seniorTroops = senior.troops.count;
+  const seniorHealth = senior.health;
+  const seniorMorale = senior.morale;
+  const drawn = scriptedCaptureRoll(world.rngState);
+  assert.equal(captureChanceForRisk("severe"), 0.55);
+  assert.ok(drawn.roll < 0.55);
+  assert.ok(drawn.roll >= 0.3);
+
+  const result = raidThisTick(world);
+  const battle = playerBattle(result.events, commander.id);
+  assert.ok(battle);
+  assert.equal(battle.data.outcome, "attacker-victory");
+  assert.equal(battle.data.defenderGarrison, 14);
+  assert.equal(settlement.garrison, 14);
+  assert.equal(commander.captivity, null);
+  assert.equal(commander.victories, 1);
+  const captures = result.events.filter((event) => event.type === "character-captured");
+  assert.equal(captures.length, 1);
+  const capture = captures[0];
+  assert.equal(capture.actorId, senior.id);
+  assert.equal(capture.data.cause, "outscore-loss");
+  assert.equal(capture.data.captureChance, 0.55);
+  assert.equal(capture.data.captureRoll, 0.5239);
+  assert.equal(capture.data.health, seniorHealth);
+  assert.equal(capture.data.morale, seniorMorale);
+  const hold = capture.data.captivity as { captorFactionId: string; cause: string; scatteredTroops: { count: number } };
+  assert.equal(hold.captorFactionId, commander.factionId);
+  assert.equal(hold.cause, "outscore-loss");
+  assert.equal(hold.scatteredTroops.count, seniorTroops);
+  assert.equal(senior.captivity?.captorFactionId, "world-government");
+  assert.equal(senior.troops.count, 0);
+  assert.equal(junior.captivity, null);
+  assert.equal(absent.captivity, null);
+  assert.equal(travelling.captivity, null);
+});
+
+test("a tie on the dock breaks toward the lower id", () => {
+  const { world, commander } = hittingOutscore();
+  quietExcept(world, new Set([commander.id, "character-16", "character-22"]));
+  const lower = placeOnDock(world, "character-16", 50, 0.4);
+  const higher = placeOnDock(world, "character-22", 50, 0.4);
+  assert.ok(lower.id < higher.id);
+  assert.equal(lower.skills.leadership + lower.personality.loyalty * 50, higher.skills.leadership + higher.personality.loyalty * 50);
+
+  const result = raidThisTick(world);
+  const captures = result.events.filter((event) => event.type === "character-captured");
+  assert.equal(captures.length, 1);
+  assert.equal(captures[0].actorId, lower.id);
+  assert.equal(captures[0].data.cause, "outscore-loss");
+  assert.equal(higher.captivity, null);
+  assert.equal(playerBattle(result.events, commander.id)?.data.outcome, "attacker-victory");
+});
+
+test("the attacker and an already captive member are not the outscore prisoner", () => {
+  const excludedAttacker = hittingOutscore();
+  quietExcept(excludedAttacker.world, new Set([excludedAttacker.commander.id, "character-16"]));
+  assert.equal(submitCommand(excludedAttacker.world, {
+    playerId: "prototype-player",
+    type: "character-action",
+    action: "raid",
+  }).ok, true);
+  excludedAttacker.commander.factionId = "free-tide";
+  excludedAttacker.commander.skills.leadership = 100;
+  excludedAttacker.commander.personality.loyalty = 0.99;
+  const mate = placeOnDock(excludedAttacker.world, "character-16", 1, 0.1);
+  assert.ok(
+    excludedAttacker.commander.skills.leadership + excludedAttacker.commander.personality.loyalty * 50 >
+    mate.skills.leadership + mate.personality.loyalty * 50,
+  );
+  const attackerResult = runTick(excludedAttacker.world);
+  const attackerCaptures = attackerResult.events.filter((event) => event.type === "character-captured");
+  assert.equal(attackerCaptures.length, 1);
+  assert.equal(attackerCaptures[0].actorId, mate.id);
+  assert.equal(attackerCaptures[0].data.cause, "outscore-loss");
+  assert.equal(
+    (attackerCaptures[0].data.captivity as { captorFactionId: string }).captorFactionId,
+    "free-tide",
+  );
+  assert.equal(excludedAttacker.commander.captivity, null);
+
+  const skippedCaptive = hittingOutscore();
+  quietExcept(skippedCaptive.world, new Set([skippedCaptive.commander.id, "character-16", "character-22"]));
+  const already = placeOnDock(skippedCaptive.world, "character-22", 99, 0.99);
+  already.captivity = {
+    captorFactionId: "world-government",
+    settlementId: "cinder-key",
+    capturedTick: 0,
+    mandatoryReleaseTick: 10_000,
+    cause: "major-defeat",
+    displayedRisk: "low",
+    scatteredTroops: { count: 0, experience: 0, discipline: 0 },
+    releaseDestinationId: null,
+  };
+  const freeMate = placeOnDock(skippedCaptive.world, "character-16", 5, 0.1);
+  const captiveResult = raidThisTick(skippedCaptive.world);
+  const captiveCaptures = captiveResult.events.filter((event) => event.type === "character-captured");
+  assert.equal(captiveCaptures.length, 1);
+  assert.equal(captiveCaptures[0].actorId, freeMate.id);
+  assert.equal(captiveCaptures[0].data.cause, "outscore-loss");
+  assert.equal(already.captivity?.cause, "major-defeat");
+});
+
+test("an empty dock spends the outscore roll, captures nobody, and leaves the same rngState", () => {
+  const empty = hittingOutscore();
+  const occupied = hittingOutscore();
+  const defeat = prepareScriptedMajor({
+    troops: 100,
+    garrison: 30,
+    fortification: 40,
+    stability: 44,
+    morale: 9,
+    health: 39,
+  });
+  quietExcept(empty.world, new Set([empty.commander.id]));
+  quietExcept(occupied.world, new Set([occupied.commander.id, "character-22"]));
+  quietExcept(defeat.world, new Set([defeat.commander.id]));
+  placeOnDock(occupied.world, "character-22", 90, 0.9);
+  assert.equal(empty.world.rngState, occupied.world.rngState);
+  assert.equal(empty.world.rngState, defeat.world.rngState);
+  const drawn = scriptedCaptureRoll(empty.world.rngState);
+
+  const emptyResult = raidThisTick(empty.world);
+  const occupiedResult = raidThisTick(occupied.world);
+  const defeatResult = raidThisTick(defeat.world);
+  assert.equal(playerBattle(emptyResult.events, empty.commander.id)?.data.outcome, "attacker-victory");
+  assert.equal(emptyResult.events.some((event) => event.type === "character-captured"), false);
+  assert.equal(occupiedResult.events.filter((event) => event.type === "character-captured").length, 1);
+  assert.equal(defeatResult.events.filter((event) => event.type === "character-captured" && event.data.cause === "outscore-loss").length, 0);
+  assert.equal(empty.world.rngState, drawn.stateAfterRoll);
+  assert.equal(occupied.world.rngState, empty.world.rngState);
+  assert.equal(defeat.world.rngState, empty.world.rngState);
+  const later = new DeterministicRng(drawn.stateAfterRoll).next();
+  assert.equal(new DeterministicRng(empty.world.rngState).next(), later);
+  assert.equal(new DeterministicRng(defeat.world.rngState).next(), later);
+});
+
+test("an outscore capture leaves the victory, the surrender offer, and the garrison unchanged", () => {
+  const empty = prepareScriptedMajor({
+    troops: 110,
+    garrison: 18,
+    fortification: 1,
+    stability: 43.97,
+    morale: 9,
+    health: 39,
+  });
+  const occupied = prepareScriptedMajor({
+    troops: 110,
+    garrison: 18,
+    fortification: 1,
+    stability: 43.97,
+    morale: 9,
+    health: 39,
+  });
+  quietExcept(empty.world, new Set([empty.commander.id]));
+  quietExcept(occupied.world, new Set([occupied.commander.id, "character-22"]));
+  placeOnDock(occupied.world, "character-22", 90, 0.9);
+
+  const emptyResult = raidThisTick(empty.world);
+  const occupiedResult = raidThisTick(occupied.world);
+  const emptyBattle = playerBattle(emptyResult.events, empty.commander.id);
+  const occupiedBattle = playerBattle(occupiedResult.events, occupied.commander.id);
+  assert.ok(emptyBattle && occupiedBattle);
+  assert.equal(emptyBattle.data.outcome, "attacker-victory");
+  assert.equal(occupiedBattle.data.outcome, emptyBattle.data.outcome);
+  assert.equal(occupiedBattle.data.defenderGarrison, emptyBattle.data.defenderGarrison);
+  assert.equal(occupiedBattle.data.settlementStability, emptyBattle.data.settlementStability);
+  assert.deepEqual(occupiedBattle.data.surrender, emptyBattle.data.surrender);
+  assert.equal(occupied.settlement.garrison, empty.settlement.garrison);
+  assert.equal(occupied.settlement.garrison, 14);
+  assert.deepEqual(occupied.settlement.surrender, empty.settlement.surrender);
+  assert.deepEqual(occupied.settlement.surrender, {
+    offeredToId: occupied.commander.id,
+    offeredTick: 0,
+    previousFactionId: "free-tide",
+  });
+  assert.equal(emptyResult.events.some((event) => event.type === "character-captured"), false);
+  assert.equal(occupiedResult.events.some((event) => event.type === "character-captured" && event.data.cause === "outscore-loss"), true);
+});
+
+test("a defender victory and a standing attacker victory do not take the dock", () => {
+  const defeat = prepareScriptedMajor({
+    troops: 100,
+    garrison: 30,
+    fortification: 40,
+    stability: 44,
+    morale: 9,
+    health: 90,
+  });
+  quietExcept(defeat.world, new Set([defeat.commander.id, "character-22"]));
+  const defeatMate = placeOnDock(defeat.world, "character-22", 90, 0.9);
+  const defeatResult = raidThisTick(defeat.world);
+  const defeatBattle = playerBattle(defeatResult.events, defeat.commander.id);
+  assert.ok(defeatBattle);
+  assert.equal(defeatBattle.data.outcome, "defender-victory");
+  assert.equal(defeat.settlement.surrender, null);
+  const defeatCaptures = defeatResult.events.filter((event) => event.type === "character-captured");
+  assert.equal(defeatCaptures.length, 1);
+  assert.equal(defeatCaptures[0].actorId, defeat.commander.id);
+  assert.equal(defeatCaptures[0].data.cause, "major-defeat");
+  assert.equal(defeatMate.captivity, null);
+
+  const standing = prepareScriptedMajor({
+    troops: 120,
+    garrison: 1,
+    fortification: 1,
+    stability: 40,
+    morale: 80,
+    health: 100,
+  });
+  quietExcept(standing.world, new Set([standing.commander.id, "character-22"]));
+  const standingMate = placeOnDock(standing.world, "character-22", 90, 0.9);
+  const standingResult = raidThisTick(standing.world);
+  const standingBattle = playerBattle(standingResult.events, standing.commander.id);
+  assert.ok(standingBattle);
+  assert.equal(standingBattle.data.outcome, "attacker-victory");
+  assert.equal(standingBattle.data.defenderGarrison, 0);
+  assert.equal(standing.settlement.garrison, 0);
+  assert.equal(standingResult.events.some((event) => event.type === "character-captured"), false);
+  assert.equal(standingMate.captivity, null);
+  assert.equal(standing.commander.captivity, null);
+
+  const immediate = prepareImmediateSurrender(39, 51.52);
+  quietExcept(immediate.world, new Set([immediate.commander.id, "character-22"]));
+  const immediateMate = placeOnDock(immediate.world, "character-22", 90, 0.9);
+  assert.equal(isMajorBattle(immediate.commander, immediate.settlement), false);
+  const immediateResult = raidThisTick(immediate.world);
+  const immediateBattle = playerBattle(immediateResult.events, immediate.commander.id);
+  assert.ok(immediateBattle);
+  assert.equal(immediateBattle.data.outcome, "attacker-victory");
+  assert.equal(immediateBattle.data.battleId, undefined);
+  assert.equal(immediateResult.events.some((event) => event.data.cause === "outscore-loss"), false);
+  assert.equal(immediateMate.captivity, null);
+});
+
+test("capturing the losing seat holder writes the acting commander", () => {
+  const { world, commander } = hittingOutscore();
+  quietExcept(world, new Set([commander.id, "character-14", "character-16"]));
+  const pax = placeOnDock(world, "character-14", 80, 0.8);
+  assert.equal(pax.name, "Pax Ash");
+  const cover = world.characters["character-16"];
+  cover.captivity = null;
+  cover.locationId = "glassport";
+  cover.travel = null;
+  cover.skills.leadership = 10;
+  cover.personality.loyalty = 0.1;
+  const paxOrders = Object.values(world.characters).flatMap((character) =>
+    character.standingOrders.filter((order) => order.issuerId === pax.id).map((order) => order.id),
+  );
+  assert.ok(paxOrders.length > 0);
+  assert.equal(Object.hasOwn(world.factions["free-tide"], "actingCommanderId"), false);
+
+  const result = raidThisTick(world);
+  assert.equal(playerBattle(result.events, commander.id)?.data.outcome, "attacker-victory");
+  const capture = result.events.find((event) => event.type === "character-captured");
+  assert.ok(capture);
+  assert.equal(capture.actorId, pax.id);
+  assert.equal(capture.data.cause, "outscore-loss");
+  assert.equal(pax.captivity?.cause, "outscore-loss");
+  assert.equal(world.factions["free-tide"].actingCommanderId, cover.id);
+  assert.equal(Object.hasOwn(world.factions["world-government"], "actingCommanderId"), false);
+  assert.deepEqual(
+    Object.values(world.characters).flatMap((character) =>
+      character.standingOrders.filter((order) => order.issuerId === pax.id).map((order) => order.id),
+    ),
+    paxOrders,
+  );
+  assert.equal(cover.standingOrders.some((order) => order.issuerId === cover.id), false);
+  assert.equal(cover.captivity, null);
 });
 
 test("an immediate battle is still the higher score when morale is 0", () => {

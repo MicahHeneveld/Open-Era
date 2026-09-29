@@ -93,7 +93,7 @@ export interface CaptivityState {
   settlementId: string;
   capturedTick: number;
   mandatoryReleaseTick: number;
-  cause: "major-defeat" | "failed-retreat";
+  cause: "major-defeat" | "failed-retreat" | "outscore-loss";
   displayedRisk: CombatRisk;
   scatteredTroops: TroopGroup;
   releaseDestinationId: string | null;

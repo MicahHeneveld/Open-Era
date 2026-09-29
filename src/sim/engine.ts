@@ -601,6 +601,11 @@ interface CaptureAttempt {
   health: number;
   morale: number;
   troopCount: number;
+  /**
+   * When set, including null, this is the hold's captor. The defeat and
+   * retreat paths leave it unset and keep the settlement's faction.
+   */
+  captorFactionId?: string | null;
 }
 
 function attemptCapture(
@@ -615,7 +620,9 @@ function attemptCapture(
   const chance = captureChanceForRisk(attempt.risk);
   if (roll >= chance) return false;
   const captivity: CaptivityState = {
-    captorFactionId: world.settlements[settlementId].factionId,
+    captorFactionId: attempt.captorFactionId !== undefined
+      ? attempt.captorFactionId
+      : world.settlements[settlementId].factionId,
     settlementId,
     capturedTick: world.tick,
     mandatoryReleaseTick: world.tick + CAPTIVITY_MAX_DAYS * world.ticksPerDay,
@@ -1068,6 +1075,40 @@ function resolveImmediateBattle(
   recordBattleConsequences(world, character, settlement, events, attackerWon);
 }
 
+function dockCommandScore(character: Character): number {
+  return character.skills.leadership + character.personality.loyalty * 50;
+}
+
+/**
+ * Who an outscore win's already-drawn capture roll can take.
+ *
+ * A member of the losing faction, standing on the port, not travelling, free,
+ * and not the attacker. Highest leadership plus loyalty times 50. A lower id
+ * wins a tie, the same comparison that names an acting commander. No draw.
+ * Nobody on the dock means the caller still spends the roll and takes nobody.
+ */
+function selectOutscoreDockPrisoner(
+  world: WorldState,
+  settlementId: string,
+  losingFactionId: string | null,
+  attackerId: string,
+): Character | null {
+  if (!losingFactionId) return null;
+  const ranked = Object.values(world.characters)
+    .filter((candidate) =>
+      candidate.factionId === losingFactionId &&
+      candidate.locationId === settlementId &&
+      candidate.travel === null &&
+      candidate.captivity === null &&
+      candidate.id !== attackerId
+    )
+    .sort((left, right) =>
+      dockCommandScore(right) - dockCommandScore(left) ||
+      left.id.localeCompare(right.id)
+    );
+  return ranked[0] ?? null;
+}
+
 function completeMajorBattle(
   world: WorldState,
   battle: ActiveBattle,
@@ -1136,11 +1177,33 @@ function completeMajorBattle(
     }, events, rng);
     if (!captured) beginPostDefeatWithdrawal(world, character, settlement.id, battle.id, events);
   } else if (consumeIgnoredCaptureRoll) {
-    // A defeat would have drawn this roll inside attemptCapture. Keep the
-    // draw, and ignore it, so later luck stays put until the victory itself
-    // changes the world. A major that was already an attacker victory does
-    // not pass this flag, and does not draw.
-    rng.next();
+    // A defeat would have drawn this roll inside attemptCapture. Spend that
+    // one draw, at the phase's existing chance, on the senior losing officer
+    // standing on the port. The captor is the attacker's faction. The cause
+    // is outscore-loss, so the chronicle does not say the prisoner lost the
+    // fight. An empty dock still spends the roll and takes nobody. No second
+    // draw. A major that was already an attacker victory does not pass this
+    // flag, and does not draw. The victory, the surrender offer, and the
+    // garrison were written on battle-resolved above and are left as they are.
+    const risk = battle.lastPhase?.captureRisk ?? battle.startingForecast.captureRisk;
+    const roll = rng.next();
+    const prisoner = selectOutscoreDockPrisoner(
+      world,
+      settlement.id,
+      settlement.factionId,
+      character.id,
+    );
+    if (prisoner) {
+      attemptCapture(world, prisoner, settlement.id, {
+        cause: "outscore-loss",
+        risk,
+        battleId: battle.id,
+        health: prisoner.health,
+        morale: prisoner.morale,
+        troopCount: prisoner.troops.count,
+        captorFactionId: character.factionId,
+      }, events, rng, roll);
+    }
   }
 }
 
