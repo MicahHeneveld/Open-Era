@@ -95,6 +95,11 @@ test("after a claim at garrison 13, regrowth reaches 15 and a hostile raid is of
   const settlement = world.settlements["cinder-key"];
   assert.notEqual(raider.factionId, claimant.factionId);
   assert.ok(raider.factionId);
+  // Cinder Key is Free Tide's only port. Another settlement under the floor
+  // keeps the ordinary gate of 15. Garrison 7 cannot be raided away.
+  const anchor = world.settlements["verdant-cay"];
+  anchor.factionId = raider.factionId;
+  anchor.garrison = 7;
   claimant.locationId = settlement.id;
   claimant.travel = null;
   settlement.garrison = 13;
@@ -209,6 +214,11 @@ test("a claimed port is not claimed or raided again while its garrison stays und
     offeredTick: world.tick,
     previousFactionId: "free-tide",
   };
+  // The faction that loses this port still holds Verdant Cay, under the floor,
+  // so garrison 8 stays on the ordinary raid gate.
+  const anchor = world.settlements["verdant-cay"];
+  anchor.factionId = "free-tide";
+  anchor.garrison = 7;
 
   const claimed = runTick(world);
   assert.ok(claimed.events.some((event) =>
@@ -230,6 +240,96 @@ test("a claimed port is not claimed or raided again while its garrison stays und
   });
   assert.equal(raids.length, 0);
   assert.ok(settlement.garrison < 15, `garrison recovered to ${settlement.garrison}`);
+});
+
+test("a landless faction is offered a raid at garrison 8, and not below it or while it holds a port", () => {
+  const raidCandidates = (events: SimEvent[], actorId: string, settlementId: string) =>
+    events.some((event) => {
+      const candidates = event.data.candidates as Array<{ action?: string; targetId?: string }> | undefined;
+      return event.type === "decision-made" &&
+        event.actorId === actorId &&
+        candidates?.some((candidate) => candidate.action === "raid" && candidate.targetId === settlementId);
+    });
+
+  const place = (seedWorld: WorldState, garrison: number) => {
+    const raider = seedWorld.characters["character-14"];
+    const settlement = seedWorld.settlements.glassport;
+    assert.equal(raider.factionId, "free-tide");
+    assert.equal(raider.name, "Pax Ash");
+    for (const character of Object.values(seedWorld.characters)) {
+      if (character.id === raider.id) continue;
+      character.lastBattleTick = seedWorld.tick;
+      if (character.locationId === settlement.id) {
+        character.locationId = "verdant-cay";
+        character.travel = null;
+      }
+    }
+    raider.locationId = settlement.id;
+    raider.travel = null;
+    raider.captivity = null;
+    raider.plan = null;
+    raider.lastBattleTick = -100;
+    raider.troops.count = 25;
+    settlement.garrison = garrison;
+    settlement.factionId = "world-government";
+    return { raider, settlement };
+  };
+
+  const landlessAt = (garrison: number) => {
+    const world = createPrototypeWorld(1847);
+    world.settlements["cinder-key"].factionId = "world-government";
+    assert.equal(Object.values(world.settlements).some((settlement) => settlement.factionId === "free-tide"), false);
+    const placed = place(world, garrison);
+    const result = runTick(world);
+    return { world, ...placed, result };
+  };
+
+  const offered = landlessAt(8);
+  assert.equal(raidCandidates(offered.result.events, offered.raider.id, offered.settlement.id), true);
+
+  const below = landlessAt(7);
+  assert.equal(raidCandidates(below.result.events, below.raider.id, below.settlement.id), false);
+
+  const holding = createPrototypeWorld(1847);
+  assert.equal(holding.settlements["cinder-key"].factionId, "free-tide");
+  const held = place(holding, 8);
+  assert.equal(raidCandidates(runTick(holding).events, held.raider.id, held.settlement.id), false);
+
+  const fight = createPrototypeWorld(1847);
+  fight.settlements["cinder-key"].factionId = "world-government";
+  const attacker = place(fight, 8);
+  attacker.settlement.population = 0;
+  attacker.settlement.fortification = 1;
+  attacker.settlement.stability = 70;
+  attacker.raider.skills.strategy = 125;
+  attacker.raider.health = 100;
+  attacker.raider.morale = 100;
+  const battleTick = runTick(fight);
+  const battle = battleTick.events.find((event) =>
+    event.type === "battle-resolved" && event.actorId === attacker.raider.id
+  );
+  assert.ok(battle);
+  assert.equal(battle.data.outcome, "attacker-victory");
+  assert.ok(attacker.settlement.surrender);
+  const claimTick = runTick(fight);
+  assert.ok(claimTick.events.some((event) =>
+    event.type === "settlement-claimed" &&
+    event.actorId === attacker.raider.id &&
+    event.settlementId === attacker.settlement.id
+  ));
+  assert.equal(attacker.settlement.factionId, "free-tide");
+  assert.ok(attacker.settlement.garrison < 15);
+
+  const later = runTicks(fight, 24);
+  const laterRaids = later.events.filter((event) => {
+    const chosen = event.data.chosen as { action?: string; targetId?: string } | undefined;
+    return event.type === "decision-made" &&
+      chosen?.action === "raid" &&
+      (event.settlementId === attacker.settlement.id || chosen.targetId === attacker.settlement.id);
+  });
+  assert.equal(laterRaids.length, 0);
+  assert.ok(attacker.settlement.garrison < 15, `garrison recovered to ${attacker.settlement.garrison}`);
+  assert.equal(attacker.settlement.factionId, "free-tide");
 });
 
 test("Crown Harbor left at garrison 6 and stability 0 reaches 15 and a hostile raid is offered", () => {
@@ -416,6 +516,7 @@ test("a free autonomous issuer confirms the report on the next tick without draw
   assert.equal(completion.data.commandId, undefined);
   assert.equal(closed.events.some((event) => event.type === "player-command-resolved" && event.data.orderId === order.id), false);
   assert.equal(order.status, "completed");
+  assert.equal(order.lastReport?.kind, "confirmed");
   assert.equal(world.rngState, held.rngState);
 });
 
@@ -433,6 +534,7 @@ test("a pressure completion writes no relationship, and a protect completion wri
   pressure.statusChangedTick = -1;
   const pressureTick = runTick(pressureWorld);
   assert.equal(pressure.status, "completed");
+  assert.equal(pressure.lastReport?.kind, "confirmed");
   assert.equal(pressureTick.events.some((event) =>
     event.type === "standing-order-completed" &&
     event.data.orderId === pressure.id &&

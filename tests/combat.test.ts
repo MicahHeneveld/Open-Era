@@ -253,6 +253,18 @@ test("an immediate victory at garrison 14 and stability 39.55 offers surrender",
   });
 });
 
+test("an immediate victory at garrison 8 and stability 55 still offers surrender", () => {
+  const { commander, settlement, battle } = immediateVictory(22, 66.97);
+  assert.equal(battle.data.defenderGarrison, 8);
+  assert.equal(battle.data.settlementStability, 55);
+  assert.ok(55 <= surrenderStabilityLimit(8));
+  assert.deepEqual(settlement.surrender, {
+    offeredToId: commander.id,
+    offeredTick: 0,
+    previousFactionId: "free-tide",
+  });
+});
+
 test("an immediate victory at garrison 14 and stability 50 does not offer surrender", () => {
   const { settlement, battle } = immediateVictory(39, 61.97);
   assert.equal(battle.data.defenderGarrison, 14);

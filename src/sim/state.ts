@@ -366,7 +366,10 @@ export function applyEvent(world: WorldState, event: SimEvent): void {
       order.status = "completed";
       order.adherence = "following";
       order.statusChangedTick = world.tick;
-      order.lastReport = { tick: world.tick, kind: "confirmed", summary: event.data.summary as string };
+      // A player signature and an autonomous issuer's judgment both confirm.
+      // A day of silence closes the order without that signature.
+      const kind = event.data.reason === "issuer-silent" ? "closed-unanswered" : "confirmed";
+      order.lastReport = { tick: world.tick, kind, summary: event.data.summary as string };
       break;
     }
     case "standing-order-expired": {

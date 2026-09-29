@@ -130,6 +130,11 @@ test("a surrendering settlement can be claimed by the conquering character", () 
     action: "claim-settlement",
   });
   assert.equal(submission.ok, true);
+  // Free Tide is about to lose its only port. Hold everyone else so a landless
+  // raid on this same tick does not move the stability the claim just set.
+  for (const character of Object.values(world.characters)) {
+    if (character.id !== commander.id) character.lastBattleTick = world.tick;
+  }
 
   const result = runTick(world);
   const claim = result.events.find((event) => event.type === "settlement-claimed");
@@ -626,7 +631,8 @@ test("with no command, the issuer's tick-0 report closes as issuer-silent at tic
     `${mara.name} did not answer ${recipient.name}'s completion report within a day, and the order closed.`,
   );
   assert.equal(order.status, "completed");
-  assert.equal(order.lastReport?.kind, "confirmed");
+  assert.equal(order.lastReport?.kind, "closed-unanswered");
+  assert.equal(order.lastReport?.tick, 6);
 });
 
 test("a cancel queued before the silent close leaves the order cancelled", () => {
@@ -697,6 +703,7 @@ test("a captive issuer is refused on submit, and the report still closes after a
   assert.equal(completed[0].tick, 6);
   assert.equal(completed[0].data.reason, "issuer-silent");
   assert.equal(order.status, "completed");
+  assert.equal(order.lastReport?.kind, "closed-unanswered");
 });
 
 test("an uncompleted timed order expires and no longer drives the character's plan", () => {
