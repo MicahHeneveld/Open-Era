@@ -30,10 +30,10 @@ Git remains the complete history. This file exists for three things git does not
 
 ## Current state
 
-- **Baseline:** branched from `2918554`. This branch is `feature/ration-floor` (M24). No pull request.
-- **Last verified:** `./scripts/evaluate-milestone.sh ration-floor` passes, Node v24.21.0, ICU 78.3. Typecheck clean, **173 tests**. Golden hashes were not regenerated.
+- **Baseline:** branched from `8c93912`. This branch is `feature/order-identity` (M25). No pull request. `origin/main` moved to `06cca95` (the captivity-debts note) and was merged.
+- **Last verified:** `./scripts/evaluate-milestone.sh order-identity` passes after that merge, Node v24.21.0, ICU 78.3. Typecheck clean, **176 tests**. Golden hashes were not regenerated.
 - **Gate status:** tick-72 hashes unchanged. Counts stay 8275 / 8489 / 8003. Split recovery replayed 572 events.
-- **Headline risk:** the playtest is pending with a blind operator. Idle-player starvation stays intended.
+- **Headline risk:** the playtest is pending with a blind operator. The paid supply contract is M26 and is not in this tree.
 - **Runtime:** Node 24.21.0, pinned by `.node-version`. ICU 78.3.
 
 ## Open items
@@ -74,7 +74,7 @@ Git remains the complete history. This file exists for three things git does not
 | `intel:*` briefing ids carry negative `observedTick` values, so stale-intelligence warnings fire on day one and report an age older than the world | Defect | Cursor | **Fixed** in this sweep. Staleness is measured from `Math.max(0, observedTick)`, a backdated report is described as predating the commander's arrival rather than as an age, the two least trustworthy reports are reported first, and no id can carry a negative number |
 | Estimated resource rows are shown with no age qualifier, beside exact owned data in identical formatting | Wording | Cursor | **Fixed** in this sweep. An estimated market labels its rows `estimated, N ticks old`, prefixes each figure with `~`, and marks an estimated garrison the same way. A market with no report at all now says so instead of drawing zeros as fact. A render test executes the shipped inline script so this cannot silently regress |
 | Population feeds the defender estimate but is unreadable before ownership, so a raider cannot weigh it | Design gap | Cursor | **Narrowed in M18.** A survey or a delivered officer report shows the recorded population and fortification, with `groundIntelligence` naming the source and the age. With no ground record they stay null. Standing there is still present-tense and does not keep them |
-| One `issue-order` can produce two standing orders | Defect | Unassigned | Open, needs a decided intended identity |
+| One `issue-order` can produce two standing orders | Defect | Cursor | **Fixed** on `feature/order-identity`. A further issue amends the open order. The playtest is pending |
 | `captureRisk` reads `low` through won battles, then capture arrives by claiming | Wording | Unassigned | Open |
 | `character.id.slice(-2)` parses a numeric cadence, which breaks past two-digit ids | Latent defect | Cursor | **Fixed** in this sweep. `characterCadence` reads the full numeric suffix, so `character-100` and `character-101` no longer collapse onto the same slot; asserted directly rather than waited for |
 | `localeCompare` sorts precede RNG draws, so ICU changes between Node builds could alter history | Latent risk | Unassigned | Dormant; identical hashes on Node 22.23.2, Node 24.21.0, and GitHub's `ubuntu-latest` runner. Recheck after 2026-10-19, when `ubuntu-latest` migrates to Ubuntu 26 and its ICU may change |
@@ -85,6 +85,10 @@ Git remains the complete history. This file exists for three things git does not
 ## Milestones
 
 Backfilled from the commit graph on 2026-09-25. **Attribution caveat:** commits do not record which agent authored them. Milestones M1–M11 are attributed to the ChatGPT partner from session context, not from the repository, and should not be read as verified provenance.
+
+### 2026-09-29 — M25: Order identity
+- **Agent:** Open Era Engineer (Cursor cloud agent) | **Branch:** `feature/order-identity` | **Playtest:** pending, [order-identity-001](docs/playtests/order-identity-001.md)
+- One open standing order per issuer and recipient. A further `issue-order` amends that id through `validateOrderAmendment`. Pending, active, and awaiting confirmation hold the slot. A refused, completed, expired, or cancelled order frees it, and only then is a new id minted. Golden hashes were not regenerated. Tick-72 counts stay 8275 / 8489 / 8003.
 
 ### 2026-09-23 to 2026-09-25 — M1: Headless world prototype
 - **Agent:** ChatGPT partner (see caveat) | **Commits:** `cf697c8`, `bb629c0`
@@ -187,6 +191,14 @@ Backfilled from the commit graph on 2026-09-25. **Attribution caveat:** commits 
 - A player can name a good and a quantity and see the price before paying, on any of the four resources, with every limit quoted before it is hit. A voyage pays for itself (+113.27 on 108 starting money in playtest). Whether it out-earns working the same ticks is a separate, deferred milestone.
 
 ## Entries
+
+### 2026-09-29 — M25: one open order per issuer and recipient
+- **Agent:** Open Era Engineer (Cursor cloud agent) | **Branch:** `feature/order-identity` | **Commits:** `69734ee` (the split-recovery replay count), `b4a3bd5` (the amendment, the tests). `fc7ae41` merges `origin/main` at `06cca95`. This entry is the record commit. | **Type:** Behavior
+- **Changed** — `openStandingOrder` in `src/sim/agency.ts`. `validateStandingOrder` in `src/sim/commands.ts` sends a further `issue-order` through `validateOrderAmendment` when that pair already has an open order. `processPlayerCommands` in `src/sim/engine.ts` no longer mints `${command.id}:standing-order` in that case. Open is `pending`, `active`, or `awaiting-confirmation`. Explicit `amend-order` still rejects awaiting confirmation. A refused, completed, expired, or cancelled order does not hold the slot. Identical terms are the existing `no-change` rejection. No new event and no new RNG draw. `npm run golden:update` was not run.
+- **Why** — one `issue-order` minted a second id beside the seeded order, and both stayed open. The identity is the issuer–recipient pair, not the command id.
+- **Verified** — baseline on `8c93912`, before any of this, Node v24.21.0, ICU 78.3: `npm ci`, `npm run typecheck` clean, **173 tests**, `./scripts/evaluate-milestone.sh baseline-order-identity` passes. Hashes `d7eb02eb0e6b835ee923147b855d0a91969a416115d0c3bd5c2650ff0e2b6a3f` (1847, 8275 events), `d0b4b449ce9bc3fc27f0cfa15a5cc8ef04d5a2e6a9cdded2c2b11b6c4ca6583d` (2718, 8489), `d5d9da8bb1e9c9bd86c93ccbaa570f04ea9052ea1b5d4b48f3452e2db6f0c0c7` (4096, 8003). Split recovery replayed 572 events. No remaining test pinned that count; `69734ee` puts the live replay next to `recovery.replayedEvents` in the fixture. After the rule: typecheck clean, **176 tests**. New tests: "a further issue-order amends the one open order, and identical terms are no-change", "a refused, completed, expired, or cancelled order frees the pair and the next issue mints a new id", "an order awaiting confirmation stays the open order, and a further issue amends it". Hashes and counts did not move. Finish gate `./scripts/evaluate-milestone.sh order-identity` passes: the same three hashes, 8275 / 8489 / 8003, split recovery replayed 572 events. `origin/main` at `06cca95` was merged after that gate. The merge is the captivity-debts note only. Typecheck, the 176 tests, and the gate were run again on that merge and passed. The playtest is pending with a blind operator at [order-identity-001](docs/playtests/order-identity-001.md). A headless dashboard read on this branch, seed 1847, is not the note's old tick-8 table: the issue is stored as `amend-order` on `character-01:order:character-13`, state tick 1 has revision 2 and target `cinder-key`, and the completion report is event tick 5, state tick 6.
+- **Left open** — the playtest, at `docs/playtests/order-identity-001.md`. The paid supply contract (offer, escrow, fulfilment, anti-leak) is M26 and is not in this tree. The contracts note is still a proposal until it moves into world simulation.
+- **Links** — [playtest](docs/playtests/order-identity-001.md) | [contracts](docs/design/contracts.md). No pull request.
 
 ### 2026-09-29 — M24: the stability penalty cannot cut provisions below the ration
 - **Agent:** Open Era Engineer (Cursor cloud agent) | **Branch:** `feature/ration-floor` | **Commits:** `4b9e0fb` (the floor), `7b8315f` (the tests), `90b927d` (golden hashes read only from the fixture). This entry is the record commit. | **Type:** Behavior
