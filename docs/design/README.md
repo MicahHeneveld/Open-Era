@@ -12,6 +12,7 @@ These documents capture the decisions made during the initial design conversatio
 - [Garrison recovery](garrison-recovery.md) — Built in M20: a fed settlement under its population ceiling regains one soldier on a world-tick interval
 - [Landless faction](landless-faction.md) — M23 built the protect predicate: a protect order completes only while the officer's faction holds the port. A faction with no ports remains. Playtest pending. The rest of the note is still a proposal
 - [Port provisions](port-provisions.md) — Open / proposal: Crown Harbor's ration outruns its fields once stability slips, and the claim leaves a port that cannot regrow
+- [Portless recovery](portless-recovery.md) — Open / proposal: a landless faction already on a port under the raid gate may raid it, so the return does not wait out garrison regrowth
 - [Contracts](contracts.md) — Open / proposal: a paid provisions delivery the sim would enforce, once a standing order is one job rather than two
 - [Order confirmation](order-confirmation.md) — Open / proposal: a completion report closes when its issuer signs it, or after a day when nobody can
 - [Owner questions](owner-questions.md) — Open: the decisions still waiting on Micah, each with the default the game runs on or is planned to run on
