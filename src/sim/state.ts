@@ -2,6 +2,8 @@ import { createHash } from "node:crypto";
 import type {
   Character,
   PartySighting,
+  ReleaseParty,
+  ReleaseSighting,
   TroopGroup,
   ResourceKey,
   Resources,
@@ -227,6 +229,51 @@ const LOYALTY_SCAR_STEP = 0.04;
  * at 0. A second unpaid release subtracts the step from the scarred reading.
  * No draw, and `personality.loyalty` is not written.
  */
+/**
+ * The prison, as it is when the release is applied, stored on the captive.
+ *
+ * Upkeep has already set the garrison, and the character walk has not run.
+ * The parties are everyone else still anchored here, in id order. A fellow
+ * prisoner is included at the live count, which is 0, and `partyPower()` is 0.
+ * A later release replaces the record when its tick is greater or equal. An
+ * earlier one does not. Called from the reducer, so a replay writes the same
+ * record the live tick wrote. No new event and no draw.
+ */
+function writeReleaseSighting(world: WorldState, character: Character): void {
+  const captivity = character.captivity;
+  if (!captivity) return;
+  const observedTick = world.tick;
+  const previous = character.releaseSighting;
+  if (previous && previous.observedTick > observedTick) return;
+  const settlement = world.settlements[captivity.settlementId];
+  const parties: ReleaseParty[] = Object.values(world.characters)
+    .filter((other) =>
+      other.id !== character.id &&
+      other.locationId === captivity.settlementId &&
+      other.travel === null,
+    )
+    .sort((left, right) => left.id.localeCompare(right.id))
+    .map((other) => ({
+      characterId: other.id,
+      troops: other.troops.count,
+      partyPower: partyPower(other),
+      observedTick,
+      source: "direct" as const,
+      confidence: 1 as const,
+    }));
+  const record: ReleaseSighting = {
+    settlementId: captivity.settlementId,
+    factionId: settlement.factionId,
+    captorFactionId: captivity.captorFactionId,
+    garrison: settlement.garrison,
+    parties,
+    observedTick,
+    source: "direct",
+    confidence: 1,
+  };
+  character.releaseSighting = record;
+}
+
 function applyUnpaidReleaseScar(character: Character, event: SimEvent): void {
   if (!character.factionId) return;
   const terms = event.data.terms;
@@ -654,6 +701,7 @@ export function applyEvent(world: WorldState, event: SimEvent): void {
       break;
     case "captivity-released":
       if (!actor) throw new Error("Captivity release event has no actor");
+      writeReleaseSighting(world, actor);
       actor.money = event.data.characterMoney as number;
       if (event.data.debt) actor.debts.push(event.data.debt as Character["debts"][number]);
       actor.captivity = null;

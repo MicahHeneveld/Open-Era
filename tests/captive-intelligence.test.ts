@@ -1,11 +1,15 @@
 import assert from "node:assert/strict";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import test from "node:test";
 import { dashboardState, fullEventFeed } from "../src/dashboard/view-model.ts";
 import { captiveIntelFor, projectCharacter, type CaptiveIntel } from "../src/dashboard/visibility.ts";
 import { runTick, runTicks } from "../src/sim/engine.ts";
+import { WorldStore } from "../src/sim/persistence.ts";
 import { createPrototypeWorld } from "../src/sim/scenario.ts";
 import { partyPower, partyPowerFromTroops, stateHash } from "../src/sim/state.ts";
-import type { Character, SettlementKnowledge, WorldState } from "../src/sim/types.ts";
+import type { Character, ReleaseSighting, SettlementKnowledge, WorldState } from "../src/sim/types.ts";
 
 function commanderOf(world: WorldState): Character {
   return world.characters[world.players["prototype-player"].characterId];
@@ -430,4 +434,92 @@ test("Mina Vale's hold on seed 2718 matches the note.", () => {
       ["character-29", 90, 137.275],
     ],
   );
+});
+
+/**
+ * Replay from one snapshot through `through`, using `WorldStore.recover`.
+ *
+ * A snapshot the store would not have written on its own is inserted at
+ * `splitAt`, and every later snapshot is removed, so recover starts there.
+ */
+function recoverThrough(seed: number, splitAt: number, through: number, characterId: string): {
+  liveHash: string;
+  rebuiltHash: string;
+  replayedEvents: number;
+  liveRecord: ReleaseSighting | undefined;
+  rebuiltRecord: ReleaseSighting | undefined;
+} {
+  const live = runTicks(createPrototypeWorld(seed), through).state;
+  const directory = mkdtempSync(join(tmpdir(), "open-era-release-recovery-"));
+  const databasePath = join(directory, "world.sqlite");
+  const store = new WorldStore(databasePath);
+  try {
+    const world = createPrototypeWorld(seed);
+    store.initialize(world);
+    let splitSequence: number | null = null;
+    let splitJson: string | null = null;
+    let splitHash: string | null = null;
+    for (let index = 0; index < through; index += 1) {
+      const result = runTick(world);
+      store.appendTick(result.events, world);
+      if (world.tick === splitAt && splitSequence === null) {
+        splitSequence = result.events.at(-1)!.sequence;
+        splitJson = JSON.stringify(world);
+        splitHash = stateHash(world);
+      }
+    }
+    assert.ok(splitSequence !== null && splitJson !== null && splitHash !== null, `no state at tick ${splitAt}`);
+    store.database.prepare(
+      "INSERT OR REPLACE INTO snapshots(sequence, tick, state_json, state_hash) VALUES (?, ?, ?, ?)",
+    ).run(splitSequence, splitAt, splitJson, splitHash);
+    store.database.prepare("DELETE FROM snapshots WHERE tick > ?").run(splitAt);
+    const recovered = store.recover();
+    assert.ok(recovered.replayedEvents > 0, "the split must replay events, not restore the final snapshot");
+    assert.equal(recovered.state.tick, through);
+    return {
+      liveHash: stateHash(live),
+      rebuiltHash: stateHash(recovered.state),
+      replayedEvents: recovered.replayedEvents,
+      liveRecord: live.characters[characterId]?.releaseSighting,
+      rebuiltRecord: recovered.state.characters[characterId]?.releaseSighting,
+    };
+  } finally {
+    store.close();
+    rmSync(directory, { recursive: true, force: true });
+  }
+}
+
+test("Sable Morrow's release at tick 119 recovers from the tick 114 snapshot", () => {
+  const live = runTicks(createPrototypeWorld(1847), 119).state;
+  const sable = live.characters["character-04"];
+  assert.equal(sable.name, "Sable Morrow");
+  assert.equal(sable.captivity, null);
+  assert.equal(sable.releaseSighting?.observedTick, 118);
+  const split = recoverThrough(1847, 114, 119, "character-04");
+  assert.equal(split.rebuiltHash, split.liveHash);
+  assert.equal(split.liveHash, stateHash(live));
+  assert.deepEqual(split.rebuiltRecord, sable.releaseSighting);
+});
+
+test("Mina Vale's release recovers from the tick 72 snapshot", () => {
+  const live = runTicks(createPrototypeWorld(2718), 156).state;
+  const mina = live.characters["character-15"];
+  assert.equal(mina.name, "Mina Vale");
+  assert.equal(mina.releaseSighting?.observedTick, 155);
+  assert.equal(mina.releaseSighting?.garrison, 208);
+  const split = recoverThrough(2718, 72, 156, "character-15");
+  assert.equal(split.rebuiltHash, split.liveHash);
+  assert.equal(split.liveHash, stateHash(live));
+  assert.deepEqual(split.rebuiltRecord, mina.releaseSighting);
+});
+
+test("seed 2718 replays through tick 160 from the tick 100 and tick 150 snapshots", () => {
+  const live = runTicks(createPrototypeWorld(2718), 160).state;
+  const liveHash = stateHash(live);
+  for (const splitAt of [100, 150]) {
+    const split = recoverThrough(2718, splitAt, 160, "character-15");
+    assert.equal(split.rebuiltHash, liveHash, `tick ${splitAt} rebuilt ${split.rebuiltHash}`);
+    assert.equal(split.liveHash, liveHash);
+    assert.deepEqual(split.rebuiltRecord, live.characters["character-15"].releaseSighting);
+  }
 });
