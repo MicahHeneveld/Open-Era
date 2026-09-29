@@ -30,10 +30,10 @@ Git remains the complete history. This file exists for three things git does not
 
 ## Current state
 
-- **Baseline:** `origin/main` at `3a9025f` (PR #60). This branch is `feature/loyalty-scar`. No pull request.
-- **Last verified:** `npm run typecheck` clean, **231 tests**, `./scripts/evaluate-milestone.sh loyalty-scar`. Node v24.21.0. Golden hashes were not regenerated. `origin/main` had not moved past `3a9025f`.
+- **Baseline:** `origin/main` at `ee9eb6e` (PR #62). This branch is `feature/sea-sightings`. No pull request.
+- **Last verified:** `npm run typecheck` clean, **242 tests**, `./scripts/evaluate-milestone.sh sea-sightings`. Node v24.21.0. Golden hashes were not regenerated.
 - **Gate status:** Tick-72 hashes stay `cb04ba5d…` / `bd7d8cc4…` / `20975bf4…` (8301, 8513, 8031). Recovery 572.
-- **Headline:** an unpaid release stores a −0.04 loyalty scar on `loyaltyAdjustment`. Only the cover sort reads it. Over 1200 quiet ticks, writes are 11 / 4 / 2, no cover is renamed, and the lowest scar is Finn Frost at 0.282. The event log matches the dock rule. First state difference is event tick 118 / 495 / 123.
+- **Headline:** A sea sighting is computed when the state is read and is not stored. Over 1200 quiet ticks the census matches the addendum, and the tick-1200 hashes match that note.
 - **Runtime:** Node 24.21.0, pinned by `.node-version`. ICU 78.3.
 
 ## Open items
@@ -58,16 +58,22 @@ Git remains the complete history. This file exists for three things git does not
 | The "Command queued for Mara Vane" summary does not name the carrier, the price, or the destination | Readability | Unassigned | Open |
 | Relationship-changed lines have null data and no stated reason | Readability | Unassigned | Open |
 | The names Toma Reef and Toma Hale collide in the feed | Readability | Unassigned | Open |
-| No briefing or event text says who covers a captive commander's seat, or that the cover doesn't take the orders. The player sees only `actingCommanderId` `character-06` in the faction JSON and has to join ids | Readability | Unassigned | Open |
-| The captivity line "Escape is guaranteed but dangerous" contradicts the capture's displayedRisk `low` (captureChance 0.04) | Readability | Unassigned | Open |
-| `player.displayName` shows "Prototype Commander" while the party, feed, and briefing say Mara Vane | Readability | Unassigned | Open |
+| No briefing or event text says who covers a captive commander's seat, or that the cover doesn't take the orders. The player sees only `actingCommanderId` in the faction JSON and has to join ids. Seen again in M31: at t595 the seat is only `character-05` | Readability | Unassigned | Open |
+| The captivity line "Escape is guaranteed but dangerous" contradicts the capture's displayedRisk `low` (captureChance 0.04). Seen again in M31 beside displayedRisk `severe` and capture chance 0.55 | Readability | Unassigned | Open |
+| `player.displayName` shows "Prototype Commander" while the party, feed, and briefing say Mara Vane. Seen again in M31 | Readability | Unassigned | Open |
+| No line says loyalty fell. Mara's card shows `loyalty` 0.768 beside `personality.loyalty` 0.8079…, and nothing says which figure the seat uses | Readability | Unassigned | Open |
+| A release feed row is only "Name: captivity released". The paid amount and the debt appear only in the briefing | Readability | Unassigned | Open |
+| The battle feed row does not say who won. The briefing does | Readability | Unassigned | Open |
+| At morale 0 the starvation line still quotes a morale cost | Readability | Unassigned | Open |
+| `attentionCount` does not match the briefing line count (4 vs 6 at t119, 7 vs 10 at t595) | Readability | Unassigned | Open |
+| Pax's leadership goes from 75 to null with no sentence explaining it | Readability | Unassigned | Open |
 | An outscore-loss capture sentence ("Rook Tern was captured at Glassport after outscore loss") and its feed row don't name the captor. The feed puts the prisoner as actorId and the captor faction as targetId, so "Rook Tern: character captured" reads as if the prisoner acted on Free Tide | Readability | Unassigned | Open |
 | "after outscore loss" has no subject, reads as if the prisoner lost the fight (next to "Pax Ash won at Glassport"), never explains "outscore", and doesn't say the prisoner was only on the dock | Readability | Unassigned | Open |
 | A character whose ambitions all reach progress 1 throws `<name> has no active goals` on the next plan review | Defect | Cursor | **Fixed** on `fix/no-active-goals`. Satisfaction stays. The opening roots (survival, archetype, and faction membership) are renewed at progress 0. Battle-born goals stay satisfied until the next victory or defeat. Reproduced through the CLI at tick 307 / 269 / 260 on seeds 1847 / 2718 / 4096, the same ticks as the bare harness |
 | Event feed leaked foreign character payloads; capturing ground widened it | Defect | Cursor | Fixed in `82c9bfc`; validated by an independent session with 0 foreign payloads visible |
 | Event feed is a rolling 100-event window with no pagination, so a player cannot audit its own history | Defect | Cursor | **Fixed** in [PR 4](https://github.com/taia-0/Open-Era/pull/4); a playtest then retrieved all 20,457 events with zero gaps and zero duplicates |
 | `combat.active` is `null` while `settlement.battleInProgress` is true, with no stated authority | Defect | Cursor | **Fixed** in `8bf60c8` and refined in [PR 5](https://github.com/taia-0/Open-Era/pull/5); one shared rule now governs the flag, the observable list and the forecast gate |
-| No legitimate channel exists for learning a rival's strength, so "estimates learned through investigation" has no machinery | Design gap | Cursor | **Narrowed in M21.** A survey, or a targeted explore delivered to the issuer, stores garrison, population, and fortification, and now the parties anchored at that port (troop count and `partyPower`, dated). Sea sightings, a passive glance, informants, captives, and faction aggregates are still unbuilt. The planner does not read the sightings |
+| No legitimate channel exists for learning a rival's strength, so "estimates learned through investigation" has no machinery | Design gap | Cursor | **Narrowed in M21, and again in M32.** A survey or a targeted explore still stores who was anchored. A ship met at sea is now a read-only row (sailors, troop count, party power) and is not stored. A passive glance, informants, captives, and faction aggregates are still unbuilt. The planner does not read either list |
 | Combat forecasts and travel ETAs are unavailable at the moment the commitment decision is made | Design gap | Cursor | **Fixed** in [PR 5](https://github.com/taia-0/Open-Era/pull/5); a playtest committed on a quoted voyage and a pre-commitment band |
 | `POST /api/advance` returns no diff or event stream, so every step is advance-then-refetch | Ergonomic | Cursor | **Fixed** in [PR 4](https://github.com/taia-0/Open-Era/pull/4); advance returns a projected event diff and a sequence watermark |
 | Undocumented targeting and parameter rules: a pressure order needs a faction target, `briefing/officer` needs `characterId` | Wording | Cursor | **Fixed** in [PR 4](https://github.com/taia-0/Open-Era/pull/4) and [PR 5](https://github.com/taia-0/Open-Era/pull/5); `capabilities.requests` publishes the whole contract |
@@ -109,6 +115,14 @@ Git remains the complete history. This file exists for three things git does not
 ## Milestones
 
 Backfilled from the commit graph on 2026-09-25. **Attribution caveat:** commits do not record which agent authored them. Milestones M1–M11 are attributed to the ChatGPT partner from session context, not from the repository, and should not be read as verified provenance.
+
+### 2026-09-29 — M32: Sea sightings
+- **Agent:** Open Era Engineer (Cursor cloud agent) | **Branch:** `feature/sea-sightings` | **Commits:** `f797dcd`, `493136e`, and the commit that adds this entry | **Type:** feature
+- **Changed** — `seaSightingsFor` in `src/dashboard/visibility.ts` derives a row when the state is projected. The observer and the subject must both be at sea. The kinds are passing, sharing, overtaking, and arriving, from the span each ship crossed this tick. The row carries sailors, `troops.count`, and `partyPower()`, with `source` `direct`, `confidence` 1, and `ageTicks` 0. It is on the commander's own character as `seaSightings`, and on the subject as `seaSighting`. It is not stored, not an event, and not read by the planner or the port forecast. `WorldState.version` stays 5. The inspector prints the count and "N ticks old", the same string a port sighting already uses.
+- **Why** — A ship that has left port was already on the map, and its troop count was not. Writing the row onto every captain moves the 72-tick hashes. Reading it does not.
+- **Verified** — `npm run typecheck` clean. **242 tests.** `./scripts/evaluate-milestone.sh sea-sightings` passed. Tick-72 hashes stayed `cb04ba5d392d8b1c868cc97e54cb21b21ec171edd546bb70d0d7aba86cc69c11` (1847, 8301), `bd7d8cc44d5fa21022ecb8f8086e13dfbb9475eb025b5ae53f87e2991f90035c` (2718, 8513), `20975bf480e5aa11eeafe1ce39c36cf5ba0fa8e2d5de2bb5887a35d7b3aecc9f` (4096, 8031). Split recovery replayed 572 events. No `golden:update`. `src/sim` is unchanged from `ee9eb6e`. Over 1200 ticks with no commands, state hashes and event counts match the addendum, including tick 1200 `95bd71dc…` / `55d48cbb…` / `f5355c1a…` (164313, 165434, 164691). The sample-captain census matches that note (Toma Hale 400 rows, Toma Reef 236, Bram Tern 373). Blind playtest [sea-sightings-001](docs/playtests/sea-sightings-001.md) on seed 1847 (`npm run dashboard -- --reset --seed 1847`, one travel command to Glassport), head `8d0df52`: **PROMOTE**. State tick 2: Ada Sorn `overtaking`, troops 35, live `troops` / `cargo` / `money` null; Zara Gale on the same leg and not a row. State tick 3: five rows, Sable Sorn `passing`, sailors 14, troops 36, party power 100.168. State tick 4: Mara `seaSightings` null at Glassport; Ada `troops.count` 35 and `seaSighting` null. Vale Gale's travel card read 1 of 3, where the plan's table says 2 of 4; her sea row otherwise matched.
+- **Left open** — [sea-sightings-001](docs/playtests/sea-sightings-001.md) has not been run by a blind operator. The row is gone when the ships separate. Idle Mara still starves in place; that stays intended, and the UI warning stays queued. Capture, cover, and seat wording were not changed. The M31 readability rows are still open.
+- **Links** — [blind playtest sea-sightings-001](docs/playtests/sea-sightings-001.md) `PROMOTE`, [sea sightings](docs/design/sea-sightings.md), [party sightings](docs/design/party-sightings.md)
 
 ### 2026-09-29 — M31: The loyalty scar
 - **Agent:** Open Era Engineer (Cursor cloud agent) | **Branch:** `feature/loyalty-scar` | **Commits:** `5f0ac1d`, `f565db5`, `db5b2e5` | **Type:** feature

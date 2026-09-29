@@ -12,7 +12,7 @@ import {
 } from "../src/dashboard/visibility.ts";
 import { runTick } from "../src/sim/engine.ts";
 import { createPrototypeWorld } from "../src/sim/scenario.ts";
-import { applyEvent, round, stateHash } from "../src/sim/state.ts";
+import { applyEvent, partyPower, round, stateHash } from "../src/sim/state.ts";
 import type { Character, SimEvent, WorldState } from "../src/sim/types.ts";
 
 interface ProjectedIntelligence {
@@ -187,6 +187,22 @@ test("a character outside the commander's observation exposes identity only", ()
   // and it must not be copied into troops.
   assert.equal(projected.troops, null);
   assert.equal(projected.partySighting, null);
+  assert.equal(projected.seaSighting, null);
+  assert.equal(projected.seaSightings, null);
+
+  // A different leg is still not a meeting. The course is already public.
+  commander.locationId = null;
+  commander.travel = { fromId: "cinder-key", toId: "verdant-cay", totalTicks: 4, remainingTicks: 4 };
+  stranger.locationId = null;
+  stranger.travel = { fromId: "crown-harbor", toId: "glassport", totalTicks: 4, remainingTicks: 4 };
+  const apart = project(world, commander, stranger);
+  assert.equal(apart.seaSighting, null, "a character outside the commander's leg has no sea sighting");
+  assert.equal(apart.troops, null);
+  assert.equal(apart.seaSightings, null);
+  const own = project(world, commander, commander);
+  const ownList = own.seaSightings as Record<string, unknown> | null;
+  assert.ok(ownList);
+  assert.equal(ownList[stranger.id], undefined);
 });
 
 test("a landless mate at Verdant Cay is distant and a rival faction hides its purse", () => {
@@ -306,6 +322,15 @@ test("tier resolution prefers proximity over affiliation", () => {
     "faction",
     "a character under way is not directly observed",
   );
+
+  commander.locationId = null;
+  commander.travel = { fromId: "crown-harbor", toId: "glassport", totalTicks: 4, remainingTicks: 3 };
+  const alongside = project(world, commander, factionPeer);
+  assert.equal(alongside.troops, null, "a character under way is not directly observed");
+  assert.equal(alongside.partyPower, null);
+  const sea = alongside.seaSighting as { troops: number; partyPower: number };
+  assert.equal(sea.troops, factionPeer.troops.count);
+  assert.equal(sea.partyPower, partyPower(factionPeer));
 });
 
 test("territory the commander's faction controls counts as observed", () => {
