@@ -30,10 +30,10 @@ Git remains the complete history. This file exists for three things git does not
 
 ## Current state
 
-- **Baseline:** branched from `827b4cb`. This branch is `feature/autonomous-short-purse` (M22). No pull request. `origin/main` had moved to `75704de` (the port-provisions note); that was merged and did not touch the simulation.
-- **Last verified:** `./scripts/evaluate-milestone.sh autonomous-short-purse` passes on this branch, Node v24.21.0, ICU 78.3. Typecheck clean, **164 tests**.
-- **Gate status:** golden hashes regenerated. Tick-72 counts are 8275 / 8489 / 8003.
-- **Headline risk:** sea sightings, a passive glance, and a faction total are still unbuilt. A human who issues no commands eats the opening hold and then starves in place; the purse is not spent on food.
+- **Baseline:** branched from `9267125`. This branch is `feature/protect-own-port` (M23). No pull request. `origin/main` had moved to `6d7badb` (the contracts note); that was merged and did not touch the simulation.
+- **Last verified:** `./scripts/evaluate-milestone.sh protect-own-port` passes on this branch, Node v24.21.0, ICU 78.3. Typecheck clean, **170 tests**. Golden hashes were not regenerated.
+- **Gate status:** tick-72 hashes unchanged. Counts stay 8275 / 8489 / 8003. Split recovery replayed 572 events.
+- **Headline risk:** the playtest is pending with a separate fresh-context operator. Sea sightings, a passive glance, and a faction total are still unbuilt.
 - **Runtime:** Node 24.21.0, pinned by `.node-version`. ICU 78.3.
 
 ## Open items
@@ -146,6 +146,10 @@ Backfilled from the commit graph on 2026-09-25. **Attribution caveat:** commits 
 - **Agent:** Cursor | **PR:** [#8](https://github.com/taia-0/Open-Era/pull/8)
 - Six defects closed without touching simulation behavior: duplicate order mutations, four unpublished endpoints, backdated staleness, unqualified estimates, a fragile cadence parse, and Node 20 actions. The first dashboard render test executes the shipped inline script against a real projection.
 
+### 2026-09-29 — M23: Protect completes on the faction's own port
+- **Agent:** Open Era Engineer (Cursor cloud agent) | **Branch:** `feature/protect-own-port` | **Playtest:** pending, [protect-own-port-001](docs/playtests/protect-own-port-001.md) (to be added)
+- A `protect` order completes only when the settlement's faction is the officer's. A faction with no ports keeps its record. Golden hashes were not regenerated. Tick-72 counts stay 8275 / 8489 / 8003.
+
 ### 2026-09-29 — M22: Autonomous short purse
 - **Agent:** Open Era Engineer (Cursor cloud agent) | **Branch:** `feature/autonomous-short-purse` | **Playtest:** [autonomous-short-purse-001](docs/playtests/autonomous-short-purse-001.md)
 - An autonomous character no longer starts a voyage the purse cannot cover. `quotedPassage` is shared with the player `insufficient-passage` check: `passageCost(travelDuration)`, and no destination tax. The unaffordable candidate scores −1000. Golden hashes were regenerated. Tick-72 counts are 8275 / 8489 / 8003.
@@ -179,6 +183,14 @@ Backfilled from the commit graph on 2026-09-25. **Attribution caveat:** commits 
 - A player can name a good and a quantity and see the price before paying, on any of the four resources, with every limit quoted before it is hit. A voyage pays for itself (+113.27 on 108 starting money in playtest). Whether it out-earns working the same ticks is a separate, deferred milestone.
 
 ## Entries
+
+### 2026-09-29 — M23: a protect order completes only on the officer's own port
+- **Agent:** Open Era Engineer (Cursor cloud agent) | **Branch:** `feature/protect-own-port` | **Commits:** `f1179c5` (the predicate), `72d9871` (the tests), `65c3199` (merge of `origin/main` at `6d7badb`). This entry is the record commit. | **Type:** Behavior
+- **Changed** — one predicate in `judgeOrderCompletion` (`src/sim/agency.ts`). A `protect` order completes only when `settlement.factionId === character.factionId`. Standing on the target for a day is not enough. Null matches null, so an unaligned officer on an unowned port can still complete. No new event and no new RNG draw. `npm run golden:update` was not run.
+- **Why** — the judgment read stability and skipped the holder, so an officer could report a lost port secure. The landless faction itself already remained: members, treasury, and the record stay, and the next claim writes that faction back onto a port.
+- **Verified** — baseline on `9267125`, before any of this, Node v24.21.0, ICU 78.3: `npm ci`, `npm run typecheck` clean, **164 tests**, `./scripts/evaluate-milestone.sh baseline-protect-own-port` passes. Hashes `d7eb02eb0e6b835ee923147b855d0a91969a416115d0c3bd5c2650ff0e2b6a3f` (1847, 8275 events), `d0b4b449ce9bc3fc27f0cfa15a5cc8ef04d5a2e6a9cdded2c2b11b6c4ca6583d` (2718, 8489), `d5d9da8bb1e9c9bd86c93ccbaa570f04ea9052ea1b5d4b48f3452e2db6f0c0c7` (4096, 8003). Split recovery replayed 572 events. After the predicate and tests: typecheck clean, **170 tests**. New tests: "a faction that loses its last port keeps its record until a claim restores one", "an active protect order does not complete once the target's faction has changed", "a landless mate at Verdant Cay is distant and a rival faction hides its purse", "offshore surrender stays null, and the exact branch runs only for the commander's faction", "the protect predicate leaves the committed golden hashes in place", "with no friendly port, retreat goes to Verdant Cay". Hashes and counts did not move. Finish gate `./scripts/evaluate-milestone.sh protect-own-port` passes: the same three hashes, 8275 / 8489 / 8003, split recovery replayed 572 events. `origin/main` at `6d7badb` was merged before that gate. The merge is the contracts note only. Typecheck, the 170 tests, and the gate were run again on that merge and passed. The playtest is pending with a separate fresh-context operator, at `docs/playtests/protect-own-port-001.md` (to be added).
+- **Left open** — the playtest. Retargeting orders, naming a capital, and splitting the treasury stay out, as the note says. The note itself is still a proposal until it moves into world simulation.
+- **Links** — [landless faction](docs/design/landless-faction.md). No pull request.
 
 ### 2026-09-29 — M22: an autonomous party does not sail a voyage it cannot pay for
 - **Agent:** Open Era Engineer (Cursor cloud agent) | **Branch:** `feature/autonomous-short-purse` | **Commits:** `fd21558` (the shared quote, the −1000 score, the tests, and the golden fixture). The playtest and this entry are the record commit. | **Type:** Balance

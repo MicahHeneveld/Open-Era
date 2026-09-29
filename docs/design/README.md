@@ -10,7 +10,7 @@ These documents capture the decisions made during the initial design conversatio
 - [Party sightings](party-sightings.md) — Built in M21: a dated troop count and party power for parties anchored at a surveyed port, or delivered by a targeted explore
 - [Raid floor](raid-floor.md) — Open / proposal: the slope-10 surrender slide, accepted as M19, so a battered port can change hands once
 - [Garrison recovery](garrison-recovery.md) — Built in M20: a fed settlement under its population ceiling regains one soldier on a world-tick interval
-- [Landless faction](landless-faction.md) — Open / proposal: a faction that loses its last port remains, and takes the next one by the existing claim
+- [Landless faction](landless-faction.md) — M23 built the protect predicate: a protect order completes only while the officer's faction holds the port. A faction with no ports remains. Playtest pending. The rest of the note is still a proposal
 - [Port provisions](port-provisions.md) — Open / proposal: Crown Harbor's ration outruns its fields once stability slips, and the claim leaves a port that cannot regrow
 - [Contracts](contracts.md) — Open / proposal: a paid provisions delivery the sim would enforce, once a standing order is one job rather than two
 - [Generated mockups](../assets/mockups/README.md) — all 13 image concepts produced during the conversation
