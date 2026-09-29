@@ -175,6 +175,10 @@ test("a character outside the commander's observation exposes identity only", ()
     assert.equal(projected[field], null, `${field} must be withheld at a distance`);
     assert.notEqual(projected[field], 0, `${field} must read as unknown, never as zero`);
   }
+  // A sighting is a record, not a live count. With no record the field is null,
+  // and it must not be copied into troops.
+  assert.equal(projected.troops, null);
+  assert.equal(projected.partySighting, null);
 });
 
 test("a faction peer is known by record without exposing condition or motive", () => {

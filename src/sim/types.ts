@@ -242,6 +242,25 @@ export interface SettlementKnowledge {
   ground?: SettlementGround;
 }
 
+/**
+ * One party, anchored in a port, as someone saw them.
+ *
+ * The numbers stay as seen. They are not recomputed from later experience,
+ * discipline, or leadership, which would move an old power when a hidden skill
+ * moved. Health, money, cargo, skills, orders, and captivity stay off the
+ * record. `travel: null` is the whole heading: this slice does not store a course.
+ */
+export interface PartySighting {
+  characterId: string;
+  locationId: string;
+  travel: null;
+  troops: number;
+  partyPower: number;
+  observedTick: number;
+  source: "direct" | "faction-report";
+  confidence: 1;
+}
+
 export type OrderDirective = "protect" | "pressure" | "trade-supplies" | "explore";
 
 export type StandingOrderStatus =
@@ -451,6 +470,14 @@ export interface Character {
   plan: CharacterPlan | null;
   relationships: Record<string, Relationship>;
   knowledge: Record<string, SettlementKnowledge>;
+  /**
+   * Parties seen anchored in a port, keyed by the subject's id.
+   *
+   * Absent until the first sighting. A survey, or a targeted explore delivered
+   * to this character, writes it. A daily observation does not, and nothing
+   * deletes an entry. Omitted so a world with no sightings hashes as before.
+   */
+  partySightings?: Record<string, PartySighting>;
   standingOrders: StandingOrder[];
   lastPlanReviewTick: number;
   currentGoal: string;

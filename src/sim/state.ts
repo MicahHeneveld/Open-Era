@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import type {
   Character,
+  PartySighting,
   ResourceKey,
   Resources,
   Settlement,
@@ -88,6 +89,36 @@ export function retainGround(
   if (!prior) return next;
   if (next.ground && next.ground.observedTick >= prior.observedTick) return next;
   return { ...next, ground: { ...prior } };
+}
+
+/**
+ * Keep a party sighting unless a newer observation replaces it.
+ *
+ * A later arrival or a daily refresh must not touch this map. The key stays
+ * absent until the first sighting, and nothing deletes an entry. An older
+ * report, including one relayed after a survey, leaves the stored tick in place.
+ * An observation at the same tick replaces, because that is the later write.
+ */
+export function mergePartySightings(character: Character, incoming: PartySighting[]): void {
+  if (incoming.length === 0) return;
+  const map = character.partySightings ?? {};
+  let wrote = false;
+  for (const sighting of [...incoming].sort((left, right) => left.characterId.localeCompare(right.characterId))) {
+    const prior = map[sighting.characterId];
+    if (prior && sighting.observedTick < prior.observedTick) continue;
+    map[sighting.characterId] = {
+      characterId: sighting.characterId,
+      locationId: sighting.locationId,
+      travel: null,
+      troops: sighting.troops,
+      partyPower: sighting.partyPower,
+      observedTick: sighting.observedTick,
+      source: sighting.source,
+      confidence: 1,
+    };
+    wrote = true;
+  }
+  if (wrote) character.partySightings = map;
 }
 
 export function clamp(value: number, minimum: number, maximum: number): number {
@@ -386,6 +417,10 @@ export function applyEvent(world: WorldState, event: SimEvent): void {
       const settlementId = event.data.settlementId as string;
       const incoming = event.data.knowledge as SettlementKnowledge;
       actor.knowledge[settlementId] = retainGround(actor.knowledge[settlementId], incoming);
+      // Present only on a survey or a delivered explore. A daily refresh omits
+      // the list, so standing in a port cannot keep or drop a sighting.
+      const sightings = event.data.partySightings as PartySighting[] | undefined;
+      if (sightings) mergePartySightings(actor, sightings);
       break;
     }
     case "plan-reconsidered":
