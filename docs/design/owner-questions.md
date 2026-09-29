@@ -306,6 +306,38 @@ Answer by number, for example "4: yes" or "4: keep the default." The default is 
 
 **Source:** [Captivity debts](captivity-debts.md#questions-for-micah) question 8
 
+## Portless recovery
+
+### 30. Several of your captains are already on a beach you do not own, and you have no port left. The town has at least 8 soldiers. Do they all attack that same morning?
+
+**Default:** Yes. The world already lets every captain attack when the town has 15 or more. A fight that drops the town under 8 closes the gate for the captains still waiting that morning. On seed 2718, tick 35, Mina Vale attacks and the town is left with 6 soldiers. The other three do not attack. Under no floor those four attacks left the town with none.
+
+**If you pick the other way:** They would not all attack that morning. One could go first, or the others could wait, even while the town still has 8 soldiers.
+
+**Status:** Accepted, not built (M28)
+
+**Source:** [Portless recovery](portless-recovery.md#questions-for-micah) question 1
+
+### 31. The town comes back with the soldiers the fight left. Should the captain also leave some of their own troops there?
+
+**Default:** No. On these runs the fight left 3 to 6, never zero. Leaving up to 10 more, and never dropping the captain below 25, pushes a town of 6 past 15. The town is then legal to raid again, and on these runs it was often lost within a few ticks.
+
+**If you pick the other way:** The captain would leave some of their own troops in the town.
+
+**Status:** Accepted, not built (M28)
+
+**Source:** [Portless recovery](portless-recovery.md#questions-for-micah) question 2
+
+### 32. Is 8 the right number of soldiers for a faction with no port?
+
+**Default:** 8. At 5 the return on the three losses above is one tick, which is the no-floor failure without the empty town. At 8 a town already that strong still falls the same day, and a lost fight can drop a town back under 8. Seed 1847 is still without a port at tick 1200 for that reason. A higher line was not measured.
+
+**If you pick the other way:** The line could be 5, or higher than 8. At 5 the return on those three losses is one tick. A higher line was not measured.
+
+**Status:** Accepted, not built (M28)
+
+**Source:** [Portless recovery](portless-recovery.md#questions-for-micah) question 3
+
 ## Already settled
 
-The [progress log](../../progress.md) (reconnaissance brief, 2026-09-29) answered reconnaissance questions 1–8. Reconnaissance question 1 is no: a survey or an officer's look stores population, walls, and who was anchored. Reconnaissance question 2 keeps confidence and the original date on that handoff. Reconnaissance questions 3–8 stay put: public sea courses, a live garrison from your other ports, no captives or informants. [Party sightings](party-sightings.md#left-open) repeats those. A foreign price is that dated report, not a live quote ([World simulation](world-simulation.md#player-trade)). An idle player with money still starves if they give no orders ([Port provisions](port-provisions.md#the-idle-commander)). Unpaid ransom is questions 22–29 ([Captivity debts](captivity-debts.md#questions-for-micah)). Battered-port surrender, fed garrisons, and refusing an unpaid voyage are built. The first hour is a test, not a choice. The one-click food buy is a known bug queued for engineering: the button will show the cost, apply the share-of-stock cap, and its refusal text will be fixed ([World simulation](world-simulation.md#player-trade); [progress log](../../progress.md#open-items)).
+The [progress log](../../progress.md) (reconnaissance brief, 2026-09-29) answered reconnaissance questions 1–8. Reconnaissance question 1 is no: a survey or an officer's look stores population, walls, and who was anchored. Reconnaissance question 2 keeps confidence and the original date on that handoff. Reconnaissance questions 3–8 stay put: public sea courses, a live garrison from your other ports, no captives or informants. [Party sightings](party-sightings.md#left-open) repeats those. A foreign price is that dated report, not a live quote ([World simulation](world-simulation.md#player-trade)). An idle player with money still starves if they give no orders ([Port provisions](port-provisions.md#the-idle-commander)). Unpaid ransom is questions 22–29 ([Captivity debts](captivity-debts.md#questions-for-micah)). A landless raid once a town has 8 soldiers, and no troops left behind on the claim, is questions 30–32 ([Portless recovery](portless-recovery.md#questions-for-micah)). Battered-port surrender, fed garrisons, and refusing an unpaid voyage are built. The first hour is a test, not a choice. The one-click food buy is a known bug queued for engineering: the button will show the cost, apply the share-of-stock cap, and its refusal text will be fixed ([World simulation](world-simulation.md#player-trade); [progress log](../../progress.md#open-items)).
