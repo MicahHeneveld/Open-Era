@@ -338,6 +338,58 @@ Answer by number, for example "4: yes" or "4: keep the default." The default is 
 
 **Source:** [Portless recovery](portless-recovery.md#questions-for-micah) question 3
 
+## Battle morale
+
+### 33. A big fight can end after one round because the captain's morale is 12 or lower, even when their side outfought the town. Should that count as their victory?
+
+**Default:** Yes. The town can still surrender only under the existing garrison and stability rules. Today it is recorded as the town's victory, the captain may be captured, and no surrender is offered. On these runs that happened 8, 5, and 8 times, first at ticks 550, 620, and 298.
+
+**If you pick the other way:** It would stay the town's victory. The captain may be captured, and no surrender is offered.
+
+**Status:** Accepted, not built (M29)
+
+**Source:** [Battle morale](battle-morale.md#questions-for-micah) question 1
+
+### 34. Does that include a close fight, such as 245 against 237, or only a lopsided one?
+
+**Default:** Any higher score. The close fight leaves Crown Harbor with about 140 soldiers, so it does not change hands. The lopsided ones are the ones that take a small port. Requiring a wide margin leaves the 1.44-ratio fight as a town victory and rewrites morale inside the first 72 ticks if the margin is applied by scaling the +3.
+
+**If you pick the other way:** Only a lopsided fight would count. A wide margin leaves the 1.44-ratio fight as a town victory and rewrites morale inside the first 72 ticks if the margin is applied by scaling the +3.
+
+**Status:** Accepted, not built (M29)
+
+**Source:** [Battle morale](battle-morale.md#questions-for-micah) question 2
+
+### 35. M28 lets a faction with no port attack a town of 8 soldiers, and it lands first. With this victory rule, Crown Harbor on seed 1847 changes hands seven times within five ticks. Is that acceptable?
+
+**Default:** Yes. The short retake is the floor working once the attack can actually win. The floor alone already has one fast loss on each seed. Rejecting the seven means keeping a won fight as a loss, or adding a hold the portless note already measured and did not take.
+
+**If you pick the other way:** The seven changes of hands would not be acceptable. That keeps a won fight as a loss, or adds a hold the portless note already measured and did not take.
+
+**Status:** Accepted, not built (M29)
+
+**Source:** [Battle morale](battle-morale.md#questions-for-micah) question 3
+
+### 36. Should resting, or standing at a port, refill the hold from the shelf?
+
+**Default:** No, not in this change. The shelf is under one unit because captains bought it out. The port's own fields are covering its ration. An automatic purchase, tried here as one ration for autonomous parties, raised the false defeats from 8 to 17 on seed 1847 and left Free Tide with no port at tick 1200 on the other two seeds. The open note about resupplying at anchor stays open. An idle player who never orders food still starves.
+
+**If you pick the other way:** Resting, or standing at a port, would refill the hold from the shelf.
+
+**Status:** Accepted, not built (M29)
+
+**Source:** [Battle morale](battle-morale.md#questions-for-micah) question 4
+
+### 37. The capture die that today's loss would have rolled is still rolled and ignored. Should it be?
+
+**Default:** Yes. Later luck stays aligned until the victory itself changes the world. No new event is added. Skipping the die would move every later roll on that seed.
+
+**If you pick the other way:** The die would be skipped, and every later roll on that seed would move.
+
+**Status:** Accepted, not built (M29)
+
+**Source:** [Battle morale](battle-morale.md#questions-for-micah) question 5
+
 ## Already settled
 
-The [progress log](../../progress.md) (reconnaissance brief, 2026-09-29) answered reconnaissance questions 1–8. Reconnaissance question 1 is no: a survey or an officer's look stores population, walls, and who was anchored. Reconnaissance question 2 keeps confidence and the original date on that handoff. Reconnaissance questions 3–8 stay put: public sea courses, a live garrison from your other ports, no captives or informants. [Party sightings](party-sightings.md#left-open) repeats those. A foreign price is that dated report, not a live quote ([World simulation](world-simulation.md#player-trade)). An idle player with money still starves if they give no orders ([Port provisions](port-provisions.md#the-idle-commander)). Unpaid ransom is questions 22–29 ([Captivity debts](captivity-debts.md#questions-for-micah)). A landless raid once a town has 8 soldiers, and no troops left behind on the claim, is questions 30–32 ([Portless recovery](portless-recovery.md#questions-for-micah)). Battered-port surrender, fed garrisons, and refusing an unpaid voyage are built. The first hour is a test, not a choice. The one-click food buy is a known bug queued for engineering: the button will show the cost, apply the share-of-stock cap, and its refusal text will be fixed ([World simulation](world-simulation.md#player-trade); [progress log](../../progress.md#open-items)).
+The [progress log](../../progress.md) (reconnaissance brief, 2026-09-29) answered reconnaissance questions 1–8. Reconnaissance question 1 is no: a survey or an officer's look stores population, walls, and who was anchored. Reconnaissance question 2 keeps confidence and the original date on that handoff. Reconnaissance questions 3–8 stay put: public sea courses, a live garrison from your other ports, no captives or informants. [Party sightings](party-sightings.md#left-open) repeats those. A foreign price is that dated report, not a live quote ([World simulation](world-simulation.md#player-trade)). An idle player with money still starves if they give no orders ([Port provisions](port-provisions.md#the-idle-commander)). Unpaid ransom is questions 22–29 ([Captivity debts](captivity-debts.md#questions-for-micah)). A landless raid once a town has 8 soldiers, and no troops left behind on the claim, is questions 30–32 ([Portless recovery](portless-recovery.md#questions-for-micah)). A higher score is the attacker's victory when morale is 12 or under, a close fight included and the short retake accepted, rest does not refill the hold, and the capture die is still rolled, is questions 33–37 ([Battle morale](battle-morale.md#questions-for-micah)). Battered-port surrender, fed garrisons, and refusing an unpaid voyage are built. The first hour is a test, not a choice. The one-click food buy is a known bug queued for engineering: the button will show the cost, apply the share-of-stock cap, and its refusal text will be fixed ([World simulation](world-simulation.md#player-trade); [progress log](../../progress.md#open-items)).
