@@ -762,6 +762,78 @@ Answer by number, for example "4: yes" or "4: keep the default." The default is 
 
 **Source:** [Port churn and captures](port-churn-and-captures.md#questions-for-micah) question 5
 
+## Autonomous orders after M29
+
+### 74. Should captains start giving new protect orders on their own, now that the landless raid and the outscore rule are in?
+
+**Default:** No. The four-day sketch issues 44 orders on each seed, against 25, 34, and 27 before, and the first order at tick 24 moves the fixture.
+
+**If you pick the other way:** Captains would give new protect orders on their own. That sketch issues 44 orders on each seed and moves the fixture at tick 24.
+
+**Status:** Default: no
+
+**Source:** [Autonomous orders after M29](autonomous-orders-after-m29.md#questions-for-micah) question 1
+
+### 75. Should those orders be used to calm Crown Harbor?
+
+**Default:** No. A retake takes one or two ticks, and the clock is 24, so an order cannot cut into a pair that has already started.
+
+**If you pick the other way:** Those orders would be used to calm Crown Harbor. A retake is one or two ticks, so an order on the clock does not get a turn inside it.
+
+**Status:** Default: no
+
+**Source:** [Autonomous orders after M29](autonomous-orders-after-m29.md#questions-for-micah) question 2
+
+### 76. If a later version does issue, when is the first order?
+
+**Default:** After the first 72 ticks. After 72 and the 72-tick clock keep today's fixture. The sketch, which starts at tick 24, does not.
+
+**If you pick the other way:** The first order would come inside the first 72 ticks. The sketch does that, and it moves the fixture.
+
+**Status:** Default: after the first 72 ticks
+
+**Source:** [Autonomous orders after M29](autonomous-orders-after-m29.md#questions-for-micah) question 3
+
+### 77. When a report has just closed, does the next protect go out on that same tick?
+
+**Default:** No. The on-free and successor variants ran away: 121 orders on seed 1847, still going at tick 1199, and 192 on seed 4096, still going at tick 1198.
+
+**If you pick the other way:** The next protect would go out on the same tick the report closes. On free and successor did that, and both ran away.
+
+**Status:** Default: no
+
+**Source:** [Autonomous orders after M29](autonomous-orders-after-m29.md#questions-for-micah) question 4
+
+### 78. When every free mate already has an order or has refused this port, what happens on the next mark?
+
+**Default:** Skip it. The four-day sketch did that, four marks on seed 2718 and three on seed 4096. It does not hand the job to someone who refused that port, and it does not stack a second order.
+
+**If you pick the other way:** The next mark would give the job to someone who refused this port, or stack a second order while the first is open. The sketch skipped those marks.
+
+**Status:** Default: skip it
+
+**Source:** [Autonomous orders after M29](autonomous-orders-after-m29.md#questions-for-micah) question 5
+
+### 79. Does the player's own commander do this too?
+
+**Default:** No. She is the human. Skipping her on all 49 marks left the same history as Free Tide alone.
+
+**If you pick the other way:** The player's own commander would give orders too. These runs gave her none, and skipping her on all 49 marks left the same history as Free Tide alone.
+
+**Status:** Default: no
+
+**Source:** [Autonomous orders after M29](autonomous-orders-after-m29.md#questions-for-micah) question 6
+
+### 80. While the commander is in prison, does the person covering the seat give the order?
+
+**Default:** No. The sketch puts him in prison once, ticks 661–745 on seed 1847, and those marks issue nothing. The cover still does not get the pen.
+
+**If you pick the other way:** The person covering the seat would give the order. Those marks issued nothing, and the cover still does not get the pen.
+
+**Status:** Default: no
+
+**Source:** [Autonomous orders after M29](autonomous-orders-after-m29.md#questions-for-micah) question 7
+
 ## Already settled
 
 The [progress log](../../progress.md) (reconnaissance brief, 2026-09-29) answered reconnaissance questions 1–8. Reconnaissance question 1 is no: a survey or an officer's look stores population, walls, and who was anchored. Reconnaissance question 2 keeps confidence and the original date on that handoff. Reconnaissance questions 3–8 stay put: public sea courses, a live garrison from your other ports, no captives or informants. [Party sightings](party-sightings.md#left-open) repeats those. A foreign price is that dated report, not a live quote ([World simulation](world-simulation.md#player-trade)). An idle player with money still starves if they give no orders ([Port provisions](port-provisions.md#the-idle-commander)). Unpaid ransom is questions 22–29 ([Captivity debts](captivity-debts.md#questions-for-micah)). A landless raid once a town has 8 soldiers, and no troops left behind on the claim, is questions 30–32 ([Portless recovery](portless-recovery.md#questions-for-micah)). A higher score is the attacker's victory when morale is 12 or under, a close fight included and the short retake accepted, rest does not refill the hold, and the capture die is still rolled, is questions 33–37 ([Battle morale](battle-morale.md#questions-for-micah)). Someone else covers the seat while the commander is in prison and hands it back on release, the cover is the highest leadership plus loyalty with the lower id winning a tie and trust is not used, you cannot name someone else or keep the cover after release, everyone including a rival sees who holds the seat, and if that cover is captured the next person steps up for the whole 14 days, is questions 38–42 ([Political layer](political-layer.md#questions-for-micah)). A character released still owing ransom loses 0.04 loyalty once, a paid release changes nothing, orders, plans and work keep using the starting loyalty, and you see loyalty only for your own faction, is questions 43–45 ([Loyalty drift](loyalty-drift.md#questions-for-micah)). Battered-port surrender, fed garrisons, and refusing an unpaid voyage are built. The first hour is a test, not a choice. The one-click food buy is a known bug queued for engineering: the button will show the cost, apply the share-of-stock cap, and its refusal text will be fixed ([World simulation](world-simulation.md#player-trade); [progress log](../../progress.md#open-items)).
