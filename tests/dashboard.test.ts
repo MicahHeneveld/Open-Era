@@ -562,7 +562,7 @@ test("the published command capabilities match what the boundary accepts", async
     assert.deepEqual(state.capabilities.limits.orderPriority, { min: 0.1, max: 1, default: 0.78 });
     assert.deepEqual(state.capabilities.limits.tradeQuantity, { min: 1, max: 200 });
     const actions = state.capabilities.actions.map((entry) => entry.action);
-    for (const action of ["travel", "buy-provisions", "buy-resource", "sell-resource", "work", "recruit", "raid", "claim-settlement", "rest"]) {
+    for (const action of ["travel", "buy-provisions", "buy-resource", "sell-resource", "work", "recruit", "raid", "claim-settlement", "survey", "rest"]) {
       assert.ok(actions.includes(action), `${action} must be documented`);
     }
     // The verb that picked what to liquidate for the player is gone from the

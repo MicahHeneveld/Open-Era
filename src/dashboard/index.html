@@ -745,7 +745,7 @@
           '</div><div class="combat-factor">' + forecast.revealedFactors.map(esc).join(" · ") + '</div></div>'
         : "";
       return '<div class="eyebrow">Island intelligence</div><h2>' + esc(item.name) + '</h2>' +
-        '<div class="subtle">' + esc(owningFaction ? owningFaction.name : "Independent") + (owner ? " · Owned by " + esc(owner.name) : "") + " · Population " + (item.population == null ? "unknown" : item.population.toLocaleString()) +
+        '<div class="subtle">' + esc(owningFaction ? owningFaction.name : "Independent") + (owner ? " · Owned by " + esc(owner.name) : "") + " · Population " + (item.population == null ? "unknown" : item.population.toLocaleString() + (item.groundIntelligence && !owned && !present ? " (" + esc(item.groundIntelligence.source) + ", " + item.groundIntelligence.ageTicks + " ticks old)" : "")) +
           (typeof item.taxRate === "number" ? " · " + (item.taxRate > 0 ? fmt(item.taxRate * 100, 0) + "% sales tax" : "no sales tax") : " · sales tax unknown") + "</div>" +
         '<div class="subtle">' + intelLabel + "</div>" +
         '<div class="stat-grid">' +
@@ -754,7 +754,7 @@
           // it. Both stay marked approximate only when the commander is away and
           // working from someone else's accounts.
           '<div class="stat"><span>Garrison</span><strong>' + (item.garrison == null ? '<span class="subtle">unknown</span>' : (here ? "" : approx) + item.garrison) + "</strong></div>" +
-          '<div class="stat"><span>Fortification</span><strong>' + fmt(item.fortification, 2) + "×</strong></div>" +
+          '<div class="stat"><span>Fortification</span><strong>' + fmt(item.fortification, 2) + "×" + (item.groundIntelligence && !owned && !present ? ' <span class="subtle">' + item.groundIntelligence.ageTicks + " ticks old</span>" : "") + "</strong></div>" +
           '<div class="stat"><span>Stability</span><strong>' + fmt(item.stability) + "%</strong></div>" +
           '<div class="stat"><span>Production</span><strong>' + esc(item.focus || "Unknown") + "</strong></div>" +
         "</div>" +
@@ -777,6 +777,7 @@
           (here && item.surrenderOffered ? '<button class="action danger" type="button" data-action="claim-settlement">Accept surrender &amp; claim</button>' : "") +
           (here && item.surrenderOffered ? '<button class="action" type="button" data-action="decline-surrender">Decline and keep fighting</button>' : "") +
           (here && item.factionId && item.factionId !== c.factionId && !item.surrenderOffered && !item.battleInProgress && !(world.combat && world.combat.commandedBattle) ? '<button class="action danger" type="button" data-action="raid">Commit attack</button>' : "") +
+          (here && !(c.factionId != null && item.factionId === c.factionId) ? '<button class="action" type="button" data-action="survey">Survey the ground</button>' : "") +
           (here ? '<button class="action" type="button" data-action="buy-provisions">Top up provisions</button>' : "") +
         "</div>";
     }

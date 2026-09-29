@@ -114,17 +114,19 @@ export function combatForecast(
   const attackerWidth = clamp(0.4 - skill * 0.27, 0.1, 0.42);
   const defenderWidth = clamp(0.3 - skill * 0.16 + intelligencePenalty, 0.12, 0.72);
 
-  // Fortification and population are ground truth only while the commander is
-  // actually present. Deliberately binary, not scaled by confidence: nothing
-  // stored describes the ground of a settlement the commander has not stood on,
-  // so any confidence-scaled contribution of the true value would be a
-  // proportional disclosure of it. A player who knows this formula could read
-  // true fortification straight out of the result. Ignorance is expressed
-  // through the range widths below instead, which widen as confidence falls and
-  // reports age.
-  const groundTruthWeight = locallyObserved ? 1 : 0;
-  const knownFortification = 1 + (settlement.fortification - 1) * groundTruthWeight;
-  const knownPopulation = settlement.population * groundTruthWeight;
+  // Fortification and population are present truth only while the commander is
+  // standing there. Remotely they come from a stored ground record — a survey
+  // or an officer's report — or from nothing. Reading the live settlement here
+  // would let a later change in the walls move a forecast the commander had
+  // already paid for. With no record the old zeroes remain: fortification 1 and
+  // population 0, which add nothing, and the range widths carry the ignorance.
+  const storedGround = locallyObserved ? undefined : storedKnowledge?.ground;
+  const knownFortification = locallyObserved
+    ? settlement.fortification
+    : storedGround ? storedGround.fortification : 1;
+  const knownPopulation = locallyObserved
+    ? settlement.population
+    : storedGround ? storedGround.population : 0;
   const fortificationEstimate = 1 + (knownFortification - 1) * (0.35 + skill * 0.65);
   const populationDefenseEstimate = knownPopulation * 0.002 * (0.25 + skill * 0.75);
   const attackerCenter = partyPower(attacker);
@@ -174,11 +176,13 @@ export function combatForecast(
     `${Math.round(attacker.troops.discipline * 100)}% troop discipline`,
   ];
   if (!locallyObserved) {
-    // Nothing stored describes the ground itself, so any label here would either
-    // be invented or read off the true fortification. The second is exactly the
-    // leak this whole projection exists to prevent, so the honest answer is that
-    // the ground is unknown.
-    revealedFactors.push("defensive ground remains poorly understood");
+    if (storedGround) {
+      const surveyAge = Math.max(0, world.tick - storedGround.observedTick);
+      revealedFactors.push(`surveyed ground is ${surveyAge} ticks old`);
+    } else {
+      // No stored ground. Naming the live fortification here would publish it.
+      revealedFactors.push("defensive ground remains poorly understood");
+    }
   } else if (strategy >= 70) {
     revealedFactors.push(`defensive ground estimated near ${round(fortificationEstimate, 2)}×`);
     revealedFactors.push(`battle variance constrained by strategy ${strategy}`);

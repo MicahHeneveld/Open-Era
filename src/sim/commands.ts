@@ -137,6 +137,7 @@ export const ACTION_CAPABILITIES: readonly ActionCapability[] = [
   { action: "raid", target: "current-settlement", requires: ["the current settlement belongs to a hostile faction", "at least 25 troops", "no other major battle underway at this settlement"] },
   { action: "claim-settlement", target: "current-settlement", requires: ["the current settlement is offering surrender to this character"] },
   { action: "decline-surrender", target: "current-settlement", requires: ["the current settlement is offering surrender to this character"] },
+  { action: "survey", target: "current-settlement", requires: ["the current settlement is not held by the commander's faction"] },
   { action: "rest", target: "none", requires: [] },
 ];
 
@@ -356,6 +357,14 @@ function validateCharacterAction(
       return reject("not-surrendering", "The settlement is not offering surrender to this character");
     }
   }
+  if (request.action === "survey") {
+    if (request.targetId && request.targetId !== character.locationId) {
+      return reject("not-here", "A survey examines the settlement the character is standing in");
+    }
+    if (character.factionId !== null && settlement.factionId === character.factionId) {
+      return reject("faction-held", `${settlement.name} is already held by the commander's faction; its ground is on the faction's own record`);
+    }
+  }
   if (request.action === "recruit") {
     // Named separately, because "money and arms" left a player unable to tell
     // which of the two it was missing.
@@ -422,7 +431,7 @@ function validateCharacterAction(
     issuedTick: world.tick,
     type: "character-action",
     action: request.action,
-    targetId: request.action === "raid" || request.action === "claim-settlement" || request.action === "decline-surrender"
+    targetId: request.action === "raid" || request.action === "claim-settlement" || request.action === "decline-surrender" || request.action === "survey"
       ? character.locationId
       : request.targetId,
     ...(request.action === "buy-resource" || request.action === "sell-resource"
