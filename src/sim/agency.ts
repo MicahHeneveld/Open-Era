@@ -393,8 +393,13 @@ export function judgeOrderCompletion(
 
   if (order.directive === "protect" && character.locationId === order.targetId && elapsed >= world.ticksPerDay) {
     const settlement = world.settlements[order.targetId!];
-    evidence = 0.62 + Math.min(0.2, elapsed / (world.ticksPerDay * 10)) + settlement.stability / 1_000;
-    summary = `${character.name} reports that ${settlement.name} is secure and asks the issuer to close the protection order.`;
+    // Standing on the port for a day is not enough. A faction that lost the
+    // port must not be told it is secure. Null matches null: an unaligned
+    // officer on an unowned port can still complete.
+    if (settlement.factionId === character.factionId) {
+      evidence = 0.62 + Math.min(0.2, elapsed / (world.ticksPerDay * 10)) + settlement.stability / 1_000;
+      summary = `${character.name} reports that ${settlement.name} is secure and asks the issuer to close the protection order.`;
+    }
   } else if (order.directive === "pressure") {
     const success = [...events].reverse().find((event) =>
       event.actorId === character.id &&
