@@ -30,11 +30,19 @@ Git remains the complete history. This file exists for three things git does not
 
 ## Current state
 
-- **Baseline:** `origin/main` at `f87beb5` (PR #72). This branch is `fix/readability-polish-3`.
-- **Last verified:** See the M34.3 entry. 308 tests. Tick-72 and tick-1200 hashes are unchanged. The blind playtest is not run.
-- **Gate status:** Tick-72 hashes stay `cb04ba5d…` / `bd7d8cc4…` / `20975bf4…` (8301, 8513, 8031). Recovery 572.
-- **Headline:** The check-in is the last 180 ticks. A witnessed battle, a capture, and a withheld refusal are plain sentences. Stored events are unchanged.
+- **Baseline:** `origin/main` at `e61aa98` (PR #74). This branch is `feature/captivity-negotiation-v2`; implementation commit `0023a80`.
+- **Last verified:** M35. Typecheck clean and **313 tests** pass. Public-API playtest `captivity-negotiation-v2-001` is `PROMOTE`.
+- **Gate status:** Tick-72 hashes are `17e21ed…` / `3a53b0df…` / `a592e73b…` (8301, 8513, 8031). The counts are unchanged; hashes move because a captured character now stores the selected captor and negotiation state. Recovery remains 572.
+- **Headline:** A prisoner must persuade the named captor through delayed messages before structured release terms open. Rejected terms may be reopened through renewed persuasion.
 - **Runtime:** Node 24.21.0, pinned by `.node-version`. ICU 78.3.
+
+### 2026-09-30 — M35: message-driven captivity negotiation
+- **Agent:** Codex | **Branch:** `feature/captivity-negotiation-v2` | **Commit:** `0023a80` (implementation); this entry and evidence are the record commit on the same branch. | **Type:** Feature
+- **Changed** — Every capture assigns a named autonomous captor. The prisoner may direct-message that character until personality, relationship, time held, and classified message intent move the hidden case from `unreceptive` through `listening` and `considering` to `open`. The dialogue provider voices a decision already made by the simulation. Open terms may be accepted, countered once, or rejected. Rejection closes the offer, applies a persuasion setback, and allows later messages to reopen a new offer. Negotiated release reuses the existing ransom split, debt, loyalty, command-seat, travel, and troop-recovery event path. Escape and the fourteen-day deadline remain.
+- **Why** — The owner requires prisoners to persuade captors through persistent messages before negotiation begins. Messaging now changes a consequential social state without giving an LLM authority over money, release, or world mutation.
+- **Verified** — Node v24.19.0 in this sandbox. `npm run check`: typecheck clean, **313/313 tests**. New coverage opens terms through credible messages, withholds private persuasion and the system maximum, rejects prompt injection, reopens after a rejected offer, enforces one counter, and persists through the existing replay suite. `npm run golden:update` intentionally repinned state hashes to `17e21ed6…`, `3a53b0df…`, and `a592e73b…`; event counts stay 8301 / 8513 / 8031 and split recovery stays 572. Public dashboard HTTP playtest on seed 9 captured Mara Vane naturally at tick 7, moved `listening → considering → open → considering → open`, accepted a 147.14 counter at tick 28, recorded 72.14 debt, and began recovery of 93 troops. Verdict `PROMOTE`.
+- **Left open** — Counter adjudication resolves on the next tick rather than after another message delay. Captor workload and reassignment are not modelled. Terms cover money and release debt only; services, resources, political favors, allegiance, enforcement, and rescue remain deferred.
+- **Links** — [design](docs/design/captivity-negotiation.md) | [playtest](docs/playtests/captivity-negotiation-v2-001.md) (`PROMOTE`) | [roadmap](docs/roadmap.md)
 
 ## Open items
 

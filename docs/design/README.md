@@ -24,6 +24,7 @@ These documents capture the decisions made during the initial design conversatio
 - [Contracts](contracts.md) — Open / proposal: a paid provisions delivery the sim would enforce, once a standing order is one job rather than two
 - [Order confirmation](order-confirmation.md) — Open / proposal: a completion report closes when its issuer signs it, or after a day when nobody can
 - [Captivity debts](captivity-debts.md) — Open / proposal: the unpaid ransom comes out of the prisoner's purse, up to one day's wages, on each world day
+- [Captivity negotiation](captivity-negotiation.md) — Built in M35: a prisoner persuades the named captor through delayed direct messages, then accepts, counters, rejects, escapes, or waits for bounded release
 - [Ransom split](ransom-split.md) — Built: the coins paid on release split between the captor's treasury and party leader. The odd cent goes to the treasury. Question 24 is settled
 - [Treasury spending](treasury-spending.md) — Open / proposal: a faction ransom goes entirely to the treasury, and the command holder spends it while other members spend a daily allowance
 - [Political layer](political-layer.md) — Built in M30: the person who already issues a faction's orders is named in command, and a captive commander's seat is covered until release
@@ -53,6 +54,7 @@ Every playtest below is evidence for a capability the project claims. Several ar
 | [Post-retreat route 001](../playtests/post-retreat-route-001.md) | Retreat as physical withdrawal with a disclosed destination and forced travel |
 | [Captivity escape 001](../playtests/captivity-escape-001.md) | Guaranteed-but-dangerous escape and the gradual return of scattered troops |
 | [Captivity release 001](../playtests/captivity-release-001.md) | Refusing escape cannot soft-lock the player; bounded mandatory release |
+| [Captivity negotiation v2 001](../playtests/captivity-negotiation-v2-001.md) | Rejecting an offer, renewing persuasion, and completing a negotiated counter through the public API |
 | [Hidden state visibility 001](../playtests/hidden-state-visibility-001.md) | An adaptive session that found the player API leaking foreign motives |
 | [Hidden state visibility 002](../playtests/hidden-state-visibility-002.md) | The same objective with the leak closed, confirming no foreign state is reachable |
 | [Paged history 001](../playtests/paged-history-001.md) | Full-history auditability: 20,457 events with no gaps or duplicates, and 93.4% withheld with no payload leaked |
