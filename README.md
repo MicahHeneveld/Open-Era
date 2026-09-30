@@ -4,6 +4,8 @@ Open Era is a persistent maritime political sandbox in which human players and a
 
 The accumulated product decisions and visual concepts are preserved in the [design record](docs/design/README.md) and [generated mockup catalog](docs/assets/mockups/README.md). Behavioral findings are recorded in the [human commander playtests](docs/playtests/), and future candidates follow the [branch, evaluation, and adaptive-playtest pipeline](docs/development-pipeline.md).
 
+Work in progress, fixes, and which agent made them are tracked in the [progress log](progress.md). Read its current-state and open-items sections before starting work.
+
 This branch contains the first **headless world prototype**. It is intentionally focused on simulation behavior rather than presentation: we can accelerate days of world activity, inspect why characters made decisions, stop and restart the process, and compare outcomes before committing to the mobile UI or networking stack.
 
 ## What the prototype exercises
@@ -14,7 +16,10 @@ This branch contains the first **headless world prototype**. It is intentionally
 - Local production, consumption, shortages, supply-and-demand prices, and territorial taxes
 - Party provisions, sailors, troop recruitment, morale, and attrition
 - Physical travel between islands and merchant arbitrage
-- Character-plus-troop combat against settlement garrisons
+- Character-plus-troop combat against settlement garrisons, with quick skirmishes and persistent three-phase major battles
+- Strategy-scaled combat forecasts covering outcome, losses, force balance, withdrawal, and capture exposure
+- Persistent captivity after failed withdrawals or major defeats, with dangerous guaranteed escape, bounded fourteen-day release terms, and gradual troop return
+- Player retreat decisions at major-battle phase boundaries; accelerated time pauses for each decision
 - Surrender thresholds, deliberate settlement claims, and personal conqueror ownership
 - Persistent personality-rooted goals and structured multi-tick plans
 - Imperfect island knowledge that becomes stale and refreshes through direct observation
@@ -53,6 +58,7 @@ The default run advances twelve in-world days and writes:
 - `simulation-output/latest/decision-traces.jsonl` — scored alternatives behind every decision
 - `simulation-output/latest/agency-traces.jsonl` — plan reviews, beliefs, evolving goals, and relationships
 - `simulation-output/latest/conversation-traces.jsonl` — threads, messages, reply schedules, response tags, and discarded action proposals
+- `simulation-output/latest/combat-traces.jsonl` — forecasts, battle phases, retreats, captures, releases, escapes, and troop recovery
 - `simulation-output/latest/metrics.csv` — faction power, treasury, and resource trends
 - `simulation-output/latest/final-state.json` — complete inspectable world state
 - `.open-era/world.sqlite` — durable event log and snapshots
@@ -81,6 +87,7 @@ Open `http://127.0.0.1:4317`. The dashboard provides:
 - An exception-first check-in briefing with completion confirmations, deviations, failures, shortages, battles, and stale intelligence
 - Persistent briefing acknowledgements and subordinate officers who bundle routine reports without gaining command authority
 - Accelerated time controls and a live world-event feed
+- Compact pre-battle forecasts and phase-by-phase retreat windows for major battles
 
 Player actions are validated by the simulation server and persisted before execution. The dashboard binds to loopback by default and intentionally has no production authentication; it is a local development observer, not a deployable multiplayer server.
 
@@ -91,6 +98,7 @@ Useful options:
 --seed, -s        deterministic seed for a new world
 --database, -d    SQLite world path
 --output, -o      report directory
+--player-character  named character to control in a new dashboard world
 --reset           replace the selected local simulation database
 ```
 
@@ -110,7 +118,8 @@ src/sim/agency.ts        goals, plans, beliefs, relationships, orders
 src/sim/commands.ts      validated and durable human command boundary
 src/sim/briefing.ts      persisted acknowledgements and reporting-officer assignment
 src/sim/conversations.ts persistent threads, timing, tags, safeguards, dialogue adapter
-src/sim/engine.ts        decisions, economy, travel, and combat
+src/sim/combat.ts        strategy-scaled forecasts and combat risk assessment
+src/sim/engine.ts        decisions, economy, travel, and combat resolution
 src/sim/state.ts         event reducer, derived values, state hashing
 src/sim/persistence.ts   SQLite event log, atomic ticks, snapshots
 src/sim/reports.ts       human- and machine-readable evaluation output
@@ -123,4 +132,4 @@ The simulation files are intended to survive into the production server. The CLI
 
 ## Current boundary
 
-This is a behavioral probe, not a complete game. The dialogue adapter currently uses deterministic prototype replies rather than a paid LLM. Deeper personality branching, faction offices, settlement management, debt, captivity, lost technology, inner strength, inheritance, multiplayer authentication, and production networking are still deferred. The current dashboard is deliberately local and the player begins as a World Government commander so command acceptance, refusal, and asynchronous communication can be exercised immediately.
+This is a behavioral probe, not a complete game. The dialogue adapter currently uses deterministic prototype replies rather than a paid LLM. Deeper personality branching, faction offices, settlement management, full debt enforcement and negotiation, rescue missions, lost technology, inner strength, inheritance, multiplayer authentication, and production networking are still deferred. The current dashboard is deliberately local and the player begins as a World Government commander so command acceptance, refusal, asynchronous communication, and defeat recovery can be exercised immediately.

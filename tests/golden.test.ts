@@ -1,0 +1,110 @@
+import assert from "node:assert/strict";
+import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { dirname, join, resolve } from "node:path";
+import test from "node:test";
+import { fileURLToPath } from "node:url";
+import { runTick, runTicks } from "../src/sim/engine.ts";
+import { WorldStore } from "../src/sim/persistence.ts";
+import { createPrototypeWorld } from "../src/sim/scenario.ts";
+import { stateHash } from "../src/sim/state.ts";
+import {
+  GOLDEN_SEEDS,
+  GOLDEN_TICKS,
+  type GoldenHashes,
+} from "../scripts/update-golden-hashes.ts";
+
+/**
+ * Behavioral regression guard.
+ *
+ * The determinism tests elsewhere in this suite compare one build against
+ * itself, so they cannot detect a change that alters world outcomes
+ * consistently. These tests compare against hashes committed ahead of time,
+ * which means an unintended behavioral change fails here instead of passing
+ * silently. Regenerate deliberately with: npm run golden:update
+ */
+const here = dirname(fileURLToPath(import.meta.url));
+const fixturePath = resolve(here, "fixtures/golden-hashes.json");
+const golden = JSON.parse(readFileSync(fixturePath, "utf8")) as GoldenHashes;
+
+test("the committed golden hashes describe the configured seeds and tick count", () => {
+  assert.equal(golden.ticks, GOLDEN_TICKS);
+  assert.deepEqual(
+    golden.seeds.map((entry) => entry.seed),
+    [...GOLDEN_SEEDS],
+  );
+});
+
+test("pinned seeds reproduce their committed state hash and event count", () => {
+  // Hashes, event counts, and the recovery replay count are read only from
+  // tests/fixtures/golden-hashes.json. The protect-own-port check used to
+  // repeat those hashes as literals in this file, so every re-baseline had
+  // to edit the test as well as the fixture.
+  for (const seed of GOLDEN_SEEDS) {
+    const recorded = golden.seeds.find((entry) => entry.seed === seed);
+    assert.ok(recorded, `fixture is missing seed ${seed}`);
+
+    const result = runTicks(createPrototypeWorld(seed), GOLDEN_TICKS);
+    assert.equal(
+      stateHash(result.state),
+      recorded.stateHash,
+      `seed ${seed} state hash drifted from the committed fixture`,
+    );
+    assert.equal(
+      result.events.length,
+      recorded.eventCount,
+      `seed ${seed} event count drifted from the committed fixture`,
+    );
+  }
+
+  // The expected split-recovery replay count lives on the fixture
+  // (`recovery.replayedEvents`). A re-baseline must update that field;
+  // this check compares the live replay to it and does not copy the number.
+  const directory = mkdtempSync(join(tmpdir(), "open-era-golden-recovery-"));
+  const databasePath = join(directory, "recovery.sqlite");
+  try {
+    const store = new WorldStore(databasePath);
+    const world = createPrototypeWorld(golden.recovery.seed);
+    store.initialize(world);
+    for (let index = 0; index < golden.recovery.splitAtTick; index += 1) {
+      const result = runTick(world);
+      store.appendTick(result.events, world);
+    }
+    store.close();
+
+    const reopened = new WorldStore(databasePath);
+    const recovered = reopened.recover();
+    assert.equal(
+      recovered.replayedEvents,
+      golden.recovery.replayedEvents,
+      "split recovery replay count drifted from the committed fixture",
+    );
+    reopened.close();
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test("the committed recovery record is internally consistent", () => {
+  const baseline = golden.seeds.find((entry) => entry.seed === golden.recovery.seed);
+  assert.ok(baseline, "the recovery seed must also appear in the seed list");
+
+  assert.equal(
+    golden.recovery.continuousStateHash,
+    baseline.stateHash,
+    "the uninterrupted recovery reference must equal the seed's own hash",
+  );
+  assert.equal(
+    golden.recovery.splitStateHash,
+    golden.recovery.continuousStateHash,
+    "a stop and restart must not change world history",
+  );
+  assert.ok(
+    golden.recovery.splitAtTick > 0 && golden.recovery.splitAtTick < golden.ticks,
+    "the split must occur mid-run for the comparison to mean anything",
+  );
+  assert.ok(
+    golden.recovery.replayedEvents > 0,
+    "the split run must actually replay post-snapshot events",
+  );
+});

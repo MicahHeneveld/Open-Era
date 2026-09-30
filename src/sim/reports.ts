@@ -1,5 +1,11 @@
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import {
+  captivityEscapedChronicle,
+  captivityReleasedChronicle,
+  characterCapturedChronicle,
+  higherScoreClause,
+} from "../dashboard/wording.ts";
 import { factionPower, marketPrice, partyPower, round, stateHash } from "./state.ts";
 import { RESOURCE_KEYS, type SimEvent, type WorldState } from "./types.ts";
 
@@ -144,6 +150,30 @@ function conversationTraces(world: WorldState, events: SimEvent[]): string {
     .join("\n");
 }
 
+function combatTraces(world: WorldState, events: SimEvent[]): string {
+  return events
+    .filter((event) =>
+      event.type.startsWith("battle-") ||
+      event.type.startsWith("captivity-") ||
+      event.type === "character-captured" ||
+      event.type === "scattered-troops-returned" ||
+      event.type === "post-defeat-withdrawal-started" ||
+      event.type === "settlement-claimed"
+    )
+    .map((event) => JSON.stringify({
+      sequence: event.sequence,
+      tick: event.tick,
+      day: round(event.tick / world.ticksPerDay, 2),
+      type: event.type,
+      characterId: event.actorId,
+      character: event.actorId ? world.characters[event.actorId]?.name : undefined,
+      targetId: event.targetId,
+      settlementId: event.settlementId,
+      ...event.data,
+    }))
+    .join("\n");
+}
+
 function metricsCsv(events: SimEvent[]): string {
   const header = "tick,day,faction_id,faction,power,treasury,settlements,provisions,arms,medicine,ship_materials";
   const rows = [header];
@@ -169,12 +199,36 @@ function metricsCsv(events: SimEvent[]): string {
   return rows.join("\n") + "\n";
 }
 
-function eventStory(world: WorldState, event: SimEvent): string | null {
+function eventStory(world: WorldState, event: SimEvent, events: SimEvent[]): string | null {
   const actor = event.actorId ? world.characters[event.actorId]?.name ?? event.actorId : "Unknown";
   const settlement = event.settlementId ? world.settlements[event.settlementId]?.name ?? event.settlementId : "unknown waters";
   if (event.type === "battle-resolved") {
     const won = event.data.outcome === "attacker-victory";
-    return `- Day ${round(event.tick / world.ticksPerDay, 1)}: **${actor}** ${won ? "defeated" : "was repelled by"} the garrison at **${settlement}**. ${event.data.attackerLosses} attackers and ${event.data.defenderLosses} defenders were lost.`;
+    const score = won ? higherScoreClause(event.data) : "";
+    return `- Day ${round(event.tick / world.ticksPerDay, 1)}: **${actor}** ${won ? "defeated" : "was repelled by"} the garrison at **${settlement}**${score}. ${event.data.attackerLosses} attackers and ${event.data.defenderLosses} defenders were lost.`;
+  }
+  if (event.type === "battle-started") {
+    const battle = event.data.battle as { totalPhases: number };
+    return `- Day ${round(event.tick / world.ticksPerDay, 1)}: **${actor}** committed to a ${battle.totalPhases}-phase battle at **${settlement}**.`;
+  }
+  if (event.type === "battle-retreated") {
+    const destination = event.data.retreatDestinationId
+      ? world.settlements[event.data.retreatDestinationId as string]?.name ?? event.data.retreatDestinationId
+      : "open waters";
+    return `- Day ${round(event.tick / world.ticksPerDay, 1)}: **${actor}** retreated from **${settlement}** toward **${destination}** during phase ${event.data.phase}, losing ${event.data.pursuitLosses} troops in withdrawal.`;
+  }
+  if (event.type === "character-captured") {
+    return `- Day ${round(event.tick / world.ticksPerDay, 1)}: ${characterCapturedChronicle(world, event, events)}`;
+  }
+  if (event.type === "captivity-escaped") {
+    const scar = event.data.scar as { attribute: string; penalty: number } | null;
+    return `- Day ${round(event.tick / world.ticksPerDay, 1)}: ${captivityEscapedChronicle(world, event, scar)}`;
+  }
+  if (event.type === "captivity-released") {
+    return `- Day ${round(event.tick / world.ticksPerDay, 1)}: ${captivityReleasedChronicle(world, event)}`;
+  }
+  if (event.type === "scattered-troops-returned") {
+    return `- Day ${round(event.tick / world.ticksPerDay, 1)}: ${event.data.returning} scattered troops returned to **${actor}**${event.data.completed ? ", completing the recovery" : ""}.`;
   }
   if (event.type === "settlement-claimed") {
     const previousFaction = event.data.previousFactionId
@@ -193,6 +247,9 @@ function eventStory(world: WorldState, event: SimEvent): string | null {
   }
   if (event.type === "goal-evolved") {
     const goal = event.data.goal as { label: string };
+    if (event.data.trigger === "satisfying every open ambition") {
+      return `- Day ${round(event.tick / world.ticksPerDay, 1)}: ${actor} had satisfied every open ambition and renewed _${goal.label}_.`;
+    }
     return `- Day ${round(event.tick / world.ticksPerDay, 1)}: ${actor}'s experience at **${settlement}** created or reshaped the ambition _${goal.label}_.`;
   }
   if (event.type === "relationship-changed") {
@@ -228,7 +285,14 @@ function summaryMarkdown(world: WorldState, events: SimEvent[], snapshotCount: n
     })
     .join("\n");
   const majorTypes = new Set([
+    "battle-started",
+    "battle-retreated",
     "battle-resolved",
+    "character-captured",
+    "captivity-escaped",
+    "captivity-released",
+    "scattered-troops-returned",
+    "post-defeat-withdrawal-started",
     "settlement-claimed",
     "goal-evolved",
     "relationship-changed",
@@ -246,17 +310,21 @@ function summaryMarkdown(world: WorldState, events: SimEvent[], snapshotCount: n
   ]);
   const majorStories = events
     .filter((event) => majorTypes.has(event.type))
-    .map((event) => eventStory(world, event))
+    .map((event) => eventStory(world, event, events))
     .filter(Boolean)
     .slice(-35)
     .join("\n");
   const recentStories = events
     .filter((event) => !majorTypes.has(event.type))
-    .map((event) => eventStory(world, event))
+    .map((event) => eventStory(world, event, events))
     .filter(Boolean)
     .slice(-30)
     .join("\n");
   const battles = events.filter((event) => event.type === "battle-resolved").length;
+  const retreats = events.filter((event) => event.type === "battle-retreated").length;
+  const captures = events.filter((event) => event.type === "character-captured").length;
+  const escapes = events.filter((event) => event.type === "captivity-escaped").length;
+  const releases = events.filter((event) => event.type === "captivity-released").length;
   const journeys = events.filter((event) => event.type === "travel-started").length;
   const trades = events.filter((event) => event.type === "market-trade").length;
   const planReviews = events.filter((event) => event.type === "plan-reconsidered");
@@ -304,7 +372,9 @@ The **${world.scenario}** scenario reached tick ${world.tick} (day ${round(world
 
 - ${autonomousCharacters} autonomous characters and ${humanCharacters} human-controlled character
 - ${events.length} persisted events across ${snapshotCount} snapshots
-- ${journeys} journeys, ${trades} market trades, and ${battles} battles
+- ${journeys} journeys, ${trades} market trades, ${battles} completed battles, and ${retreats} successful retreats
+- ${captures} captures, ${escapes} dangerous escapes, and ${releases} mandatory releases
+- ${Object.keys(world.activeBattles).length} major battles currently active
 - ${acceptedCommands} player commands accepted and ${resolvedCommands} resolved
 - ${sentMessages} player messages, ${autonomousReplies} autonomous replies, and ${pendingReplies} replies pending
 
@@ -353,6 +423,7 @@ export function writeReports(
   writeFileSync(join(outputDirectory, "decision-traces.jsonl"), decisionTraces(world, events) + "\n");
   writeFileSync(join(outputDirectory, "agency-traces.jsonl"), agencyTraces(world, events) + "\n");
   writeFileSync(join(outputDirectory, "conversation-traces.jsonl"), conversationTraces(world, events) + "\n");
+  writeFileSync(join(outputDirectory, "combat-traces.jsonl"), combatTraces(world, events) + "\n");
   writeFileSync(join(outputDirectory, "metrics.csv"), metricsCsv(events));
   writeFileSync(join(outputDirectory, "map.svg"), mapSvg(world));
   writeFileSync(join(outputDirectory, "report.md"), summaryMarkdown(world, events, snapshotCount));

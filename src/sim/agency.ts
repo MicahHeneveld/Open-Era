@@ -1,5 +1,5 @@
 import { DeterministicRng } from "./rng.ts";
-import { clamp, marketPrice, round } from "./state.ts";
+import { clamp, marketPrice, retainGround, round } from "./state.ts";
 import {
   RESOURCE_KEYS,
   type Character,
@@ -50,9 +50,48 @@ const fallbackPrices: Record<ResourceKey, number> = {
   shipMaterials: 4.5,
 };
 
+/**
+ * How many ticks a garrison report takes to fall to about 1/e of its confidence.
+ *
+ * Garrisons move when a battle or a provision shortage says so. A report from
+ * twelve days ago can still be the best picture of a wall.
+ */
+export const GARRISON_FRESHNESS_TICKS = 72;
+
+/**
+ * How many ticks a price report takes to fall to about 1/e of its confidence.
+ *
+ * Prices are recomputed every tick from stock, and M17's local use moves a
+ * board by a meaningful amount inside a few days. A price and a garrison used
+ * to share the 72-tick horizon, so a merchant would still steer on a quote
+ * the market had already left. Eighteen ticks is three days: a report from
+ * this morning still dominates, and a report from last week has fallen to the
+ * floor. The alternative of twelve or twenty-four is the same shape.
+ */
+export const PRICE_FRESHNESS_TICKS = 18;
+
+function beliefWeight(age: number, confidence: number, horizon: number): number {
+  return clamp(confidence * Math.exp(-Math.max(0, age) / horizon), 0.08, 1);
+}
+
+/**
+ * The garrison confidence a player is shown.
+ *
+ * Two decimals, the same label `believedGarrison` already uses. The stored
+ * confidence is not replaced by this number.
+ */
+export function garrisonConfidenceLabel(confidence: number, ageTicks: number): number {
+  return round(beliefWeight(ageTicks, confidence, GARRISON_FRESHNESS_TICKS), 2);
+}
+
 function freshness(world: WorldState, belief: SettlementKnowledge): number {
   const age = Math.max(0, world.tick - belief.observedTick);
-  return clamp(belief.confidence * Math.exp(-age / 72), 0.08, 1);
+  return beliefWeight(age, belief.confidence, GARRISON_FRESHNESS_TICKS);
+}
+
+function priceFreshness(world: WorldState, belief: SettlementKnowledge): number {
+  const age = Math.max(0, world.tick - belief.observedTick);
+  return beliefWeight(age, belief.confidence, PRICE_FRESHNESS_TICKS);
 }
 
 export function believedPrice(
@@ -64,7 +103,7 @@ export function believedPrice(
   if (character.locationId === settlementId) return marketPrice(world, settlementId, resource);
   const belief = character.knowledge[settlementId];
   if (!belief) return fallbackPrices[resource];
-  const confidence = freshness(world, belief);
+  const confidence = priceFreshness(world, belief);
   return round(belief.priceEstimate[resource] * confidence + fallbackPrices[resource] * (1 - confidence), 2);
 }
 
@@ -81,7 +120,9 @@ export function believedGarrison(
   const confidence = freshness(world, belief);
   return {
     estimate: Math.max(1, round(belief.garrisonEstimate * confidence + 100 * (1 - confidence), 1)),
-    confidence: round(confidence),
+    // Two decimals, because this is a player-facing confidence and every surface
+    // is expected to display exactly this number.
+    confidence: round(confidence, 2),
     observedTick: belief.observedTick,
   };
 }
@@ -89,7 +130,8 @@ export function believedGarrison(
 export function directObservation(world: WorldState, character: Character): SettlementKnowledge | null {
   if (!character.locationId) return null;
   const settlement = world.settlements[character.locationId];
-  return {
+  const previous = character.knowledge[settlement.id];
+  const knowledge: SettlementKnowledge = {
     settlementId: settlement.id,
     observedTick: world.tick,
     confidence: 1,
@@ -101,6 +143,10 @@ export function directObservation(world: WorldState, character: Character): Sett
     ) as SettlementKnowledge["priceEstimate"],
     source: "direct",
   };
+  // Garrison, stocks and prices are what is here now. Ground is not copied from
+  // the settlement: standing in a port is not a survey. A survey already stored
+  // has to survive, because the reducer replaces the whole entry.
+  return retainGround(previous, knowledge);
 }
 
 export function needsObservation(world: WorldState, character: Character): boolean {
@@ -114,6 +160,23 @@ export function activeStandingOrder(character: Character, tick: number): Standin
     .filter((order) =>
       (order.status === "pending" || order.status === "active") &&
       (order.expiresTick === null || order.expiresTick > tick)
+    )
+    .sort((left, right) => right.priority - left.priority || left.id.localeCompare(right.id))[0] ?? null;
+}
+
+/**
+ * The open order from one issuer to one recipient.
+ *
+ * Open means pending, active, or awaiting confirmation. Refused, completed,
+ * expired, and cancelled orders do not hold the slot, so a later issue may
+ * mint a new id. When more than one open order is already stored, the highest
+ * priority wins and then the id, matching `activeStandingOrder`.
+ */
+export function openStandingOrder(character: Character, issuerId: string): StandingOrder | null {
+  return character.standingOrders
+    .filter((order) =>
+      order.issuerId === issuerId &&
+      (order.status === "pending" || order.status === "active" || order.status === "awaiting-confirmation")
     )
     .sort((left, right) => right.priority - left.priority || left.id.localeCompare(right.id))[0] ?? null;
 }
@@ -357,8 +420,13 @@ export function judgeOrderCompletion(
 
   if (order.directive === "protect" && character.locationId === order.targetId && elapsed >= world.ticksPerDay) {
     const settlement = world.settlements[order.targetId!];
-    evidence = 0.62 + Math.min(0.2, elapsed / (world.ticksPerDay * 10)) + settlement.stability / 1_000;
-    summary = `${character.name} reports that ${settlement.name} is secure and asks the issuer to close the protection order.`;
+    // Standing on the port for a day is not enough. A faction that lost the
+    // port must not be told it is secure. Null matches null: an unaligned
+    // officer on an unowned port can still complete.
+    if (settlement.factionId === character.factionId) {
+      evidence = 0.62 + Math.min(0.2, elapsed / (world.ticksPerDay * 10)) + settlement.stability / 1_000;
+      summary = `${character.name} reports that ${settlement.name} is secure and asks the issuer to close the protection order.`;
+    }
   } else if (order.directive === "pressure") {
     const success = [...events].reverse().find((event) =>
       event.actorId === character.id &&
@@ -385,7 +453,15 @@ export function judgeOrderCompletion(
     const knowledge = targetId ? character.knowledge[targetId] : undefined;
     if (targetId && character.locationId === targetId && knowledge?.source === "direct" && knowledge.observedTick >= order.issuedTick) {
       evidence = 0.88;
-      summary = `${character.name} considers the survey of ${world.settlements[targetId].name} complete and requests confirmation.`;
+      const place = world.settlements[targetId].name;
+      // Same tick as the order, and already standing on the target: the report
+      // did not cost a voyage. A later completion keeps the ordinary line,
+      // including an officer who sailed there. Untargeted explores have no
+      // target to already be at.
+      const alreadyThere = order.targetId !== undefined && order.issuedTick === world.tick;
+      summary = alreadyThere
+        ? `${character.name} was already at ${place} and reports the survey from an officer already there. The survey is complete and awaits confirmation.`
+        : `${character.name} considers the survey of ${place} complete and requests confirmation.`;
     }
   }
 

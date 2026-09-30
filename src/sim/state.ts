@@ -1,17 +1,50 @@
 import { createHash } from "node:crypto";
+import {
+  negotiationAfterRejectedOffer,
+  normalizeCaptivityNegotiation,
+  selectCaptivityNegotiator,
+} from "./captivity.ts";
 import type {
+  CaptivityNegotiationState,
   Character,
+  PartySighting,
+  ReleaseParty,
+  ReleaseSighting,
+  TroopGroup,
   ResourceKey,
   Resources,
   Settlement,
+  SettlementKnowledge,
   SimEvent,
   StandingOrder,
+  SupplyContract,
   WorldState,
 } from "./types.ts";
 
 export const SURRENDER_GARRISON_THRESHOLD = 15;
 export const SURRENDER_STABILITY_THRESHOLD = 30;
+/** Each soldier under the garrison line raises the stability limit by this much. */
+export const SURRENDER_STABILITY_SLOPE = 10;
+/** The sliding stability limit never rises above this. */
+export const SURRENDER_STABILITY_CAP = 80;
 export const CLAIM_STABILITY_FLOOR = 55;
+
+/**
+ * Stability at or below which an attacker victory offers surrender.
+ *
+ * The garrison test stays at 15. Each soldier under that line raises the
+ * stability limit by 10, and the limit stops at 80. At garrison 14 the limit
+ * is 40, which contains the blow that used to stall a port at 39.55. At
+ * garrison 10 and below the limit is the cap. The battle just fought is the
+ * only input. A survey, a rumor, and a motive are not.
+ */
+export function surrenderStabilityLimit(garrison: number): number {
+  const shortfall = Math.max(0, SURRENDER_GARRISON_THRESHOLD - garrison);
+  return Math.min(
+    SURRENDER_STABILITY_CAP,
+    SURRENDER_STABILITY_THRESHOLD + SURRENDER_STABILITY_SLOPE * shortfall,
+  );
+}
 
 export function normalizeStandingOrder(order: StandingOrder): StandingOrder {
   return {
@@ -26,19 +59,90 @@ export function normalizeStandingOrder(order: StandingOrder): StandingOrder {
 }
 
 export function normalizeWorldState(world: WorldState): WorldState {
+  world.version = 5;
+  world.activeBattles ??= {};
+  for (const battle of Object.values(world.activeBattles)) {
+    battle.retreatDestinationId ??= null;
+  }
   for (const character of Object.values(world.characters)) {
     character.standingOrders = character.standingOrders.map(normalizeStandingOrder);
+    character.captivity ??= null;
+    if (character.captivity) {
+      normalizeCaptivityNegotiation(character.captivity);
+      character.captivity.negotiation.negotiatorId ??= selectCaptivityNegotiator(
+        world,
+        character.id,
+        character.captivity.settlementId,
+        character.captivity.captorFactionId,
+      );
+    }
+    character.troopRecovery ??= null;
+    character.scars ??= [];
+    character.debts ??= [];
   }
   for (const player of Object.values(world.players)) {
     player.briefingAcknowledgements ??= {};
     player.routineBriefingThroughSequence ??= 0;
     player.reportingOfficerId ??= null;
+    const negotiatorId = world.characters[player.characterId]?.captivity?.negotiation.negotiatorId;
+    if (negotiatorId && !player.knownCharacterIds.includes(negotiatorId)) {
+      player.knownCharacterIds.push(negotiatorId);
+      player.knownCharacterIds.sort();
+    }
   }
   return world;
 }
 
 export function settlementClaimAvailableTo(settlement: Settlement, characterId: string): boolean {
   return settlement.surrender?.offeredToId === characterId;
+}
+
+/**
+ * Keep a ground record when a settlement report is replaced.
+ *
+ * The reducer stores the whole entry, so a refresh that forgets `ground` would
+ * erase a survey. A new record wins only when it brings its own ground dated
+ * at least as recently as the one already held. An older ground, or none, leaves
+ * the stored survey in place.
+ */
+export function retainGround(
+  previous: SettlementKnowledge | undefined,
+  next: SettlementKnowledge,
+): SettlementKnowledge {
+  const prior = previous?.ground;
+  if (!prior) return next;
+  if (next.ground && next.ground.observedTick >= prior.observedTick) return next;
+  return { ...next, ground: { ...prior } };
+}
+
+/**
+ * Keep a party sighting unless a newer observation replaces it.
+ *
+ * A later arrival or a daily refresh must not touch this map. The key stays
+ * absent until the first sighting, and nothing deletes an entry. An older
+ * report, including one relayed after a survey, leaves the stored tick in place.
+ * An observation at the same tick replaces, because that is the later write.
+ */
+export function mergePartySightings(character: Character, incoming: PartySighting[]): void {
+  if (incoming.length === 0) return;
+  const map = character.partySightings ?? {};
+  let wrote = false;
+  for (const sighting of [...incoming].sort((left, right) => left.characterId.localeCompare(right.characterId))) {
+    const prior = map[sighting.characterId];
+    if (prior && sighting.observedTick < prior.observedTick) continue;
+    map[sighting.characterId] = {
+      characterId: sighting.characterId,
+      locationId: sighting.locationId,
+      travel: null,
+      troops: sighting.troops,
+      partyPower: sighting.partyPower,
+      observedTick: sighting.observedTick,
+      source: sighting.source,
+      confidence: 1,
+    };
+    wrote = true;
+  }
+  if (wrote) character.partySightings = map;
 }
 
 export function clamp(value: number, minimum: number, maximum: number): number {
@@ -60,20 +164,26 @@ export function distanceBetween(
   return Math.hypot(to.x - from.x, to.y - from.y);
 }
 
+const basePrices: Resources = {
+  provisions: 1.8,
+  arms: 5.6,
+  medicine: 7.4,
+  shipMaterials: 4.5,
+};
+
+/** Board price for one good, from its target holding and the stock on the shelf. */
+export function resourcePrice(resource: ResourceKey, targetStock: number, stock: number): number {
+  const scarcity = targetStock / Math.max(1, stock);
+  return round(basePrices[resource] * clamp(scarcity, 0.55, 2.5), 2);
+}
+
 export function marketPrice(
   world: WorldState,
   settlementId: string,
   resource: ResourceKey,
 ): number {
   const settlement = world.settlements[settlementId];
-  const basePrices: Resources = {
-    provisions: 1.8,
-    arms: 5.6,
-    medicine: 7.4,
-    shipMaterials: 4.5,
-  };
-  const scarcity = settlement.targetStocks[resource] / Math.max(1, settlement.stocks[resource]);
-  return round(basePrices[resource] * clamp(scarcity, 0.55, 2.5), 2);
+  return resourcePrice(resource, settlement.targetStocks[resource], settlement.stocks[resource]);
 }
 
 export function personalPower(character: Character): number {
@@ -87,11 +197,280 @@ export function personalPower(character: Character): number {
   return round(physical * healthFactor);
 }
 
-export function partyPower(character: Character): number {
-  const troops = character.troops;
+/** Party power for a troop block, including a captive's scattered count. */
+export function partyPowerFromTroops(character: Character, troops: TroopGroup): number {
   const troopPower = troops.count * (0.65 + troops.experience * 0.8) * (0.6 + troops.discipline * 0.6);
   const leaderEffect = 1 + character.skills.leadership / 220;
   return round(personalPower(character) * 1.5 + troopPower * leaderEffect);
+}
+
+export function partyPower(character: Character): number {
+  if (character.captivity) return 0;
+  return partyPowerFromTroops(character, character.troops);
+}
+
+/**
+ * Split a ransom that was actually paid.
+ *
+ * Money is stored at two decimal places. The split is done in whole cents so
+ * the shares sum exactly to `paid`. There is no RNG.
+ *
+ * When the captor has a faction, the odd cent goes to that faction's treasury.
+ * The leader's share is `floor(cents / 2)` and the treasury's share is the
+ * rest. 58.13 is 29.07 to the treasury and 29.06 to the leader.
+ *
+ * When the captor has no faction, the leader receives every cent and the
+ * treasury share is 0.
+ */
+export function splitRansom(paid: number, hasFaction: boolean): { treasuryShare: number; leaderShare: number } {
+  const cents = Math.round(paid * 100);
+  if (!hasFaction) return { treasuryShare: 0, leaderShare: round(cents / 100, 2) };
+  const leaderCents = Math.floor(cents / 2);
+  const treasuryCents = cents - leaderCents;
+  return {
+    treasuryShare: round(treasuryCents / 100, 2),
+    leaderShare: round(leaderCents / 100, 2),
+  };
+}
+
+function partyLeaderScore(character: Character): number {
+  return character.skills.leadership + character.personality.loyalty * 50;
+}
+
+function highestPartyLeader(
+  world: WorldState,
+  include: (character: Character) => boolean,
+): Character | null {
+  const ranked = Object.values(world.characters)
+    .filter(include)
+    .sort((left, right) =>
+      partyLeaderScore(right) - partyLeaderScore(left) ||
+      left.id.localeCompare(right.id),
+    );
+  return ranked[0] ?? null;
+}
+
+/**
+ * The captor's party leader, the person who receives that side of a ransom.
+ *
+ * A faction's leader is the command holder, the one person who issues that
+ * faction's standing orders. The prisoner is skipped, so the purse that just
+ * paid does not pay itself. If that seat is unnamed, or the holder is the
+ * prisoner, the faction member with the highest leadership plus
+ * `personality.loyalty * 50` is the leader. A lower id wins a tie. The scar
+ * is not read. No draw.
+ *
+ * With no captor faction, the prison's owner is the leader when that owner
+ * has no faction and is not the prisoner. Otherwise the same ranking is
+ * applied to unaffiliated characters.
+ */
+export function captorPartyLeader(world: WorldState, prisoner: Character): Character | null {
+  const captivity = prisoner.captivity;
+  if (!captivity) return null;
+  const faction = captivity.captorFactionId ? world.factions[captivity.captorFactionId] : undefined;
+  if (faction) {
+    const holderId = commandHolderId(world, faction.id);
+    if (holderId && holderId !== prisoner.id) {
+      const holder = world.characters[holderId];
+      if (holder) return holder;
+    }
+    return highestPartyLeader(
+      world,
+      (candidate) => candidate.factionId === faction.id && candidate.id !== prisoner.id,
+    );
+  }
+  const ownerId = world.settlements[captivity.settlementId]?.ownerId ?? null;
+  if (ownerId && ownerId !== prisoner.id) {
+    const owner = world.characters[ownerId];
+    if (owner && owner.factionId === null) return owner;
+  }
+  return highestPartyLeader(
+    world,
+    (candidate) => candidate.factionId === null && candidate.id !== prisoner.id,
+  );
+}
+
+/**
+ * The one person who issues this faction's standing orders.
+ *
+ * The seat is that issuer. It is not stored on the faction. Two issuers, or
+ * none, leave the seat unnamed. Trust, grievance, troops, and location are not read.
+ */
+export function commandHolderId(world: WorldState, factionId: string): string | null {
+  let holderId: string | null = null;
+  for (const character of Object.values(world.characters)) {
+    for (const order of character.standingOrders) {
+      const issuer = world.characters[order.issuerId];
+      if (issuer?.factionId !== factionId) continue;
+      if (holderId === null) holderId = issuer.id;
+      else if (holderId !== issuer.id) return null;
+    }
+  }
+  return holderId;
+}
+
+/** Loyalty the cover sort reads: the seed, plus the unpaid-release scar. */
+function coverLoyalty(character: Character): number {
+  return character.personality.loyalty + (character.loyaltyAdjustment ?? 0);
+}
+
+function commandScore(character: Character): number {
+  return character.skills.leadership + coverLoyalty(character) * 50;
+}
+
+/** One unpaid release. The result is clamped, then the adjustment is the gap from the seed. */
+const LOYALTY_SCAR_STEP = 0.04;
+
+/**
+ * Store the scar on an unpaid release, after the cover that is ending has cleared.
+ *
+ * `v` is the loyalty the cover sort already reads. The stored reading is
+ * `round(clamp(v - 0.04, 0.05, 0.98), 3)`. `loyaltyAdjustment` is that reading
+ * minus `personality.loyalty`, rounded to 3 decimals, and the field is omitted
+ * at 0. A second unpaid release subtracts the step from the scarred reading.
+ * No draw, and `personality.loyalty` is not written.
+ */
+/**
+ * The prison, as it is when the release is applied, stored on the captive.
+ *
+ * Upkeep has already set the garrison, and the character walk has not run.
+ * The parties are everyone else still anchored here, in id order. A fellow
+ * prisoner is included at the live count, which is 0, and `partyPower()` is 0.
+ * A later release replaces the record when its tick is greater or equal. An
+ * earlier one does not. Called from the reducer, so a replay writes the same
+ * record the live tick wrote. No new event and no draw.
+ */
+function writeReleaseSighting(world: WorldState, character: Character): void {
+  const captivity = character.captivity;
+  if (!captivity) return;
+  const observedTick = world.tick;
+  const previous = character.releaseSighting;
+  if (previous && previous.observedTick > observedTick) return;
+  const settlement = world.settlements[captivity.settlementId];
+  const parties: ReleaseParty[] = Object.values(world.characters)
+    .filter((other) =>
+      other.id !== character.id &&
+      other.locationId === captivity.settlementId &&
+      other.travel === null,
+    )
+    .sort((left, right) => left.id.localeCompare(right.id))
+    .map((other) => ({
+      characterId: other.id,
+      troops: other.troops.count,
+      partyPower: partyPower(other),
+      observedTick,
+      source: "direct" as const,
+      confidence: 1 as const,
+    }));
+  const record: ReleaseSighting = {
+    settlementId: captivity.settlementId,
+    factionId: settlement.factionId,
+    captorFactionId: captivity.captorFactionId,
+    garrison: settlement.garrison,
+    parties,
+    observedTick,
+    source: "direct",
+    confidence: 1,
+  };
+  character.releaseSighting = record;
+}
+
+/**
+ * Credit the ransom carried on a release.
+ *
+ * The event stores the absolute treasury and the absolute leader purse, the
+ * same way a market trade stores `characterMoney`. A share of 0 does not write.
+ * A release with no `ransom` field, including older rows, leaves both purses
+ * where `characterMoney` already put the prisoner.
+ */
+function applyRansomCredit(world: WorldState, event: SimEvent): void {
+  const ransom = event.data.ransom;
+  if (!ransom || typeof ransom !== "object") return;
+  const credit = ransom as {
+    treasuryShare?: number;
+    leaderShare?: number;
+    treasuryFactionId?: string | null;
+    factionTreasury?: number | null;
+    leaderId?: string | null;
+    leaderMoney?: number | null;
+  };
+  if (
+    typeof credit.treasuryShare === "number" && credit.treasuryShare > 0 &&
+    typeof credit.treasuryFactionId === "string" &&
+    typeof credit.factionTreasury === "number"
+  ) {
+    const faction = world.factions[credit.treasuryFactionId];
+    if (!faction) throw new Error("Captivity release paid a missing captor treasury");
+    faction.treasury = credit.factionTreasury;
+  }
+  if (
+    typeof credit.leaderShare === "number" && credit.leaderShare > 0 &&
+    typeof credit.leaderId === "string" &&
+    typeof credit.leaderMoney === "number"
+  ) {
+    const leader = world.characters[credit.leaderId];
+    if (!leader) throw new Error("Captivity release paid a missing party leader");
+    leader.money = credit.leaderMoney;
+  }
+}
+
+function applyUnpaidReleaseScar(character: Character, event: SimEvent): void {
+  if (!character.factionId) return;
+  const terms = event.data.terms;
+  if (!terms || typeof terms !== "object") return;
+  const debtValue = (terms as { debtValue?: unknown }).debtValue;
+  if (typeof debtValue !== "number" || !(debtValue > 0)) return;
+  const scarred = round(clamp(coverLoyalty(character) - LOYALTY_SCAR_STEP, 0.05, 0.98), 3);
+  const adjustment = round(scarred - character.personality.loyalty, 3);
+  if (adjustment === 0) delete character.loyaltyAdjustment;
+  else character.loyaltyAdjustment = adjustment;
+}
+
+/**
+ * The free faction mate who covers a captive holder.
+ *
+ * Highest leadership plus the scarred loyalty times 50. The holder is skipped,
+ * and so is anyone already captive. A tie breaks toward the lower id, the same
+ * comparison `createPrototypeWorld` uses for the reporting officer. No draw.
+ */
+function selectActingCommanderId(
+  world: WorldState,
+  factionId: string,
+  holderId: string,
+): string | undefined {
+  const ranked = Object.values(world.characters)
+    .filter((character) =>
+      character.factionId === factionId &&
+      character.id !== holderId &&
+      character.captivity === null
+    )
+    .sort((left, right) =>
+      commandScore(right) - commandScore(left) ||
+      left.id.localeCompare(right.id)
+    );
+  return ranked[0]?.id;
+}
+
+function assignActingCommander(world: WorldState, captured: Character): void {
+  if (!captured.factionId) return;
+  const faction = world.factions[captured.factionId];
+  if (!faction) return;
+  const holderId = commandHolderId(world, captured.factionId);
+  if (!holderId) return;
+  const holderCaptured = captured.id === holderId;
+  const actingCaptured = faction.actingCommanderId === captured.id;
+  if (!holderCaptured && !actingCaptured) return;
+  const next = selectActingCommanderId(world, captured.factionId, holderId);
+  if (next) faction.actingCommanderId = next;
+  else delete faction.actingCommanderId;
+}
+
+function clearActingCommander(world: WorldState, freed: Character): void {
+  if (!freed.factionId) return;
+  const faction = world.factions[freed.factionId];
+  if (!faction) return;
+  if (commandHolderId(world, freed.factionId) !== freed.id) return;
+  delete faction.actingCommanderId;
 }
 
 export function factionPower(world: WorldState, factionId: string): number {
@@ -278,7 +657,10 @@ export function applyEvent(world: WorldState, event: SimEvent): void {
       order.status = "completed";
       order.adherence = "following";
       order.statusChangedTick = world.tick;
-      order.lastReport = { tick: world.tick, kind: "confirmed", summary: event.data.summary as string };
+      // A player signature and an autonomous issuer's judgment both confirm.
+      // A day of silence closes the order without that signature.
+      const kind = event.data.reason === "issuer-silent" ? "closed-unanswered" : "confirmed";
+      order.lastReport = { tick: world.tick, kind, summary: event.data.summary as string };
       break;
     }
     case "standing-order-expired": {
@@ -310,6 +692,12 @@ export function applyEvent(world: WorldState, event: SimEvent): void {
       actor.health = event.data.health as number;
       actor.morale = event.data.morale as number;
       actor.troops.count = event.data.troopCount as number;
+      // Present only while the party is underway. Anchored upkeep does not
+      // touch the purse, and older events that predate the charge must not
+      // either.
+      if (event.type === "character-upkeep" && typeof event.data.characterMoney === "number") {
+        actor.money = event.data.characterMoney;
+      }
       if (event.type === "travel-progressed" && actor.travel) {
         actor.travel.remainingTicks = event.data.remainingTicks as number;
       }
@@ -319,10 +707,17 @@ export function applyEvent(world: WorldState, event: SimEvent): void {
       actor.currentGoal = event.data.goal as string;
       actor.lastDecisionTick = world.tick;
       break;
-    case "knowledge-updated":
+    case "knowledge-updated": {
       if (!actor) throw new Error("Knowledge event has no actor");
-      actor.knowledge[event.data.settlementId as string] = event.data.knowledge as Character["knowledge"][string];
+      const settlementId = event.data.settlementId as string;
+      const incoming = event.data.knowledge as SettlementKnowledge;
+      actor.knowledge[settlementId] = retainGround(actor.knowledge[settlementId], incoming);
+      // Present only on a survey or a delivered explore. A daily refresh omits
+      // the list, so standing in a port cannot keep or drop a sighting.
+      const sightings = event.data.partySightings as PartySighting[] | undefined;
+      if (sightings) mergePartySightings(actor, sightings);
       break;
+    }
     case "plan-reconsidered":
       if (!actor) throw new Error("Plan event has no actor");
       actor.activeGoalId = event.data.selectedGoalId as string;
@@ -351,7 +746,7 @@ export function applyEvent(world: WorldState, event: SimEvent): void {
       break;
     case "travel-started":
       if (!actor) throw new Error("Travel event has no actor");
-      actor.travel = event.data.travel as Character["travel"];
+      actor.travel = { ...(event.data.travel as NonNullable<Character["travel"]>) };
       actor.locationId = null;
       break;
     case "arrived":
@@ -382,6 +777,122 @@ export function applyEvent(world: WorldState, event: SimEvent): void {
       actor.troops.count = event.data.troopCount as number;
       settlement.stocks = resourcesFrom(event.data, "settlementStocks");
       break;
+    case "battle-started": {
+      const battle = event.data.battle as WorldState["activeBattles"][string];
+      world.activeBattles[battle.id] = battle;
+      break;
+    }
+    case "battle-phase-resolved": {
+      if (!actor || !settlement) throw new Error("Battle phase event is missing an entity");
+      const battle = event.data.battle as WorldState["activeBattles"][string];
+      actor.health = event.data.attackerHealth as number;
+      actor.morale = event.data.attackerMorale as number;
+      actor.troops.count = event.data.attackerTroops as number;
+      settlement.garrison = event.data.defenderGarrison as number;
+      settlement.stability = event.data.settlementStability as number;
+      world.activeBattles[battle.id] = battle;
+      break;
+    }
+    case "battle-retreated":
+      if (!actor || !settlement) throw new Error("Battle retreat event is missing an entity");
+      actor.health = event.data.attackerHealth as number;
+      actor.morale = event.data.attackerMorale as number;
+      actor.troops.count = event.data.attackerTroops as number;
+      actor.lastBattleTick = world.tick;
+      actor.locationId = null;
+      actor.travel = event.data.retreatTravel
+        ? { ...(event.data.retreatTravel as NonNullable<Character["travel"]>) }
+        : null;
+      delete world.activeBattles[event.data.battleId as string];
+      break;
+    case "post-defeat-withdrawal-started":
+      if (!actor) throw new Error("Post-defeat withdrawal event has no actor");
+      actor.locationId = event.data.travel ? null : event.settlementId ?? actor.locationId;
+      actor.travel = event.data.travel
+        ? { ...(event.data.travel as NonNullable<Character["travel"]>) }
+        : null;
+      break;
+    case "character-captured": {
+      if (!actor || !settlement) throw new Error("Capture event is missing an entity");
+      actor.health = event.data.health as number;
+      actor.morale = event.data.morale as number;
+      actor.troops.count = 0;
+      const captivity = event.data.captivity as NonNullable<Character["captivity"]>;
+      normalizeCaptivityNegotiation(captivity);
+      captivity.negotiation.negotiatorId ??= selectCaptivityNegotiator(
+        world,
+        actor.id,
+        captivity.settlementId,
+        captivity.captorFactionId,
+      );
+      actor.captivity = captivity;
+      actor.troopRecovery = null;
+      actor.locationId = settlement.id;
+      actor.travel = null;
+      actor.lastBattleTick = world.tick;
+      delete world.activeBattles[event.data.battleId as string];
+      assignActingCommander(world, actor);
+      const negotiatorId = captivity.negotiation.negotiatorId;
+      if (negotiatorId) {
+        const player = Object.values(world.players).find((candidate) => candidate.characterId === actor.id);
+        if (player && !player.knownCharacterIds.includes(negotiatorId)) {
+          player.knownCharacterIds.push(negotiatorId);
+          player.knownCharacterIds.sort();
+        }
+      }
+      break;
+    }
+    case "captivity-persuasion-updated":
+    case "captivity-negotiations-opened": {
+      const captive = event.targetId ? world.characters[event.targetId] : undefined;
+      if (!captive?.captivity) throw new Error("Captivity negotiation event has no captive");
+      captive.captivity.negotiation = event.data.negotiation as CaptivityNegotiationState;
+      break;
+    }
+    case "captivity-counter-rejected": {
+      if (!actor?.captivity?.negotiation.offer) throw new Error("Rejected counter has no active offer");
+      actor.captivity.negotiation.offer.countered = true;
+      break;
+    }
+    case "captivity-offer-rejected": {
+      if (!actor?.captivity) throw new Error("Rejected captivity offer has no captive");
+      actor.captivity.negotiation = negotiationAfterRejectedOffer(actor.captivity.negotiation);
+      break;
+    }
+    case "captivity-escaped":
+      if (!actor) throw new Error("Captivity escape event has no actor");
+      actor.health = event.data.health as number;
+      actor.morale = event.data.morale as number;
+      actor.attributes = event.data.attributes as Character["attributes"];
+      if (event.data.scar) actor.scars.push(event.data.scar as Character["scars"][number]);
+      actor.captivity = null;
+      actor.troopRecovery = event.data.troopRecovery as Character["troopRecovery"];
+      actor.travel = event.data.travel
+        ? { ...(event.data.travel as NonNullable<Character["travel"]>) }
+        : null;
+      actor.locationId = event.data.releaseLocationId as string | null;
+      clearActingCommander(world, actor);
+      break;
+    case "captivity-released":
+      if (!actor) throw new Error("Captivity release event has no actor");
+      writeReleaseSighting(world, actor);
+      actor.money = event.data.characterMoney as number;
+      applyRansomCredit(world, event);
+      if (event.data.debt) actor.debts.push(event.data.debt as Character["debts"][number]);
+      actor.captivity = null;
+      actor.troopRecovery = event.data.troopRecovery as Character["troopRecovery"];
+      actor.travel = event.data.travel
+        ? { ...(event.data.travel as NonNullable<Character["travel"]>) }
+        : null;
+      actor.locationId = event.data.releaseLocationId as string | null;
+      clearActingCommander(world, actor);
+      applyUnpaidReleaseScar(actor, event);
+      break;
+    case "scattered-troops-returned":
+      if (!actor) throw new Error("Troop return event has no actor");
+      actor.troops.count = event.data.troopCount as number;
+      actor.troopRecovery = event.data.troopRecovery as Character["troopRecovery"];
+      break;
     case "rested":
       if (!actor) throw new Error("Rest event has no actor");
       actor.health = event.data.health as number;
@@ -401,6 +912,11 @@ export function applyEvent(world: WorldState, event: SimEvent): void {
       settlement.stability = event.data.settlementStability as number;
       settlement.stocks = resourcesFrom(event.data, "settlementStocks");
       settlement.surrender = event.data.surrender as Settlement["surrender"];
+      if (typeof event.data.battleId === "string") delete world.activeBattles[event.data.battleId];
+      break;
+    case "settlement-surrender-declined":
+      if (!actor || !settlement) throw new Error("Settlement surrender decline event is missing an entity");
+      settlement.surrender = null;
       break;
     case "settlement-claimed":
       if (!actor || !settlement) throw new Error("Settlement claim event is missing an entity");
@@ -415,6 +931,28 @@ export function applyEvent(world: WorldState, event: SimEvent): void {
       break;
     case "metrics-recorded":
       break;
+    case "contract-offered":
+    case "contract-amended":
+    case "contract-accepted":
+    case "contract-refused":
+    case "contract-fulfilled":
+    case "contract-breached":
+    case "contract-cancelled": {
+      const contract = event.data.contract as SupplyContract;
+      world.contracts ??= {};
+      world.contracts[contract.id] = contract;
+      const buyer = world.characters[contract.buyerId];
+      const carrier = world.characters[contract.carrierId];
+      if (buyer && typeof event.data.buyerMoney === "number") buyer.money = event.data.buyerMoney;
+      if (carrier && typeof event.data.carrierMoney === "number") carrier.money = event.data.carrierMoney;
+      if (event.type === "contract-fulfilled") {
+        const shelf = world.settlements[contract.destinationId];
+        if (!shelf || !carrier) throw new Error("Contract fulfilment is missing a shelf or a carrier");
+        shelf.stocks = resourcesFrom(event.data, "settlementStocks");
+        carrier.cargo = resourcesFrom(event.data, "carrierCargo");
+      }
+      break;
+    }
     default:
       throw new Error(`Unknown event type: ${event.type}`);
   }

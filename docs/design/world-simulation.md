@@ -23,6 +23,8 @@ Player-created faction structure evolves as the organization grows rather than r
 
 Delegating information is distinct from delegating authority. An appointed reporting officer may filter and summarize routine updates, but the original issuer still confirms completion, changes objectives, and cancels orders unless a later office system explicitly grants broader powers.
 
+The person who issues a faction's standing orders holds the command seat. That name is not stored. While their captivity is set, the free faction mate with the highest leadership plus loyalty times 50 covers the seat, and a lower id wins a tie. Anyone already captive is skipped. The cover is chosen when the holder is captured, and again only if that cover is captured. It is removed when the holder is released or escapes. The cover does not issue, confirm, retarget, or set the tax. The reporting officer stays a separate job. Both names are public, including to a rival. A rival's treasury and power stay hidden. Choosing a commander, and a permanent change of seat, wait.
+
 Deputy behavior is personality- and loyalty-sensitive. The current decision record permits routine budgets, production, taxes, defensive responses, minor agreements, and potentially even high-impact acts such as law changes, war, secession, or disposal of major assets. That last category needs explicit authorization guardrails before production; loyalty alone is not a sufficient security boundary.
 
 ## Economy
@@ -52,6 +54,32 @@ Local supply and demand set prices within stability limits. Territorial factions
 
 Taxes cannot be evaded through a hidden action. A settlement owner can escape a faction's tax authority only by declaring separation, which is an overt political act.
 
+### Player trade
+
+A player trades by naming what to buy or sell and how much, and can see the price before committing. Any of the four resources may be traded on any market. Four constraints apply: the stock the market actually holds, the depth that market will clear in one order, the money the buyer actually holds, and the hold the party can actually carry. Trade is the player verb that moves goods between islands, and it is the physical transport the resource model assumes.
+
+A market is quoted only where the commander is standing, because trading needs a market they are physically at and a remote figure would be an estimate presented as a price. Standing there is direct observation: the stock and price rows in a settlement the commander occupies are present truth, not a decaying report, while the rows for a settlement they are away from remain a report with an age. A live price is only the board as of this tick: it carries the tick it was read and expires on the next one, because production and trade recompute it. A destination's tax rate is visible from offshore. The tax is public in a way the price is not.
+
+Prototype choices, made to make this evaluable rather than decided:
+
+- Hold capacity is 40 units plus 2 per sailor, shared across all four resources.
+- Quantity is a whole number of units, 1 to 200. Resources are carried fractionally by upkeep and production, but a player trades discrete goods, and a fractional request would make "how much did I buy" a question about rounding.
+- Provisions below the party reserve cannot be sold. A trader cannot strand their own crew to make a sale.
+- Selling pays the tax rate of the faction holding the settlement. Buying pays none, because a purchase is not money earned in the settlement.
+- One price covers both directions. A purchase moves the quoted unit price times the quantity; a sale moves the same figure less the local tax. The market re-quotes afterwards from the stock it now holds, so a trade does not price itself as it fills.
+- One order may clear 16% of the settlement's target stock. The same depth binds the player and the autonomous trader. It is a fraction of the normal holding, not of the stock on the shelf, so a shortage can still absorb a cargo. A purchase cannot exceed the stock that is actually there.
+- A party underway pays a flat passage cost each tick. Provisions burn at the same rate at sea and at anchor; the passage is the cost that makes "is this trip worth it" a real question. The money is spent, not paid to a port, so a destination tax is not part of the quote. A purse that cannot cover `passageCost(travelDuration)` does not start the voyage. A player command is refused as `insufficient-passage`. An autonomous candidate scores −1000, the same gate as an unaffordable recruit, and the next candidate is chosen. Both ask `quotedPassage`. A voyage already underway is not sent back: each sea tick still charges `min(money, 3)`.
+- Settlements use arms, medicine, and ship materials as well as provisions. An island uses little of its focus and more of the other goods, so a specialty stays worth exporting and a neighbour's specialty stays worth carrying home. That use does not reduce stability or the garrison. Running out of timber is a price, not a political crisis.
+- A request beyond any limit is refused and names the limit that bound it, rather than quietly filling short. A player who asks for more than they can have is told which ceiling they hit and what the ceiling was.
+- Money moves in whole cents. The panel and the boundary run the same rounding cascade, so a total printed before the button is pressed is the total the purse shows after it.
+- The autonomous path uses the same prices, taxes, and depth, with its own heuristics for choosing volume. It is not the player's path.
+- A faction's own ports stay a live board, including from another of its ports. The board expires next tick and publishes `priceDrift` beside the price: how far that price would move in one quiet tick of production and local use, with no other merchants in the figure. The panel labels it "own use …/tick, if no one trades", because the figure is not the next quote once someone buys or sells. A price pinned to its floor or ceiling reports a drift of 0. The alternative was to age an own-faction price like a faction report. That was not taken. The faction does hold the current number; what a voyage needs is the slope.
+- A price report and a garrison report no longer share one decay. A price falls to about 1/e of its confidence in 18 ticks, because local use moves a board inside a few days. A garrison still takes 72. `believedPrice` uses the price horizon, so a merchant stops steering on a quote the market has left. That read is what moves the golden hashes. A remote estimate still has no drift; unknown stock and unknown price are null, not zero.
+
+The opening stocks at Crown Harbor and Glassport start in the imbalance those use rates sustain: Crown is short of medicine, Glassport is short of arms. On seed 1847 a round trip in those two goods out-earns the same number of ticks of `work`. The measurement is in [progress.md](../../progress.md).
+
+Open: whether a merchant should be able to learn a foreign price at all, or must sail to find out what a rival market pays. A foreign price stays an estimate with an age and no expiry. Also open: whether cargo can be lost, spoiled or taken rather than only bought and sold. The player's one-click provisions top-up quotes its price and, past `marketDepth`, fills only that share and says so. A named `buy-resource` order is still refused at that ceiling. An autonomous captain's `buy-provisions` stays uncapped, per [autonomous provisioning](autonomous-provisioning.md). Splitting a rumor and a quote into two price fields is deferred until the trade panel is designed with it.
+
 ## Settlements, ownership, and secession
 
 A character may legally own a settlement by founding or colonizing it, purchasing it, receiving a negotiated transfer or faction grant, or conquering it and establishing a claim.
@@ -66,7 +94,7 @@ When the owner declares separation:
 
 If the settlement survives a time threshold or makes peace, the owner may remain independent, found a new faction, or seek protection or membership elsewhere.
 
-The prototype uses a garrison surrender threshold followed by an explicit player claim decision. The conquering character personally owns a claimed settlement; longer-term occupation, negotiation, and population responses remain deferred.
+The prototype offers surrender after an attacker victory, in an immediate battle and at the end of a major one, when the garrison is still at most 15 and stability is at or below `min(80, 30 + 10 × max(0, 15 − garrison))`. A faction that still holds a settlement is not offered another raid once the garrison is under 15. A faction that holds no settlement is offered a raid at garrison 8 or more. Troops of at least 25, the 18-tick cooldown, hostility, and the open-battle check stay. Surrender, the claim, and regrowth stay. The conquering character then claims personally. A fed settlement under `round(population / 70)` regains one soldier every `max(6, round(200000 / population))` world ticks, written on settlement upkeep, including a neutral port. Shortage still only reduces the garrison. Longer-term occupation, negotiation, and population responses remain deferred. The measurements are [the raid floor](raid-floor.md), [garrison recovery](garrison-recovery.md), and [portless recovery](portless-recovery.md).
 
 ## Parties, troops, and ships
 
@@ -102,6 +130,12 @@ There are no elemental or ability-matchup counters in the core design. Terrain a
 
 Randomness depends heavily on commander strategy and troop discipline. Strategy improves the accuracy of pre-battle strength and casualty estimates and reduces disastrous variance. External events do not enter once a multi-phase battle begins.
 
+The current prototype makes that commitment visible through one compact forecast: outcome likelihood, expected losses, character-and-troop power, retreat prospects, and capture exposure. Strategy narrows estimate ranges and progressively reveals defensive-ground factors; intelligence quality still limits what even a skilled commander can know. Small attacks resolve immediately. Major attacks persist across three phases, refresh direct battlefield intelligence after each phase, and pause accelerated player time at every retreat window. Continuing requires advancing time again. A withdrawal can succeed with pursuit losses or fail according to its displayed capture risk. Capture can also follow a complete major-battle defeat; surviving troops scatter rather than disappearing.
+
+A major still ends when its phases are done, troops are under 8, the garrison is 0, health is at most 15, or morale is at most 12. The attacker wins that finished major when the garrison is 0, or when at least 8 troops remain, health is above 15, and either morale is above 12 and the phase wins say so, or the attacker's score is higher while the garrison is still standing. Any higher score qualifies, including a close one, and including a battle morale ended at 12 or under. A tie does not. Surrender is unchanged: it is offered only after an attacker victory, and only when garrison and stability already pass the existing limit. When the higher score is what turns today's defeat into a victory, the capture roll that defeat would have drawn is still drawn and ignored. An immediate battle is still decided by the higher score. Morale 0 does not give it a different rule. The measurement is [battle morale](battle-morale.md).
+
+A retreating party leaves the hostile settlement immediately and begins a forced sea journey. The route is disclosed at the battle decision window and targets the nearest settlement controlled by the party's faction, then the nearest neutral haven if no friendly settlement exists, then any alternate island as a last resort. The party cannot issue local commands while withdrawing and receives direct intelligence on arrival through the normal travel system.
+
 ## Character progression and powers
 
 ### Raw strength
@@ -132,7 +166,7 @@ Noncombat skills—navigation, medicine, trade, leadership, and strategy—grow 
 
 Ordinary defeats cause temporary wounds and debuffs. Only repeated or catastrophic defeats create permanent losses, including possible loss of extraordinary powers.
 
-A captive always has a guaranteed escape option that causes wounds and risks permanent loss. After a time threshold, the captor must offer release through negotiation using a system-limited standard price or debt.
+A captive always has a guaranteed escape option that causes a serious wound and carries a small risk of a one-to-three-point permanent physical scar. Messaging remains available. If the character waits, the prototype forces release after fourteen world days under captor-selected terms that cannot exceed a system-calculated maximum. Available money is paid first and any remainder is recorded as debt. Release or escape begins a seven-step return of surviving scattered troops. Full negotiation, debt enforcement, and rescue missions remain later milestones.
 
 Formal debt may require money or resources, escort or delivery, defense, a political favor or vote, recognition, or temporary service or allegiance. The captor selects terms within a system-calculated maximum. Breaking a valid debt causes negative traits, relationship and reputation damage, increased or replacement obligations, a recognized hostile claim, and party penalties to navigation, trade, and speed.
 

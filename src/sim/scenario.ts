@@ -112,6 +112,10 @@ function makeCharacter(
       experience: veteran ? rng.between(0.55, 0.8) : rng.between(0.05, 0.35),
       discipline: archetype === "officer" ? rng.between(0.7, 0.92) : rng.between(0.35, 0.78),
     },
+    captivity: null,
+    troopRecovery: null,
+    scars: [],
+    debts: [],
     attributes: {
       power: veteran ? rng.integer(68, 82) : rng.integer(20, 55),
       speed: veteran ? rng.integer(60, 78) : rng.integer(20, 55),
@@ -264,7 +268,11 @@ function orderFor(character: Character): StandingOrder | null {
   };
 }
 
-export function createPrototypeWorld(seed = 1847): WorldState {
+export interface PrototypeWorldOptions {
+  playerCharacterId?: string;
+}
+
+export function createPrototypeWorld(seed = 1847, options: PrototypeWorldOptions = {}): WorldState {
   const rng = new DeterministicRng(seed);
   const factions: Record<string, Faction> = {
     "world-government": {
@@ -292,7 +300,10 @@ export function createPrototypeWorld(seed = 1847): WorldState {
       population: 18_000,
       focus: "arms",
       production: resources(5.5, 6.5, 2.2, 3.4),
-      stocks: resources(220, 155, 82, 105),
+      // Medicine starts scarce: Glassport's focus, and Crown uses more of it
+      // than it makes. The opening price has to already say so, or the first
+      // voyage home is sailing into a glut that has not happened yet.
+      stocks: resources(220, 155, 30, 105),
       garrison: 260,
       fortification: 1.35,
       stability: 91,
@@ -331,7 +342,10 @@ export function createPrototypeWorld(seed = 1847): WorldState {
       population: 10_500,
       focus: "medicine",
       production: resources(4.1, 2.5, 7.7, 3.2),
-      stocks: resources(145, 76, 215, 91),
+      // Arms start scarce: Crown Harbor's focus, and Glassport uses more of
+      // them than it makes. Paired with Crown's medicine shortage, the same
+      // two ports pay in both directions.
+      stocks: resources(145, 36, 215, 91),
       garrison: 155,
       fortification: 1.22,
       stability: 86,
@@ -365,7 +379,10 @@ export function createPrototypeWorld(seed = 1847): WorldState {
     }
   }
 
-  characters["character-01"].controller = { kind: "human", playerId: "prototype-player" };
+  const playerCharacterId = options.playerCharacterId ?? "character-01";
+  const playerCharacter = characters[playerCharacterId];
+  if (!playerCharacter) throw new Error(`Unknown prototype player character: ${playerCharacterId}`);
+  playerCharacter.controller = { kind: "human", playerId: "prototype-player" };
 
   // Give co-located characters a small social history independent of hierarchy.
   for (const character of Object.values(characters)) {
@@ -378,7 +395,11 @@ export function createPrototypeWorld(seed = 1847): WorldState {
   }
 
   const initialReportingOfficerId = Object.values(characters)
-    .filter((character) => character.controller.kind === "autonomous" && character.factionId === "world-government")
+    .filter((character) =>
+      character.controller.kind === "autonomous" &&
+      character.factionId !== null &&
+      character.factionId === playerCharacter.factionId
+    )
     .sort((left, right) =>
       (right.skills.leadership + right.personality.loyalty * 50) -
         (left.skills.leadership + left.personality.loyalty * 50) ||
@@ -386,7 +407,7 @@ export function createPrototypeWorld(seed = 1847): WorldState {
     )[0]?.id ?? null;
 
   return {
-    version: 3,
+    version: 5,
     scenario: "four-island-pressure-test",
     seed,
     rngState: rng.state,
@@ -404,7 +425,7 @@ export function createPrototypeWorld(seed = 1847): WorldState {
       "prototype-player": {
         id: "prototype-player",
         displayName: "Prototype Commander",
-        characterId: "character-01",
+        characterId: playerCharacterId,
         knownCharacterIds: Object.keys(characters),
         conversationTagScores: {},
         briefingAcknowledgements: {},
@@ -413,6 +434,7 @@ export function createPrototypeWorld(seed = 1847): WorldState {
       },
     },
     pendingCommands: [],
+    activeBattles: {},
     conversationThreads: {},
     conversationMessages: [],
     scheduledReplies: [],

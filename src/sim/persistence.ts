@@ -4,6 +4,16 @@ import { DatabaseSync } from "node:sqlite";
 import { applyEvent, normalizeWorldState, stateHash } from "./state.ts";
 import type { SimEvent, WorldState } from "./types.ts";
 
+/** Largest event-feed page a player may request in one read. */
+export const EVENT_FEED_PAGE_LIMIT = 200;
+/**
+ * Largest check-in read. A month of this campaign is about 20–28 thousand
+ * events. Past this cap the newest rows inside the tick window are kept.
+ */
+export const CHECK_IN_READ_CAP = 40_000;
+/** Page size used when a request does not ask for one. */
+export const EVENT_FEED_PAGE_DEFAULT = 100;
+
 export interface RecoveryResult {
   state: WorldState;
   snapshotSequence: number;
@@ -97,6 +107,10 @@ export class WorldStore {
       INSERT OR REPLACE INTO snapshots(sequence, tick, state_json, state_hash)
       VALUES (?, ?, ?, ?)
     `);
+    const updateSchemaVersion = this.database.prepare(`
+      INSERT INTO metadata(key, value) VALUES ('schema-version', ?)
+      ON CONFLICT(key) DO UPDATE SET value = excluded.value
+    `);
     const latestSnapshot = this.database
       .prepare("SELECT sequence FROM snapshots ORDER BY sequence DESC LIMIT 1")
       .get() as { sequence: number };
@@ -117,6 +131,7 @@ export class WorldStore {
           JSON.stringify(event.data),
         );
       }
+      updateSchemaVersion.run(String(world.version));
       if (shouldSnapshot) {
         insertSnapshot.run(lastSequence, world.tick, JSON.stringify(world), stateHash(world));
       }
@@ -134,8 +149,9 @@ export class WorldStore {
     if (!snapshot) throw new Error("World store has no snapshot");
 
     const state = JSON.parse(snapshot.state_json) as WorldState;
-    if (state.version !== 3) {
-      throw new Error(`World schema ${state.version} is incompatible with schema 3; start this milestone with --reset`);
+    const storedVersion = (state as unknown as { version: number }).version;
+    if (storedVersion !== 3 && storedVersion !== 4 && storedVersion !== 5) {
+      throw new Error(`World schema ${storedVersion} is incompatible with schema 5; start this milestone with --reset`);
     }
     const actualHash = stateHash(state);
     if (actualHash !== snapshot.state_hash) {
@@ -168,6 +184,49 @@ export class WorldStore {
       .prepare("SELECT * FROM events ORDER BY sequence DESC LIMIT ?")
       .all(safeLimit) as unknown as EventRow[];
     return rows.reverse().map((row) => this.rowToEvent(row));
+  }
+
+  /**
+   * Events from `minTick` forward, oldest first, capped so one check-in cannot
+   * read the whole log.
+   *
+   * The cap is 40,000. A month of this campaign is about 20–28 thousand events
+   * (measured at tick 1200). When the window is larger than the cap, the newest
+   * rows inside it are kept.
+   */
+  eventsSinceTick(minTick: number, limit = CHECK_IN_READ_CAP): SimEvent[] {
+    const safeLimit = Math.max(1, Math.min(CHECK_IN_READ_CAP, Math.floor(limit)));
+    const floorTick = Math.max(0, Math.floor(minTick));
+    const rows = this.database
+      .prepare("SELECT * FROM events WHERE tick >= ? ORDER BY sequence DESC LIMIT ?")
+      .all(floorTick, safeLimit) as unknown as EventRow[];
+    return rows.reverse().map((row) => this.rowToEvent(row));
+  }
+
+  /**
+   * Reads one page of event history, oldest-first within the page.
+   *
+   * With no cursor this returns the newest page. Pass the previous page's
+   * `oldestSequence` as the cursor to walk further back: the query is strictly
+   * `sequence < cursor`, so pages never overlap and a client can reconstruct
+   * the whole feed without gaps.
+   */
+  eventsPage(beforeSequence: number | null, limit: number): SimEvent[] {
+    const safeLimit = Math.max(1, Math.min(EVENT_FEED_PAGE_LIMIT, Math.floor(limit)));
+    const rows = (beforeSequence === null
+      ? this.database.prepare("SELECT * FROM events ORDER BY sequence DESC LIMIT ?").all(safeLimit)
+      : this.database
+        .prepare("SELECT * FROM events WHERE sequence < ? ORDER BY sequence DESC LIMIT ?")
+        .all(beforeSequence, safeLimit)) as unknown as EventRow[];
+    return rows.reverse().map((row) => this.rowToEvent(row));
+  }
+
+  /** Counts events strictly older than the cursor, which is how a page reports `hasMore`. */
+  countEventsBefore(beforeSequence: number | null): number {
+    const row = (beforeSequence === null
+      ? this.database.prepare("SELECT COUNT(*) AS count FROM events").get()
+      : this.database.prepare("SELECT COUNT(*) AS count FROM events WHERE sequence < ?").get(beforeSequence)) as { count: number };
+    return row.count;
   }
 
   snapshotCount(): number {

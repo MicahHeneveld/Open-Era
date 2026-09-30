@@ -13,6 +13,11 @@ export interface Faction {
   color: string;
   treasury: number;
   taxRate: number;
+  /**
+   * Who covers the seat while the command holder is captive.
+   * Absent, not null, once that holder is free. The holder is not stored here.
+   */
+  actingCommanderId?: string;
 }
 
 export interface Settlement {
@@ -66,6 +71,128 @@ export interface TroopGroup {
   discipline: number;
 }
 
+export interface CharacterScar {
+  id: string;
+  attribute: keyof CharacterAttributes;
+  penalty: number;
+  cause: "captivity-escape";
+  gainedTick: number;
+}
+
+export interface DebtObligation {
+  id: string;
+  creditorFactionId: string | null;
+  originalValue: number;
+  remainingValue: number;
+  incurredTick: number;
+  reason: "prisoner-release";
+}
+
+export type CaptivityNegotiationStatus = "unreceptive" | "listening" | "considering" | "open";
+
+export interface CaptivityReleaseOffer {
+  id: string;
+  createdTick: number;
+  demandedValue: number;
+  systemMaximum: number;
+  countered: boolean;
+}
+
+export interface CaptivityNegotiationState {
+  /** The autonomous captor who decides whether to discuss release. */
+  negotiatorId: string | null;
+  /** Private simulation state. Player projections expose only the qualitative status. */
+  persuasion: number;
+  status: CaptivityNegotiationStatus;
+  attempts: number;
+  lastAttemptTick: number | null;
+  openedTick: number | null;
+  offer: CaptivityReleaseOffer | null;
+}
+
+export interface CaptivityState {
+  captorFactionId: string | null;
+  settlementId: string;
+  capturedTick: number;
+  mandatoryReleaseTick: number;
+  cause: "major-defeat" | "failed-retreat" | "outscore-loss";
+  displayedRisk: CombatRisk;
+  scatteredTroops: TroopGroup;
+  releaseDestinationId: string | null;
+  negotiation: CaptivityNegotiationState;
+}
+
+export interface TroopRecoveryState {
+  total: number;
+  remaining: number;
+  nextReturnTick: number;
+  returnEveryTicks: number;
+  sourceSettlementId: string;
+}
+
+export interface NumericRange {
+  low: number;
+  high: number;
+}
+
+export type CombatRisk = "low" | "moderate" | "high" | "severe";
+
+export interface CombatForecast {
+  settlementId: string;
+  generatedTick: number;
+  outlook: "decisive-advantage" | "favored" | "contested" | "underdog" | "grave-danger";
+  detailLevel: "basic" | "tactical" | "command";
+  strategy: number;
+  intelligence: {
+    source: SettlementKnowledge["source"] | "none";
+    confidence: number;
+    ageTicks: number | null;
+  };
+  attackerPower: NumericRange;
+  defenderPower: NumericRange;
+  winChance: NumericRange;
+  attackerCasualties: NumericRange;
+  defenderCasualties: NumericRange;
+  retreatSuccess: NumericRange;
+  retreatRisk: CombatRisk;
+  captureRisk: CombatRisk;
+  majorBattle: boolean;
+  phases: number;
+  revealedFactors: string[];
+}
+
+export interface BattlePhaseReport {
+  phase: number;
+  outcome: "attacker-advantage" | "defender-advantage";
+  attackerLosses: number;
+  defenderLosses: number;
+  attackerHealth: number;
+  attackerMorale: number;
+  attackerTroops: number;
+  defenderGarrison: number;
+  retreatRisk: CombatRisk;
+  captureRisk: CombatRisk;
+}
+
+export interface ActiveBattle {
+  id: string;
+  attackerId: string;
+  settlementId: string;
+  defenderFactionId: string | null;
+  startedTick: number;
+  phase: number;
+  totalPhases: number;
+  attackerInitialPower: number;
+  defenderInitialPower: number;
+  attackerInitialTroops: number;
+  defenderInitialGarrison: number;
+  attackerPhaseWins: number;
+  defenderPhaseWins: number;
+  retreatDestinationId: string | null;
+  lastPhase: BattlePhaseReport | null;
+  startingForecast: CombatForecast;
+}
+
 export interface TravelState {
   fromId: string;
   toId: string;
@@ -116,6 +243,21 @@ export interface Relationship {
   lastChangedTick: number;
 }
 
+/**
+ * Population and walls, dated separately from the rest of a settlement report.
+ *
+ * Garrison, stocks and prices keep refreshing while a character stands in a
+ * port. The ground does not: a later arrival or a daily refresh must carry this
+ * record forward, because the reducer replaces the whole knowledge entry.
+ * Absent means the ground was never surveyed. It is never stored as null.
+ */
+export interface SettlementGround {
+  population: number;
+  fortification: number;
+  observedTick: number;
+  source: "direct" | "faction-report";
+}
+
 export interface SettlementKnowledge {
   settlementId: string;
   observedTick: number;
@@ -125,6 +267,60 @@ export interface SettlementKnowledge {
   stocksEstimate: Resources;
   priceEstimate: Resources;
   source: "direct" | "faction-report" | "rumor";
+  ground?: SettlementGround;
+}
+
+/**
+ * One party, anchored in a port, as someone saw them.
+ *
+ * The numbers stay as seen. They are not recomputed from later experience,
+ * discipline, or leadership, which would move an old power when a hidden skill
+ * moved. Health, money, cargo, skills, orders, and captivity stay off the
+ * record. `travel: null` is the whole heading: this slice does not store a course.
+ */
+export interface PartySighting {
+  characterId: string;
+  locationId: string;
+  travel: null;
+  troops: number;
+  partyPower: number;
+  observedTick: number;
+  source: "direct" | "faction-report";
+  confidence: 1;
+}
+
+/**
+ * One anchored party, as a prisoner saw them on the morning they were released.
+ *
+ * The count and the power are the ones on that tick. A fellow prisoner is
+ * included at count 0 and power 0. Captivity itself is not copied.
+ */
+export interface ReleaseParty {
+  characterId: string;
+  troops: number;
+  partyPower: number;
+  observedTick: number;
+  source: "direct";
+  confidence: 1;
+}
+
+/**
+ * The prison a released captain carries home.
+ *
+ * Written once, inside the release, after that morning's upkeep. Absent until
+ * the first release, so a world with no release hashes as it does now. A later
+ * release replaces it when the new tick is greater or equal. Nothing deletes it.
+ * It is not an event and it is not copied into `knowledge`.
+ */
+export interface ReleaseSighting {
+  settlementId: string;
+  factionId: string | null;
+  captorFactionId: string | null;
+  garrison: number;
+  parties: ReleaseParty[];
+  observedTick: number;
+  source: "direct";
+  confidence: 1;
 }
 
 export type OrderDirective = "protect" | "pressure" | "trade-supplies" | "explore";
@@ -142,8 +338,41 @@ export type StandingOrderAdherence = "unassessed" | "following" | "deviating";
 
 export interface StandingOrderReport {
   tick: number;
-  kind: "accepted" | "refused" | "deviation" | "resumed" | "completion" | "confirmed" | "expired" | "amended" | "cancelled";
+  kind: "accepted" | "refused" | "deviation" | "resumed" | "completion" | "confirmed" | "closed-unanswered" | "expired" | "amended" | "cancelled";
   summary: string;
+}
+
+export type SupplyContractStatus =
+  | "offered"
+  | "accepted"
+  | "refused"
+  | "fulfilled"
+  | "breached"
+  | "cancelled";
+
+/**
+ * A paid provisions delivery. The price sits on `escrow`, in neither purse and
+ * in no treasury, from the moment the offer is applied until it is paid or
+ * returned exactly once.
+ */
+export interface SupplyContract {
+  id: string;
+  buyerId: string;
+  carrierId: string;
+  good: "provisions";
+  quantity: number;
+  destinationId: string;
+  price: number;
+  escrow: number;
+  /** True after the escrow has been paid to the carrier or returned to the buyer. */
+  settled: boolean;
+  deadlineTick: number;
+  issuedTick: number;
+  acceptedTick: number | null;
+  status: SupplyContractStatus;
+  revision: number;
+  /** Tick of the last status change. The projection's age is `tick - observedTick`. */
+  observedTick: number;
 }
 
 export interface StandingOrder {
@@ -183,6 +412,7 @@ export type MessageTag =
   | "urgent"
   | "trade"
   | "political"
+  | "negotiation"
   | "threat"
   | "request"
   | "supportive"
@@ -228,10 +458,14 @@ export type PlayerAction =
   | "travel"
   | "buy-provisions"
   | "trade-local"
+  | "buy-resource"
+  | "sell-resource"
   | "work"
   | "recruit"
   | "raid"
   | "claim-settlement"
+  | "decline-surrender"
+  | "survey"
   | "rest";
 
 export type PlayerCommand =
@@ -242,6 +476,26 @@ export type PlayerCommand =
       type: "character-action";
       action: PlayerAction;
       targetId?: string;
+      /** Set by the two trading verbs: what to trade, and how much of it. */
+      resource?: ResourceKey;
+      quantity?: number;
+      /**
+       * The price per unit this order was accepted at. Fixed at acceptance so the
+       * player is charged the total they were quoted, even if a tick of
+       * autonomous trading moves the board before the order fills.
+       */
+      unitPrice?: number;
+      /**
+       * The total quoted at acceptance, in cents: `quantity` times `unitPrice`.
+       * Set on `buy-provisions` so the accepted command states what the purse
+       * will pay. The resolution event's `gross` is what was actually paid.
+       */
+      gross?: number;
+      /**
+       * Set on `buy-provisions` when the gap up to the resupply target was larger
+       * than one order may clear. `quantity` is then `marketDepth`, not the gap.
+       */
+      capped?: boolean;
     }
   | {
       id: string;
@@ -282,6 +536,49 @@ export type PlayerCommand =
       type: "cancel-order";
       characterId: string;
       orderId: string;
+    }
+  | {
+      id: string;
+      playerId: string;
+      issuedTick: number;
+      type: "retreat-battle";
+      battleId: string;
+    }
+  | {
+      id: string;
+      playerId: string;
+      issuedTick: number;
+      type: "escape-captivity";
+    }
+  | {
+      id: string;
+      playerId: string;
+      issuedTick: number;
+      type: "respond-captivity-offer";
+      offerId: string;
+      response: "accept" | "counter" | "reject";
+      counterValue?: number;
+    }
+  | {
+      id: string;
+      playerId: string;
+      issuedTick: number;
+      type: "offer-contract";
+      characterId: string;
+      /** Set when this offer restates a contract that is still `offered`. */
+      contractId?: string;
+      quantity: number;
+      destinationId: string;
+      price: number;
+      expiresTick: number;
+    }
+  | {
+      id: string;
+      playerId: string;
+      issuedTick: number;
+      type: "cancel-contract";
+      characterId: string;
+      contractId: string;
     };
 
 export interface Character {
@@ -297,15 +594,43 @@ export interface Character {
   morale: number;
   sailors: number;
   troops: TroopGroup;
+  captivity: CaptivityState | null;
+  troopRecovery: TroopRecoveryState | null;
+  scars: CharacterScar[];
+  debts: DebtObligation[];
   attributes: CharacterAttributes;
   skills: CharacterSkills;
   personality: Personality;
+  /**
+   * Unpaid-release loyalty scar, omitted while it is 0.
+   *
+   * The cover sort adds this to `personality.loyalty` before multiplying by 50.
+   * Orders, plans, work, the dock sort, and `personality.loyalty` itself do not
+   * read it. A paid release and an escape do not write it. No event carries it.
+   */
+  loyaltyAdjustment?: number;
   controller: CharacterController;
   goals: CharacterGoal[];
   activeGoalId: string | null;
   plan: CharacterPlan | null;
   relationships: Record<string, Relationship>;
   knowledge: Record<string, SettlementKnowledge>;
+  /**
+   * Parties seen anchored in a port, keyed by the subject's id.
+   *
+   * Absent until the first sighting. A survey, or a targeted explore delivered
+   * to this character, writes it. A daily observation does not, and nothing
+   * deletes an entry. Omitted so a world with no sightings hashes as before.
+   */
+  partySightings?: Record<string, PartySighting>;
+  /**
+   * The prison this captain was released from.
+   *
+   * Absent until the first release. A later release replaces it when the new
+   * `observedTick` is greater or equal. Nothing deletes it. Omitted so a world
+   * with no release hashes as before. The captor's reading is not stored here.
+   */
+  releaseSighting?: ReleaseSighting;
   standingOrders: StandingOrder[];
   lastPlanReviewTick: number;
   currentGoal: string;
@@ -316,7 +641,7 @@ export interface Character {
 }
 
 export interface WorldState {
-  version: 3;
+  version: 5;
   scenario: string;
   seed: number;
   rngState: number;
@@ -332,9 +657,17 @@ export interface WorldState {
   characters: Record<string, Character>;
   players: Record<string, Player>;
   pendingCommands: PlayerCommand[];
+  activeBattles: Record<string, ActiveBattle>;
   conversationThreads: Record<string, ConversationThread>;
   conversationMessages: ConversationMessage[];
   scheduledReplies: ScheduledReply[];
+  /**
+   * Paid provisions contracts, keyed by id.
+   *
+   * Absent until the first offer. A headless world never writes it, so the
+   * golden hash stays the world that has no contracts.
+   */
+  contracts?: Record<string, SupplyContract>;
 }
 
 export interface DecisionCandidate {
@@ -343,6 +676,15 @@ export interface DecisionCandidate {
   reason: string;
   targetId?: string;
   resource?: ResourceKey;
+  /** Units a trading action should move. Set by the player, not the planner. */
+  quantity?: number;
+  /**
+   * The price per unit the order was accepted at. Player trades only: it fixes
+   * the price at the moment the player was shown it, because a tick of
+   * autonomous trading can move a board between accepting an order and filling
+   * it, and a player who was quoted a total must be charged that total.
+   */
+  unitPrice?: number;
 }
 
 export interface SimEvent {

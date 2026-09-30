@@ -19,10 +19,11 @@ import {
   type SendMessageRequest,
 } from "../sim/conversations.ts";
 import { runTick } from "../sim/engine.ts";
-import { WorldStore } from "../sim/persistence.ts";
+import { round } from "../sim/state.ts";
+import { WorldStore, EVENT_FEED_PAGE_DEFAULT, EVENT_FEED_PAGE_LIMIT } from "../sim/persistence.ts";
 import { createPrototypeWorld } from "../sim/scenario.ts";
-import type { WorldState } from "../sim/types.ts";
-import { dashboardState } from "./view-model.ts";
+import type { SimEvent, WorldState } from "../sim/types.ts";
+import { CHECK_IN_EVENT_CAP, CHECK_IN_TICKS, dashboardState, projectEventFeed } from "./view-model.ts";
 
 const moduleDirectory = dirname(fileURLToPath(import.meta.url));
 const page = readFileSync(resolve(moduleDirectory, "index.html"), "utf8");
@@ -31,6 +32,7 @@ export interface DashboardOptions {
   databasePath: string;
   reset?: boolean;
   seed?: number;
+  playerCharacterId?: string;
   dialogueProvider?: DialogueProvider;
 }
 
@@ -47,6 +49,15 @@ function json(response: ServerResponse, status: number, body: unknown): void {
     "x-content-type-options": "nosniff",
   });
   response.end(JSON.stringify(body));
+}
+
+/** Reads the event-feed cursor from a request. Returns "invalid" when unusable. */
+function parseEventCursor(url: URL): number | null | "invalid" {
+  const raw = url.searchParams.get("beforeSequence");
+  if (raw === null) return null;
+  const parsed = Number(raw);
+  if (!Number.isInteger(parsed) || parsed < 0) return "invalid";
+  return parsed;
 }
 
 async function requestBody(request: IncomingMessage): Promise<unknown> {
@@ -76,7 +87,7 @@ export function createDashboardApp(options: DashboardOptions): DashboardApp {
   let world: WorldState;
   if (store.hasWorld()) world = store.recover().state;
   else {
-    world = createPrototypeWorld(options.seed ?? 1847);
+    world = createPrototypeWorld(options.seed ?? 1847, { playerCharacterId: options.playerCharacterId });
     store.initialize(world);
   }
 
@@ -95,9 +106,30 @@ export function createDashboardApp(options: DashboardOptions): DashboardApp {
         return;
       }
       if (request.method === "GET" && url.pathname === "/api/state") {
-        // Roughly one busy in-world week is scanned for exceptional events;
-        // the view model still returns only a compact recent-event feed.
-        json(response, 200, dashboardState(world, store.recentEvents(5_000)));
+        const beforeSequence = parseEventCursor(url);
+        if (beforeSequence === "invalid") {
+          json(response, 400, { ok: false, code: "invalid-cursor", error: "beforeSequence must be a non-negative integer" });
+          return;
+        }
+        const limitParam = url.searchParams.get("limit");
+        const limit = limitParam === null ? EVENT_FEED_PAGE_DEFAULT : Number(limitParam);
+        if (!Number.isInteger(limit) || limit < 1 || limit > EVENT_FEED_PAGE_LIMIT) {
+          json(response, 400, { ok: false, code: "invalid-limit", error: `limit must be an integer between 1 and ${EVENT_FEED_PAGE_LIMIT}` });
+          return;
+        }
+        // The check-in looks back CHECK_IN_TICKS world ticks, not the newest
+        // 5,000 events. The read is capped at CHECK_IN_EVENT_CAP. The feed
+        // itself is still one explicit page.
+        const feedEvents = store.eventsPage(beforeSequence, limit);
+        const checkInMinTick = Math.max(0, world.tick - CHECK_IN_TICKS);
+        json(response, 200, dashboardState(world, store.eventsSinceTick(checkInMinTick, CHECK_IN_EVENT_CAP), {
+          events: feedEvents,
+          hasMore: feedEvents.length > 0 && store.countEventsBefore(feedEvents[0].sequence) > 0,
+          limit,
+          total: store.eventCount(),
+          limitMax: EVENT_FEED_PAGE_LIMIT,
+          limitDefault: EVENT_FEED_PAGE_DEFAULT,
+        }));
         return;
       }
       if (request.method === "GET" && url.pathname === "/api/health") {
@@ -108,15 +140,52 @@ export function createDashboardApp(options: DashboardOptions): DashboardApp {
         const body = await requestBody(request) as { ticks?: number };
         const ticks = body.ticks ?? 1;
         if (!Number.isInteger(ticks) || ticks < 1 || ticks > 144) {
-          json(response, 400, { ok: false, error: "ticks must be an integer between 1 and 144" });
+          json(response, 400, { ok: false, code: "invalid-ticks", error: "ticks must be an integer between 1 and 144" });
           return;
         }
+        const playerCharacterId = Object.values(world.players)[0]?.characterId;
+        if (!playerCharacterId) {
+          json(response, 400, { ok: false, code: "unknown-player", error: "The world has no player session" });
+          return;
+        }
+        let ticksAdvanced = 0;
+        let combatUpdated = false;
+        let attentionUpdated = false;
+        const produced: SimEvent[] = [];
         for (let index = 0; index < ticks; index += 1) {
           const result = runTick(world);
           const conversationEvents = await resolveDueReplies(world, dialogueProvider);
-          store.appendTick([...result.events, ...conversationEvents], world);
+          const tickEvents = [...result.events, ...conversationEvents];
+          store.appendTick(tickEvents, world);
+          produced.push(...tickEvents);
+          ticksAdvanced += 1;
+          combatUpdated = result.events.some((event) =>
+            event.actorId === playerCharacterId &&
+            (event.type === "battle-phase-resolved" || event.type === "battle-retreated" || event.type === "battle-resolved")
+          );
+          attentionUpdated = tickEvents.some((event) =>
+            (event.actorId === playerCharacterId || event.targetId === playerCharacterId) &&
+            (
+              event.type === "character-captured" || event.type === "captivity-escaped" ||
+              event.type === "captivity-released" || event.type === "captivity-negotiations-opened"
+            )
+          );
+          if (combatUpdated || attentionUpdated) break;
         }
-        json(response, 200, { ok: true, tick: world.tick, day: world.tick / world.ticksPerDay });
+        const commandedBattle = Object.values(world.activeBattles).find((battle) => battle.attackerId === playerCharacterId);
+        json(response, 200, {
+          ok: true,
+          tick: world.tick,
+          day: round(world.tick / world.ticksPerDay, 2),
+          ticksAdvanced,
+          combatUpdated,
+          attentionUpdated,
+          pausedForBattle: Boolean(commandedBattle),
+          // The events this request produced, projected through the same
+          // visibility path as the feed, so a step needs no follow-up read.
+          eventSequence: world.nextEventSequence - 1,
+          events: projectEventFeed(world, playerCharacterId, produced).reverse(),
+        });
         return;
       }
       if (request.method === "POST" && url.pathname === "/api/commands") {
@@ -127,7 +196,11 @@ export function createDashboardApp(options: DashboardOptions): DashboardApp {
           return;
         }
         store.appendTick([result.event], world);
-        json(response, 202, { ok: true, command: result.command });
+        json(response, 202, {
+          ok: true,
+          command: result.command,
+          ...(result.notice ? { notice: result.notice } : {}),
+        });
         return;
       }
       if (request.method === "POST" && url.pathname === "/api/briefing/acknowledge") {
@@ -174,9 +247,9 @@ export function createDashboardApp(options: DashboardOptions): DashboardApp {
         json(response, 202, { ok: true, message: result.value.message, replies: result.value.replies });
         return;
       }
-      json(response, 404, { ok: false, error: "Not found" });
+      json(response, 404, { ok: false, code: "not-found", error: "Not found" });
     }).catch((error: unknown) => {
-      if (!response.headersSent) json(response, 500, { ok: false, error: error instanceof Error ? error.message : "Unknown error" });
+      if (!response.headersSent) json(response, 500, { ok: false, code: "internal-error", error: error instanceof Error ? error.message : "Unknown error" });
       else response.end();
     });
   });
