@@ -167,6 +167,7 @@ test("a ship in port is absent, and so is a captive.", () => {
     displayedRisk: "low",
     scatteredTroops: { ...subject.troops },
     releaseDestinationId: "crown-harbor",
+    negotiation: { negotiatorId: null, persuasion: 0, status: "unreceptive", attempts: 0, lastAttemptTick: null, openedTick: null, offer: null },
   };
   assert.equal(row(world, observer, subject), null);
   assert.equal(seaSightingsFor(world, subject), null);

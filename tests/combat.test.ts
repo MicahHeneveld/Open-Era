@@ -629,6 +629,7 @@ function quietExcept(world: WorldState, keep: Set<string>): void {
       displayedRisk: "low",
       scatteredTroops: { count: 0, experience: 0, discipline: 0 },
       releaseDestinationId: null,
+      negotiation: { negotiatorId: null, persuasion: 0, status: "unreceptive", attempts: 0, lastAttemptTick: null, openedTick: null, offer: null },
     };
   }
 }
@@ -909,6 +910,7 @@ test("the attacker and an already captive member are not the outscore prisoner",
     displayedRisk: "low",
     scatteredTroops: { count: 0, experience: 0, discipline: 0 },
     releaseDestinationId: null,
+    negotiation: { negotiatorId: null, persuasion: 0, status: "unreceptive", attempts: 0, lastAttemptTick: null, openedTick: null, offer: null },
   };
   const freeMate = placeOnDock(skippedCaptive.world, "character-16", 5, 0.1);
   const captiveResult = raidThisTick(skippedCaptive.world);

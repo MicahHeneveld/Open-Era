@@ -1,5 +1,11 @@
 import { createHash } from "node:crypto";
+import {
+  negotiationAfterRejectedOffer,
+  normalizeCaptivityNegotiation,
+  selectCaptivityNegotiator,
+} from "./captivity.ts";
 import type {
+  CaptivityNegotiationState,
   Character,
   PartySighting,
   ReleaseParty,
@@ -61,6 +67,15 @@ export function normalizeWorldState(world: WorldState): WorldState {
   for (const character of Object.values(world.characters)) {
     character.standingOrders = character.standingOrders.map(normalizeStandingOrder);
     character.captivity ??= null;
+    if (character.captivity) {
+      normalizeCaptivityNegotiation(character.captivity);
+      character.captivity.negotiation.negotiatorId ??= selectCaptivityNegotiator(
+        world,
+        character.id,
+        character.captivity.settlementId,
+        character.captivity.captorFactionId,
+      );
+    }
     character.troopRecovery ??= null;
     character.scars ??= [];
     character.debts ??= [];
@@ -69,6 +84,11 @@ export function normalizeWorldState(world: WorldState): WorldState {
     player.briefingAcknowledgements ??= {};
     player.routineBriefingThroughSequence ??= 0;
     player.reportingOfficerId ??= null;
+    const negotiatorId = world.characters[player.characterId]?.captivity?.negotiation.negotiatorId;
+    if (negotiatorId && !player.knownCharacterIds.includes(negotiatorId)) {
+      player.knownCharacterIds.push(negotiatorId);
+      player.knownCharacterIds.sort();
+    }
   }
   return world;
 }
@@ -792,19 +812,53 @@ export function applyEvent(world: WorldState, event: SimEvent): void {
         ? { ...(event.data.travel as NonNullable<Character["travel"]>) }
         : null;
       break;
-    case "character-captured":
+    case "character-captured": {
       if (!actor || !settlement) throw new Error("Capture event is missing an entity");
       actor.health = event.data.health as number;
       actor.morale = event.data.morale as number;
       actor.troops.count = 0;
-      actor.captivity = event.data.captivity as Character["captivity"];
+      const captivity = event.data.captivity as NonNullable<Character["captivity"]>;
+      normalizeCaptivityNegotiation(captivity);
+      captivity.negotiation.negotiatorId ??= selectCaptivityNegotiator(
+        world,
+        actor.id,
+        captivity.settlementId,
+        captivity.captorFactionId,
+      );
+      actor.captivity = captivity;
       actor.troopRecovery = null;
       actor.locationId = settlement.id;
       actor.travel = null;
       actor.lastBattleTick = world.tick;
       delete world.activeBattles[event.data.battleId as string];
       assignActingCommander(world, actor);
+      const negotiatorId = captivity.negotiation.negotiatorId;
+      if (negotiatorId) {
+        const player = Object.values(world.players).find((candidate) => candidate.characterId === actor.id);
+        if (player && !player.knownCharacterIds.includes(negotiatorId)) {
+          player.knownCharacterIds.push(negotiatorId);
+          player.knownCharacterIds.sort();
+        }
+      }
       break;
+    }
+    case "captivity-persuasion-updated":
+    case "captivity-negotiations-opened": {
+      const captive = event.targetId ? world.characters[event.targetId] : undefined;
+      if (!captive?.captivity) throw new Error("Captivity negotiation event has no captive");
+      captive.captivity.negotiation = event.data.negotiation as CaptivityNegotiationState;
+      break;
+    }
+    case "captivity-counter-rejected": {
+      if (!actor?.captivity?.negotiation.offer) throw new Error("Rejected counter has no active offer");
+      actor.captivity.negotiation.offer.countered = true;
+      break;
+    }
+    case "captivity-offer-rejected": {
+      if (!actor?.captivity) throw new Error("Rejected captivity offer has no captive");
+      actor.captivity.negotiation = negotiationAfterRejectedOffer(actor.captivity.negotiation);
+      break;
+    }
     case "captivity-escaped":
       if (!actor) throw new Error("Captivity escape event has no actor");
       actor.health = event.data.health as number;

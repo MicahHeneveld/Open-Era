@@ -46,7 +46,9 @@ export function higherScoreClause(data: Record<string, unknown>): string {
  * `data` stays null. A decision, a contract, and an upkeep row are not in this set.
  */
 export function summaryStaysWhenWithheld(type: string): boolean {
-  return type === "character-captured" || type === "captivity-released" || type === "battle-resolved" || type === "settlement-claimed";
+  return type === "character-captured" || type === "captivity-released" || type === "battle-resolved" ||
+    type === "settlement-claimed" || type === "captivity-negotiations-opened" ||
+    type === "captivity-counter-rejected" || type === "captivity-offer-rejected";
 }
 
 /**
@@ -513,6 +515,14 @@ export function publicFeedSentence(world: WorldState, event: SimEvent): string {
       return `${actor} was released${at}.`;
     case "captivity-escaped":
       return `${actor} escaped captivity${at}.`;
+    case "captivity-persuasion-updated":
+      return `${actor} considered a prisoner's message.`;
+    case "captivity-negotiations-opened":
+      return `${actor} opened release negotiations.`;
+    case "captivity-counter-rejected":
+      return `${actor}'s counterproposal was rejected.`;
+    case "captivity-offer-rejected":
+      return `${actor} rejected release terms.`;
     case "scattered-troops-returned":
       return `Scattered troops returned to ${actor}.`;
     case "settlement-claimed":
@@ -635,6 +645,12 @@ export function eventBriefingTitle(type: string): string {
       return "A captain was released";
     case "captivity-escaped":
       return "A captain escaped";
+    case "captivity-negotiations-opened":
+      return "Release negotiations opened";
+    case "captivity-counter-rejected":
+      return "A release counter was rejected";
+    case "captivity-offer-rejected":
+      return "Release terms were rejected";
     case "player-command-failed":
       return "A command failed";
     case "standing-order-accepted":

@@ -202,6 +202,7 @@ test("the escape card names the capture risk, and the seat line names the cover"
     displayedRisk: "low",
     scatteredTroops: { ...commander.troops },
     releaseDestinationId: "crown-harbor",
+    negotiation: { negotiatorId: null, persuasion: 0, status: "unreceptive", attempts: 0, lastAttemptTick: null, openedTick: null, offer: null },
   };
   const view = dashboardState(world, [], fullEventFeed([])) as {
     briefing: { items: Array<{ id: string; summary: string }> };
@@ -238,6 +239,7 @@ test("an outscore hold keeps the stored cause and adds the plain label", () => {
     displayedRisk: "low",
     scatteredTroops: { ...commander.troops },
     releaseDestinationId: null,
+    negotiation: { negotiatorId: null, persuasion: 0, status: "unreceptive", attempts: 0, lastAttemptTick: null, openedTick: null, offer: null },
   };
   const view = dashboardState(world, [], fullEventFeed([])) as {
     captivity: { active: { cause: string; causeLabel: string | null } };

@@ -35,6 +35,7 @@ function hold(
       discipline: character.troops.discipline,
     },
     releaseDestinationId: "glassport",
+    negotiation: { negotiatorId: null, persuasion: 0, status: "unreceptive", attempts: 0, lastAttemptTick: null, openedTick: null, offer: null },
   };
   character.troops = { ...character.troops, count: 0 };
   character.locationId = settlementId;
@@ -257,6 +258,7 @@ test("a release record keeps the prison and does not follow it.", () => {
       displayedRisk: "low",
       scatteredTroops: { count: 5, experience: 0.2, discipline: 0.2 },
       releaseDestinationId: prison === "glassport" ? "crown-harbor" : "glassport",
+      negotiation: { negotiatorId: null, persuasion: 0, status: "unreceptive", attempts: 0, lastAttemptTick: null, openedTick: null, offer: null },
     };
     prisoner.locationId = prison;
     prisoner.travel = null;

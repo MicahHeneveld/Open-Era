@@ -371,6 +371,7 @@ test("a captor row does not create a partySightings entry", () => {
     displayedRisk: "low",
     scatteredTroops: { count: 12, experience: subject.troops.experience, discipline: subject.troops.discipline },
     releaseDestinationId: null,
+    negotiation: { negotiatorId: null, persuasion: 0, status: "unreceptive", attempts: 0, lastAttemptTick: null, openedTick: null, offer: null },
   };
   assert.equal(commander.partySightings, undefined);
 

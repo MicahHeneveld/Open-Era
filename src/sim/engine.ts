@@ -24,6 +24,12 @@ import {
 } from "./agency.ts";
 import { assessSupplyContract, contractRelationship } from "./contracts.ts";
 import {
+  captivitySystemMaximum,
+  counterOfferAccepted,
+  initialCaptivityNegotiation,
+  selectCaptivityNegotiator,
+} from "./captivity.ts";
+import {
   applyEvent,
   captorPartyLeader,
   CLAIM_STABILITY_FLOOR,
@@ -636,6 +642,14 @@ function attemptCapture(
       discipline: character.troops.discipline,
     },
     releaseDestinationId: selectRetreatDestination(world, character.id, settlementId),
+    negotiation: initialCaptivityNegotiation(selectCaptivityNegotiator(
+      world,
+      character.id,
+      settlementId,
+      attempt.captorFactionId !== undefined
+        ? attempt.captorFactionId
+        : world.settlements[settlementId].factionId,
+    )),
   };
   emit(world, events, {
     type: "character-captured",
@@ -1649,6 +1663,61 @@ function escapeCaptivity(
   });
 }
 
+function releaseCaptiveOnTerms(
+  world: WorldState,
+  character: Character,
+  captivity: CaptivityState,
+  systemMaximum: number,
+  demandedValue: number,
+  reason: "negotiated-offer" | "negotiated-counter" | "mandatory-bounded-terms",
+  events: SimEvent[],
+): void {
+  const boundedValue = round(clamp(demandedValue, 0, systemMaximum), 2);
+  // Only coins that leave the purse are split. Debt is the unpaid remainder.
+  // The existing ransom-routing rule is shared by negotiated and forced terms.
+  const faction = captivity.captorFactionId ? world.factions[captivity.captorFactionId] : undefined;
+  const leader = captorPartyLeader(world, character);
+  let moneyPaid = round(Math.min(character.money, boundedValue), 2);
+  if (!faction && !leader) moneyPaid = 0;
+  const shares = faction && !leader
+    ? { treasuryShare: moneyPaid, leaderShare: 0 }
+    : splitRansom(moneyPaid, Boolean(faction));
+  const debtValue = round(boundedValue - moneyPaid, 2);
+  const debt: DebtObligation | null = debtValue > 0 ? {
+    id: `debt-${String(world.nextEventSequence).padStart(6, "0")}`,
+    creditorFactionId: captivity.captorFactionId,
+    originalValue: debtValue,
+    remainingValue: debtValue,
+    incurredTick: world.tick,
+    reason: "prisoner-release",
+  } : null;
+  const travel = releaseTravel(world, character, captivity);
+  emit(world, events, {
+    type: "captivity-released",
+    actorId: character.id,
+    targetId: captivity.captorFactionId ?? undefined,
+    settlementId: captivity.settlementId,
+    data: {
+      reason,
+      daysHeld: round((world.tick - captivity.capturedTick) / world.ticksPerDay, 2),
+      terms: { systemMaximum, demandedValue: boundedValue, moneyPaid, debtValue },
+      ransom: {
+        treasuryShare: shares.treasuryShare,
+        leaderShare: shares.leaderShare,
+        treasuryFactionId: faction ? faction.id : null,
+        factionTreasury: faction ? round(faction.treasury + shares.treasuryShare, 2) : null,
+        leaderId: leader ? leader.id : null,
+        leaderMoney: leader ? round(leader.money + shares.leaderShare, 2) : null,
+      },
+      characterMoney: round(character.money - moneyPaid, 2),
+      debt,
+      travel,
+      releaseLocationId: travel ? null : captivity.settlementId,
+      troopRecovery: recoveryAfterRelease(world, captivity),
+    },
+  });
+}
+
 function processCaptivityDeadlines(
   world: WorldState,
   events: SimEvent[],
@@ -1657,57 +1726,17 @@ function processCaptivityDeadlines(
   for (const character of Object.values(world.characters).sort((left, right) => left.id.localeCompare(right.id))) {
     const captivity = character.captivity;
     if (!captivity || world.tick < captivity.mandatoryReleaseTick) continue;
-    const physicalAverage = Object.values(character.attributes).reduce((sum, value) => sum + value, 0) / 4;
-    const systemMaximum = round(clamp(50 + captivity.scatteredTroops.count * 2 + physicalAverage * 0.5, 75, 600), 2);
+    const systemMaximum = captivitySystemMaximum(character, captivity);
     const demandedValue = round(systemMaximum * rng.between(0.55, 1), 2);
-    // Only the coins that leave the purse are split. The debt is the unpaid
-    // remainder and is not split. A faction treasury takes half, and the
-    // captor's party leader takes half. The odd cent goes to the treasury.
-    // No faction: the leader takes the whole payment. No recipient at all:
-    // the coins stay in the purse, so a payment cannot destroy them.
-    const faction = captivity.captorFactionId ? world.factions[captivity.captorFactionId] : undefined;
-    const leader = captorPartyLeader(world, character);
-    let moneyPaid = round(Math.min(character.money, demandedValue), 2);
-    if (!faction && !leader) moneyPaid = 0;
-    const shares = faction && !leader
-      ? { treasuryShare: moneyPaid, leaderShare: 0 }
-      : splitRansom(moneyPaid, Boolean(faction));
-    const debtValue = round(demandedValue - moneyPaid, 2);
-    const debt: DebtObligation | null = debtValue > 0 ? {
-      id: `debt-${String(world.nextEventSequence).padStart(6, "0")}`,
-      creditorFactionId: captivity.captorFactionId,
-      originalValue: debtValue,
-      remainingValue: debtValue,
-      incurredTick: world.tick,
-      reason: "prisoner-release",
-    } : null;
-    const travel = releaseTravel(world, character, captivity);
-    emit(world, events, {
-      type: "captivity-released",
-      actorId: character.id,
-      targetId: captivity.captorFactionId ?? undefined,
-      settlementId: captivity.settlementId,
-      data: {
-        reason: "mandatory-bounded-terms",
-        daysHeld: round((world.tick - captivity.capturedTick) / world.ticksPerDay, 2),
-        terms: { systemMaximum, demandedValue, moneyPaid, debtValue },
-        // Same event type. The split is extra fields so replay credits the
-        // treasury and the leader without a second draw or a second event.
-        ransom: {
-          treasuryShare: shares.treasuryShare,
-          leaderShare: shares.leaderShare,
-          treasuryFactionId: faction ? faction.id : null,
-          factionTreasury: faction ? round(faction.treasury + shares.treasuryShare, 2) : null,
-          leaderId: leader ? leader.id : null,
-          leaderMoney: leader ? round(leader.money + shares.leaderShare, 2) : null,
-        },
-        characterMoney: round(character.money - moneyPaid, 2),
-        debt,
-        travel,
-        releaseLocationId: travel ? null : captivity.settlementId,
-        troopRecovery: recoveryAfterRelease(world, captivity),
-      },
-    });
+    releaseCaptiveOnTerms(
+      world,
+      character,
+      captivity,
+      systemMaximum,
+      demandedValue,
+      "mandatory-bounded-terms",
+      events,
+    );
   }
 }
 
@@ -2163,6 +2192,67 @@ function processPlayerCommands(
       emit(world, events, {
         type: "player-command-failed",
         data: { commandId: command.id, reason: "player or controlled character no longer exists" },
+      });
+      continue;
+    }
+
+    if (command.type === "respond-captivity-offer") {
+      const captivity = commander.captivity;
+      const offer = captivity?.negotiation.offer;
+      if (!captivity || captivity.negotiation.status !== "open" || !offer || offer.id !== command.offerId) {
+        emit(world, events, {
+          type: "player-command-failed",
+          actorId: commander.id,
+          data: { commandId: command.id, reason: "the release offer is no longer open" },
+        });
+        continue;
+      }
+      emit(world, events, {
+        type: "player-action-executed",
+        actorId: commander.id,
+        targetId: captivity.negotiation.negotiatorId ?? undefined,
+        settlementId: captivity.settlementId,
+        data: {
+          commandId: command.id,
+          action: "respond-captivity-offer",
+          response: command.response,
+          offerId: offer.id,
+          counterValue: command.counterValue,
+        },
+      });
+      let outcome: string;
+      if (command.response === "accept") {
+        releaseCaptiveOnTerms(world, commander, captivity, offer.systemMaximum, offer.demandedValue, "negotiated-offer", events);
+        outcome = "captivity-released";
+      } else if (command.response === "counter") {
+        const proposedValue = command.counterValue!;
+        if (counterOfferAccepted(world, commander, proposedValue)) {
+          releaseCaptiveOnTerms(world, commander, captivity, offer.systemMaximum, proposedValue, "negotiated-counter", events);
+          outcome = "counter-accepted";
+        } else {
+          emit(world, events, {
+            type: "captivity-counter-rejected",
+            actorId: commander.id,
+            targetId: captivity.negotiation.negotiatorId ?? undefined,
+            settlementId: captivity.settlementId,
+            data: { offerId: offer.id, counterValue: proposedValue },
+          });
+          outcome = "counter-rejected";
+        }
+      } else {
+        emit(world, events, {
+          type: "captivity-offer-rejected",
+          actorId: commander.id,
+          targetId: captivity.negotiation.negotiatorId ?? undefined,
+          settlementId: captivity.settlementId,
+          data: { offerId: offer.id },
+        });
+        outcome = "offer-rejected";
+      }
+      emit(world, events, {
+        type: "player-command-resolved",
+        actorId: commander.id,
+        data: { commandId: command.id, outcome, offerId: offer.id },
       });
       continue;
     }

@@ -190,6 +190,7 @@ test("an empty berth is named, and a stocked market is not called unsold", () =>
     displayedRisk: "low",
     scatteredTroops: { count: 0, experience: 0, discipline: 0 },
     releaseDestinationId: null,
+    negotiation: { negotiatorId: null, persuasion: 0, status: "unreceptive", attempts: 0, lastAttemptTick: null, openedTick: null, offer: null },
   };
   glassport.stocks.provisions = 0;
   const verdant = world.settlements["verdant-cay"];

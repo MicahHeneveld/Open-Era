@@ -385,6 +385,7 @@ test("accelerated time pauses when mandatory captivity release changes player st
       displayedRisk: "high",
       scatteredTroops: { count: 30, experience: 0.5, discipline: 0.6 },
       releaseDestinationId: "glassport",
+      negotiation: { negotiatorId: null, persuasion: 0, status: "unreceptive", attempts: 0, lastAttemptTick: null, openedTick: null, offer: null },
     };
 
     await new Promise<void>((resolve) => app.server.listen(0, "127.0.0.1", resolve));

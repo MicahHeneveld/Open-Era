@@ -1,6 +1,6 @@
 import { assessStandingOrder, garrisonConfidenceLabel } from "../sim/agency.ts";
 import { commandHolderId, factionPower, partyPower, partyPowerFromTroops, round } from "../sim/state.ts";
-import type { Character, PartySighting, ReleaseSighting, SimEvent, StandingOrder, SupplyContract, TravelState, WorldState } from "../sim/types.ts";
+import type { CaptivityState, Character, PartySighting, ReleaseSighting, SimEvent, StandingOrder, SupplyContract, TravelState, WorldState } from "../sim/types.ts";
 import { causeLabelFor, captivityReleasedParts, characterName, learnedInPortNote, loyaltyNoteFor, ownedPortTaxSentence, publicFeedSentence, releaseDebtNote, ransomIncomeNote, seatSummaryFor, skillsWithheldNote, summaryStaysWhenWithheld } from "./wording.ts";
 
 /**
@@ -42,6 +42,35 @@ function asRecord(value: unknown): Record<string, unknown> | null {
 
 function asString(value: unknown): string | null {
   return typeof value === "string" ? value : null;
+}
+
+/** The prisoner sees the captor's stance and offer, never the hidden score or ceiling. */
+export function projectCaptivity(
+  captivity: CaptivityState | null,
+  negotiationVisible = true,
+): Record<string, unknown> | null {
+  if (!captivity) return null;
+  return {
+    captorFactionId: captivity.captorFactionId,
+    settlementId: captivity.settlementId,
+    capturedTick: captivity.capturedTick,
+    mandatoryReleaseTick: captivity.mandatoryReleaseTick,
+    cause: captivity.cause,
+    displayedRisk: captivity.displayedRisk,
+    scatteredTroops: captivity.scatteredTroops,
+    releaseDestinationId: captivity.releaseDestinationId,
+    negotiation: negotiationVisible ? {
+      negotiatorId: captivity.negotiation.negotiatorId,
+      status: captivity.negotiation.status,
+      openedTick: captivity.negotiation.openedTick,
+      offer: captivity.negotiation.offer ? {
+        id: captivity.negotiation.offer.id,
+        createdTick: captivity.negotiation.offer.createdTick,
+        demandedValue: captivity.negotiation.offer.demandedValue,
+        countered: captivity.negotiation.offer.countered,
+      } : null,
+    } : null,
+  };
 }
 
 /**
@@ -716,7 +745,7 @@ export function projectCharacter(
     seaSighting,
     captivity: condition && character.captivity
       ? {
-          ...character.captivity,
+          ...projectCaptivity(character.captivity, isSelf),
           scatteredTroops: projectTroopFigures(character.captivity.scatteredTroops),
           causeLabel: causeLabelFor(character.captivity.cause),
         }

@@ -205,6 +205,7 @@ test("a character outside the commander's observation exposes identity only", ()
     displayedRisk: "low",
     scatteredTroops: { count: 22, experience: stranger.troops.experience, discipline: stranger.troops.discipline },
     releaseDestinationId: null,
+    negotiation: { negotiatorId: null, persuasion: 0, status: "unreceptive", attempts: 0, lastAttemptTick: null, openedTick: null, offer: null },
   };
   const heldByAnother = project(world, commander, stranger);
   assert.equal(heldByAnother.captiveIntel, null, "a distant prisoner of another faction has no captor row");
@@ -295,6 +296,7 @@ test("a rival row names the seat and the cover, and still hides treasury and pow
         displayedRisk: "high",
         scatteredTroops: { ...pax.troops },
         releaseDestinationId: null,
+        negotiation: { negotiatorId: null, persuasion: 0, status: "unreceptive", attempts: 0, lastAttemptTick: null, openedTick: null, offer: null },
       },
     },
   });
@@ -377,6 +379,7 @@ test("territory the commander's faction controls counts as observed", () => {
     displayedRisk: "low",
     scatteredTroops: { count: 40, experience: outsider.troops.experience, discipline: outsider.troops.discipline },
     releaseDestinationId: null,
+    negotiation: { negotiatorId: null, persuasion: 0, status: "unreceptive", attempts: 0, lastAttemptTick: null, openedTick: null, offer: null },
   };
   world.tick = 5;
 

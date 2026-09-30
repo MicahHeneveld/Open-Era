@@ -17,7 +17,7 @@ import {
 import { marketPrice, partyPowerFromTroops, round, settlementClaimAvailableTo } from "../sim/state.ts";
 import { CHECK_IN_READ_CAP } from "../sim/persistence.ts";
 import { RESOURCE_KEYS, type ActiveBattle, type Character, type CombatForecast, type SettlementKnowledge, type SimEvent, type WorldState } from "../sim/types.ts";
-import { captiveIntelFor, projectCharacter, projectEvent, projectFactions, projectSupplyContracts, seaSightingsFor } from "./visibility.ts";
+import { captiveIntelFor, projectCaptivity, projectCharacter, projectEvent, projectFactions, projectSupplyContracts, seaSightingsFor } from "./visibility.ts";
 import {
   attentionLabel,
   battleResolvedSentence,
@@ -169,6 +169,14 @@ function eventSummary(world: WorldState, event: SimEvent, events?: SimEvent[], r
       return captivityEscapedSentence(world, event);
     case "captivity-released":
       return captivityReleasedSentence(world, event);
+    case "captivity-persuasion-updated":
+      return `${actor} reconsidered whether to discuss release with ${target ?? "the prisoner"}`;
+    case "captivity-negotiations-opened":
+      return `${actor} opened release negotiations with ${target ?? "the prisoner"}`;
+    case "captivity-counter-rejected":
+      return `${target ?? "The captor"} rejected ${actor}'s counterproposal`;
+    case "captivity-offer-rejected":
+      return `${actor} rejected the current release offer`;
     case "character-upkeep": {
       const passage = passageUpkeepSentence(world, event);
       if (passage) return passage;
@@ -417,12 +425,19 @@ function checkInBriefing(world: WorldState, commanderId: string, events: SimEven
       0,
       (commander.captivity.mandatoryReleaseTick - world.tick) / world.ticksPerDay,
     );
+    const negotiation = commander.captivity.negotiation;
+    const negotiatorName = negotiation.negotiatorId
+      ? world.characters[negotiation.negotiatorId]?.name ?? negotiation.negotiatorId
+      : "the local authority";
+    const negotiationSummary = negotiation.offer
+      ? `${negotiatorName} has opened terms demanding ${negotiation.offer.demandedValue} money. Accept, counter once, reject, or attempt escape.`
+      : `${negotiatorName} is ${negotiation.status}. Persuade them through direct messages, attempt escape, or wait for bounded mandatory terms.`;
     addItem({
       id: `captivity:${commander.captivity.capturedTick}`,
       severity: "action",
       actionRequired: true,
       title: "A captain is held captive.",
-      summary: `Held at ${world.settlements[commander.captivity.settlementId]?.name ?? commander.captivity.settlementId}. Escape always works, and it wounds you. The capture risk was ${commander.captivity.displayedRisk}. Mandatory release is in ${round(daysRemaining, 1)} days.`,
+      summary: `Held at ${world.settlements[commander.captivity.settlementId]?.name ?? commander.captivity.settlementId}. ${negotiationSummary} Escape always works, and it wounds you. The capture risk was ${commander.captivity.displayedRisk}. Mandatory release is in ${round(daysRemaining, 1)} days.`,
       day: round(world.tick / world.ticksPerDay, 2),
       settlementId: commander.captivity.settlementId,
       action: "review-captivity",
@@ -613,6 +628,9 @@ function checkInBriefing(world: WorldState, commanderId: string, events: SimEven
     "character-captured",
     "captivity-escaped",
     "captivity-released",
+    "captivity-negotiations-opened",
+    "captivity-counter-rejected",
+    "captivity-offer-rejected",
     "scattered-troops-returned",
     "settlement-shortage",
     "settlement-claimed",
@@ -633,6 +651,7 @@ function checkInBriefing(world: WorldState, commanderId: string, events: SimEven
       event.type === "standing-order-deviated" || event.type === "standing-order-expired" ||
       event.type === "settlement-shortage" || event.type === "character-captured" ||
       event.type === "captivity-released" ||
+      event.type === "captivity-counter-rejected" || event.type === "captivity-offer-rejected" ||
       (event.type === "battle-resolved" && event.data.outcome !== "attacker-victory");
     if (reportingOfficer && routineTypes.has(event.type)) {
       if (event.sequence > player.routineBriefingThroughSequence) routineEvents.push(event);
@@ -1156,12 +1175,15 @@ export function dashboardState(
     },
     captivity: {
       active: captivity ? {
-        ...captivity,
+        ...projectCaptivity(captivity),
         causeLabel: causeLabelFor(captivity.cause),
         settlementName: world.settlements[captivity.settlementId]?.name ?? captivity.settlementId,
         captorName: captivity.captorFactionId
           ? world.factions[captivity.captorFactionId]?.name ?? captivity.captorFactionId
           : "Unknown captor",
+        negotiatorName: captivity.negotiation.negotiatorId
+          ? world.characters[captivity.negotiation.negotiatorId]?.name ?? captivity.negotiation.negotiatorId
+          : "No captor identified",
         heldDays: round((world.tick - captivity.capturedTick) / world.ticksPerDay, 2),
         daysUntilMandatoryRelease: round(Math.max(0, captivity.mandatoryReleaseTick - world.tick) / world.ticksPerDay, 2),
         canEscape: true,

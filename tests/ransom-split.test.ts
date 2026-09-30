@@ -32,6 +32,7 @@ function dueForRelease(
     displayedRisk: "moderate",
     scatteredTroops: { count: 200, experience: 0.2, discipline: 0.5 },
     releaseDestinationId: null,
+    negotiation: { negotiatorId: null, persuasion: 0, status: "unreceptive", attempts: 0, lastAttemptTick: null, openedTick: null, offer: null },
   };
   if (ownerId) world.settlements[settlementId].ownerId = ownerId;
   return character;

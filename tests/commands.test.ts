@@ -683,6 +683,7 @@ test("a captive issuer is refused on submit, and the report still closes after a
     displayedRisk: "high",
     scatteredTroops: { count: 30, experience: 0.5, discipline: 0.6 },
     releaseDestinationId: "crown-harbor",
+    negotiation: { negotiatorId: null, persuasion: 0, status: "unreceptive", attempts: 0, lastAttemptTick: null, openedTick: null, offer: null },
   };
   const submission = submitCommand(world, {
     playerId: "prototype-player",
